@@ -458,6 +458,7 @@ Foundation: auth, data model, and core lane CRUD with opportunity list.
 - [ ] Build lane detail view (read-only for non-owners, editable for owner)
 - [ ] Build opportunity list dashboard (flat list, filterable by customer, port, status, owner)
 - [ ] Implement lane status state machine (draft -> rates_requested -> rates_received -> quoting -> quoted)
+- [ ] Deploy and gather feedback
 
 ### Milestone 2: Vendor Network
 Shared vendor database with personal preference lists.
@@ -471,6 +472,7 @@ Shared vendor database with personal preference lists.
 - [ ] Build vendor detail view (contacts, ports serviced, notes, add/edit forms)
 - [ ] Build "My Preferred Vendors" management UI (toggle preferences per port)
 - [ ] Vendor creation form with multi-port selection and initial contact
+- [ ] Deploy and gather feedback
 
 ### Milestone 3: Rate Request Generation
 Template-based rate request creation with manual email workflow.
@@ -487,6 +489,7 @@ Template-based rate request creation with manual email workflow.
 - [ ] Deadline input (datetime picker)
 - [ ] Save rate request and update lane status to "rates_requested"
 - [ ] Rate request detail view showing blast status (which vendors, responded/pending)
+- [ ] Deploy and gather feedback
 
 ### Milestone 4: Rate Parsing + Ingestion
 Parse forwarded vendor rate emails into standardized buckets.
@@ -504,6 +507,7 @@ Parse forwarded vendor rate emails into standardized buckets.
 - [ ] Update response count on rate_request; check threshold/deadline
 - [ ] Build manual rate entry form (for verbal quotes or unparseable emails)
 - [ ] Temporary UI for manual email paste/upload until email ingestion infra is built
+- [ ] Deploy and gather feedback
 
 ### Milestone 5: Rate Comparison + Vendor Lineup
 Side-by-side comparison table and carrier ranking.
@@ -520,6 +524,7 @@ Side-by-side comparison table and carrier ranking.
 - [ ] Send in-app notification (badge on dashboard, status update on lane)
 - [ ] Send email notification from app's outbound address
 - [ ] Update lane status to "rates_received" when first rate arrives, "quoting" when lineup is set
+- [ ] Deploy and gather feedback
 
 ### Milestone 6: Markup + Quote Generation
 Apply markups, preview, and export customer-facing CSV.
@@ -534,3 +539,4 @@ Apply markups, preview, and export customer-facing CSV.
 - [ ] CSV download endpoint
 - [ ] Update lane status to "quoted" on export
 - [ ] Quote history: persist all generated quotes, viewable from lane detail and customer views
+- [ ] Deploy and gather feedback
