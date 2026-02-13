@@ -1,0 +1,395 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# sync-spec-to-gitlab: One-way sync from SPEC.md milestones/tasks to GitLab milestones/issues.
+# Reads the ## Milestones section of SPEC.md, creates/updates/closes GitLab objects,
+# and tracks the mapping in .gitlab-sync.json.
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+SPEC_FILE="$REPO_ROOT/SPEC.md"
+STATE_FILE="$REPO_ROOT/.gitlab-sync.json"
+LOCK_FILE="/tmp/sync-spec-to-gitlab.lock"
+GITLAB_API="https://gitlab.com/api/v4"
+PROJECT_PATH="perenne/clients/schneider/drayage-quoter"
+LABEL="spec-sync"
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+die()  { echo "ERROR: $*" >&2; exit 1; }
+warn() { echo "  WARN: $*" >&2; }
+info() { echo "  $*"; }
+
+# ---------------------------------------------------------------------------
+# Preflight
+# ---------------------------------------------------------------------------
+
+[[ -n "${GITLAB_TOKEN:-}" ]] || die "GITLAB_TOKEN is not set. Export a GitLab personal access token with 'api' scope."
+command -v curl >/dev/null  || die "curl is required but not found"
+command -v jq   >/dev/null  || die "jq is required but not found"
+[[ -f "$SPEC_FILE" ]]       || die "SPEC.md not found at $SPEC_FILE"
+
+# ---------------------------------------------------------------------------
+# Lockfile — prevent concurrent runs from racing
+# ---------------------------------------------------------------------------
+
+exec 9>"$LOCK_FILE"
+flock -n 9 || die "Another sync is already running (lockfile: $LOCK_FILE)"
+
+# ---------------------------------------------------------------------------
+# State file helpers (flat key-value JSON object)
+# ---------------------------------------------------------------------------
+
+init_state() {
+  [[ -f "$STATE_FILE" ]] || echo '{}' > "$STATE_FILE"
+}
+
+get_state() {
+  jq -r ".\"$1\" // empty" "$STATE_FILE"
+}
+
+set_state() {
+  local tmp
+  tmp=$(jq --arg k "$1" --arg v "$2" '.[$k] = $v' "$STATE_FILE")
+  printf '%s\n' "$tmp" > "$STATE_FILE"
+}
+
+# ---------------------------------------------------------------------------
+# GitLab API wrapper
+#   gitlab_api METHOD PATH [JSON_BODY]
+#   Returns response body on success, returns 1 on failure.
+# ---------------------------------------------------------------------------
+
+gitlab_api() {
+  local method="$1" path="$2" data="${3:-}"
+  local -a args=(-s -H "PRIVATE-TOKEN: $GITLAB_TOKEN" -w '\n%{http_code}')
+
+  if [[ -n "$data" ]]; then
+    args+=(-H "Content-Type: application/json" -X "$method" -d "$data")
+  elif [[ "$method" != "GET" ]]; then
+    args+=(-X "$method")
+  fi
+
+  local raw http_code body
+  raw=$(curl "${args[@]}" "$GITLAB_API$path")
+  http_code=$(printf '%s' "$raw" | tail -n1)
+  body=$(printf '%s' "$raw" | sed '$d')
+
+  if [[ "$http_code" -ge 200 && "$http_code" -lt 300 ]]; then
+    printf '%s' "$body"
+    return 0
+  else
+    warn "API $method $path -> HTTP $http_code"
+    return 1
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# Resolve GitLab project ID (cached after first call)
+# ---------------------------------------------------------------------------
+
+resolve_project() {
+  local pid
+  pid=$(get_state "project_id")
+  if [[ -n "$pid" ]]; then
+    PROJECT_ID="$pid"
+    return
+  fi
+
+  local encoded_path
+  encoded_path=$(printf '%s' "$PROJECT_PATH" | jq -sRr @uri)
+
+  local resp
+  resp=$(gitlab_api GET "/projects/$encoded_path") \
+    || die "Failed to resolve project. Check GITLAB_TOKEN and project path."
+
+  PROJECT_ID=$(printf '%s' "$resp" | jq -r '.id')
+  [[ "$PROJECT_ID" != "null" && -n "$PROJECT_ID" ]] \
+    || die "Could not extract project ID from API response"
+
+  set_state "project_id" "$PROJECT_ID"
+  info "Resolved project ID: $PROJECT_ID"
+}
+
+# ---------------------------------------------------------------------------
+# Ensure the spec-sync label exists
+# ---------------------------------------------------------------------------
+
+ensure_label() {
+  local encoded_label
+  encoded_label=$(printf '%s' "$LABEL" | jq -sRr @uri)
+
+  local resp
+  resp=$(gitlab_api GET "/projects/$PROJECT_ID/labels?search=$encoded_label") || true
+
+  local count
+  count=$(printf '%s' "$resp" | jq '[.[] | select(.name == "'"$LABEL"'")] | length' 2>/dev/null) || count=0
+
+  if [[ "$count" -eq 0 ]]; then
+    local payload
+    payload=$(jq -n \
+      --arg name "$LABEL" \
+      --arg color "#6699cc" \
+      --arg desc "Auto-synced from SPEC.md" \
+      '{name: $name, color: $color, description: $desc}')
+    gitlab_api POST "/projects/$PROJECT_ID/labels" "$payload" >/dev/null \
+      || warn "Could not create label '$LABEL' (may already exist)"
+    info "Created label: $LABEL"
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# Parse SPEC.md — extract milestones and tasks
+#
+# Output (tab-separated, one line per item):
+#   MILESTONE  <num>  <title>  <description>
+#   TASK       <num:idx>  <title>  open|closed
+# ---------------------------------------------------------------------------
+
+parse_spec() {
+  local in_milestones=false
+  local current_milestone=""
+  local milestone_title=""
+  local got_description=false
+  local task_index=0
+
+  while IFS= read -r line; do
+    # Enter the milestones section
+    if [[ "$line" == "## Milestones" ]]; then
+      in_milestones=true
+      continue
+    fi
+
+    # Exit on next h2
+    if $in_milestones && [[ "$line" =~ ^##\  ]] && [[ "$line" != "## Milestones" ]]; then
+      break
+    fi
+
+    $in_milestones || continue
+
+    # --- Milestone heading: ### Milestone N: Title ---
+    if [[ "$line" =~ ^###\ Milestone\ ([0-9]+):\ (.+)$ ]]; then
+      current_milestone="${BASH_REMATCH[1]}"
+      milestone_title="${BASH_REMATCH[2]}"
+      got_description=false
+      task_index=0
+      continue
+    fi
+
+    # --- Description: first non-empty, non-task line after heading ---
+    if [[ -n "$current_milestone" ]] && ! $got_description \
+       && [[ -n "$line" ]] && [[ ! "$line" =~ ^-\  ]]; then
+      printf 'MILESTONE\t%s\t%s\t%s\n' "$current_milestone" "$milestone_title" "$line"
+      got_description=true
+      continue
+    fi
+
+    # --- Task: - [ ] or - [x] ---
+    if [[ -n "$current_milestone" ]] && [[ "$line" =~ ^-\ \[(.)\]\ (.+)$ ]]; then
+      task_index=$((task_index + 1))
+      local check="${BASH_REMATCH[1]}"
+      local title="${BASH_REMATCH[2]}"
+      local state="open"
+      [[ "$check" == "x" ]] && state="closed"
+      printf 'TASK\t%s:%s\t%s\t%s\n' "$current_milestone" "$task_index" "$title" "$state"
+    fi
+  done < "$SPEC_FILE"
+}
+
+# ---------------------------------------------------------------------------
+# Sync a single milestone
+# ---------------------------------------------------------------------------
+
+sync_milestone() {
+  local num="$1" title="$2" description="$3"
+  local full_title="Milestone $num: $title"
+  local key_id="milestone:$num"
+  local key_title="milestone:$num:title"
+  local key_desc="milestone:$num:desc"
+
+  local existing_id prev_title prev_desc
+  existing_id=$(get_state "$key_id")
+  prev_title=$(get_state "$key_title")
+  prev_desc=$(get_state "$key_desc")
+
+  if [[ -z "$existing_id" ]]; then
+    # Create
+    local payload
+    payload=$(jq -n --arg t "$full_title" --arg d "$description" \
+      '{title: $t, description: $d}')
+    local resp
+    resp=$(gitlab_api POST "/projects/$PROJECT_ID/milestones" "$payload") || {
+      warn "Failed to create milestone '$full_title'"; return 1
+    }
+    local new_id
+    new_id=$(printf '%s' "$resp" | jq -r '.id')
+    set_state "$key_id"    "$new_id"
+    set_state "$key_title" "$full_title"
+    set_state "$key_desc"  "$description"
+    info "Created milestone: $full_title (ID: $new_id)"
+  elif [[ "$prev_title" != "$full_title" || "$prev_desc" != "$description" ]]; then
+    # Update (something changed)
+    local payload
+    payload=$(jq -n --arg t "$full_title" --arg d "$description" \
+      '{title: $t, description: $d}')
+    gitlab_api PUT "/projects/$PROJECT_ID/milestones/$existing_id" "$payload" >/dev/null || {
+      warn "Failed to update milestone '$full_title'"; return 1
+    }
+    set_state "$key_title" "$full_title"
+    set_state "$key_desc"  "$description"
+    info "Updated milestone: $full_title"
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# Sync a single issue
+# ---------------------------------------------------------------------------
+
+sync_issue() {
+  local key="$1" title="$2" desired_state="$3" milestone_num="$4"
+  local key_iid="issue:$key"
+  local key_title="issue:$key:title"
+  local key_state="issue:$key:state"
+
+  local milestone_id
+  milestone_id=$(get_state "milestone:$milestone_num")
+
+  local existing_iid prev_title prev_state
+  existing_iid=$(get_state "$key_iid")
+  prev_title=$(get_state "$key_title")
+  prev_state=$(get_state "$key_state")
+
+  if [[ -z "$existing_iid" ]]; then
+    # Create
+    local payload
+    payload=$(jq -n \
+      --arg t  "$title" \
+      --arg l  "$LABEL" \
+      --argjson mid "${milestone_id:-null}" \
+      '{title: $t, labels: $l, milestone_id: $mid}')
+
+    local resp
+    resp=$(gitlab_api POST "/projects/$PROJECT_ID/issues" "$payload") || {
+      warn "Failed to create issue '$title'"; return 1
+    }
+    local new_iid
+    new_iid=$(printf '%s' "$resp" | jq -r '.iid')
+    set_state "$key_iid"   "$new_iid"
+    set_state "$key_title" "$title"
+    set_state "$key_state" "$desired_state"
+    info "Created issue #$new_iid: $title"
+
+    # Close immediately if the task is already checked off
+    if [[ "$desired_state" == "closed" ]]; then
+      gitlab_api PUT "/projects/$PROJECT_ID/issues/$new_iid" \
+        '{"state_event":"close"}' >/dev/null || true
+      info "  -> Closed #$new_iid"
+    fi
+
+  else
+    # Skip if nothing changed
+    if [[ "$prev_title" == "$title" && "$prev_state" == "$desired_state" ]]; then
+      return 0
+    fi
+
+    # Build update payload
+    local state_event=""
+    [[ "$desired_state" == "closed" ]] && state_event="close"
+    [[ "$desired_state" == "open" && "$prev_state" == "closed" ]] && state_event="reopen"
+
+    local payload
+    payload=$(jq -n \
+      --arg t  "$title" \
+      --arg se "$state_event" \
+      --argjson mid "${milestone_id:-null}" \
+      'if $se == "" then {title: $t, milestone_id: $mid}
+       else {title: $t, state_event: $se, milestone_id: $mid} end')
+
+    gitlab_api PUT "/projects/$PROJECT_ID/issues/$existing_iid" "$payload" >/dev/null || {
+      warn "Failed to update issue #$existing_iid"; return 1
+    }
+    set_state "$key_title" "$title"
+    set_state "$key_state" "$desired_state"
+    info "Updated issue #$existing_iid: $title [$desired_state]"
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# Close issues whose tasks were removed from SPEC.md
+# ---------------------------------------------------------------------------
+
+close_deleted_tasks() {
+  # $@ = array of task keys seen in the current parse (e.g. "1:1" "1:2" ...)
+  local -A seen_map=()
+  for k in "$@"; do seen_map["$k"]=1; done
+
+  local all_issue_keys
+  all_issue_keys=$(jq -r 'keys[] | select(test("^issue:[0-9]+:[0-9]+$"))' "$STATE_FILE")
+
+  while IFS= read -r state_key; do
+    [[ -z "$state_key" ]] && continue
+    local task_key="${state_key#issue:}"
+
+    if [[ -z "${seen_map[$task_key]+_}" ]]; then
+      local iid prev_state
+      iid=$(get_state "$state_key")
+      prev_state=$(get_state "${state_key}:state")
+
+      if [[ -n "$iid" && "$prev_state" != "closed" ]]; then
+        gitlab_api PUT "/projects/$PROJECT_ID/issues/$iid" \
+          '{"state_event":"close"}' >/dev/null || true
+        set_state "${state_key}:state" "closed"
+        info "Closed removed issue #$iid"
+      fi
+    fi
+  done <<< "$all_issue_keys"
+}
+
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
+
+main() {
+  echo "Syncing SPEC.md to GitLab..."
+  echo
+
+  init_state
+  resolve_project
+  ensure_label
+
+  # Parse the spec once
+  local parsed
+  parsed=$(parse_spec)
+
+  # Pass 1: milestones (must exist before issues reference them)
+  echo "Syncing milestones..."
+  while IFS=$'\t' read -r type key title extra; do
+    [[ "$type" == "MILESTONE" ]] && sync_milestone "$key" "$title" "$extra"
+  done <<< "$parsed"
+  echo
+
+  # Pass 2: issues
+  echo "Syncing issues..."
+  local -a seen_task_keys=()
+  while IFS=$'\t' read -r type key title extra; do
+    if [[ "$type" == "TASK" ]]; then
+      local milestone_num="${key%%:*}"
+      sync_issue "$key" "$title" "$extra" "$milestone_num"
+      seen_task_keys+=("$key")
+    fi
+  done <<< "$parsed"
+  echo
+
+  # Pass 3: close issues for tasks removed from the spec
+  echo "Checking for removed tasks..."
+  if [[ ${#seen_task_keys[@]} -gt 0 ]]; then
+    close_deleted_tasks "${seen_task_keys[@]}"
+  fi
+
+  echo
+  echo "Sync complete."
+}
+
+main "$@"

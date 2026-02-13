@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# post-commit: Trigger SPEC.md -> GitLab sync when SPEC.md changes.
+# Always exits 0 — sync failures never block commits.
+
+# Only run if SPEC.md was modified in the latest commit
+if ! git diff-tree --no-commit-id --name-only -r HEAD | grep -q '^SPEC.md$'; then
+  exit 0
+fi
+
+if [[ -z "${GITLAB_TOKEN:-}" ]]; then
+  echo "[spec-sync] SPEC.md changed but GITLAB_TOKEN is not set."
+  echo "[spec-sync] To enable sync: export GITLAB_TOKEN=<personal-access-token with api scope>"
+  exit 0
+fi
+
+SCRIPT="$(git rev-parse --show-toplevel)/scripts/sync-spec-to-gitlab"
+if [[ -x "$SCRIPT" ]]; then
+  echo "[spec-sync] SPEC.md changed, syncing to GitLab..."
+  "$SCRIPT" || echo "[spec-sync] Sync failed (non-fatal). Check output above for details."
+else
+  echo "[spec-sync] Sync script not found or not executable at $SCRIPT"
+fi
+
+exit 0
