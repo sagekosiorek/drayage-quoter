@@ -445,8 +445,8 @@ Multi-lane quotes produce multiple rows, distinctly organized by a coloful table
 ### Milestone 1: Project Setup + Lane Management
 Foundation: auth, data model, and core lane CRUD with opportunity list.
 
-- [ ] Initialize Go project with module structure, Dockerfile, and Fly.io config
-- [ ] Set up SQLite database with migrations framework
+- [x] Initialize Go project with module structure, Dockerfile, and Fly.io config
+- [x] Set up SQLite database with migrations framework
 - [ ] Configure Litestream for S3 replication
 - [ ] Implement magic link authentication (send link, verify token, session cookie)
 - [ ] Build base HTML layout and HTMX infrastructure (templates, partials, static assets)
