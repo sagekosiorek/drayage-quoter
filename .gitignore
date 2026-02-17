@@ -1,2 +1,4 @@
 .env
 .gitlab-sync.json
+*.db
+/data/
