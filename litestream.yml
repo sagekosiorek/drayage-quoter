@@ -1,0 +1,9 @@
+dbs:
+  - path: ./data/drayage.db
+    replicas:
+      - type: s3
+        bucket: drayage-backups
+        endpoint: http://localhost:9000
+        access-key-id: minioadmin
+        secret-access-key: minioadmin
+        force-path-style: true  # required for MinIO
