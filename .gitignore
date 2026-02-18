@@ -2,3 +2,4 @@
 .gitlab-sync.json
 *.db
 /data/
+/server
