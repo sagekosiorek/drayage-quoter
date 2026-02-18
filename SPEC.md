@@ -460,6 +460,7 @@ Foundation: auth, data model, and core lane CRUD with opportunity list.
 - [x] Configure Litestream for S3 replication
 - [x] Implement magic link authentication (send link, verify token, session cookie)
 - [x] Build base HTML layout and HTMX infrastructure (templates, partials, static assets)
+- [ ] Before going any further, create a .css file and clean up existing templates.
 - [ ] Create users table and seed initial rep accounts
 - [ ] Create customers table with CRUD (name + optional LP#)
 - [ ] Create ports table and seed with known ports/rail heads
@@ -468,7 +469,7 @@ Foundation: auth, data model, and core lane CRUD with opportunity list.
 - [ ] Build lane detail view (read-only for non-owners, editable for owner)
 - [ ] Build opportunity list dashboard (flat list, filterable by customer, port, status, owner)
 - [ ] Implement lane status state machine (draft -> rates_requested -> rates_received -> quoting -> quoted)
-- [ ] Deploy and gather feedback
+- [ ] Deploy on Docker and gather feedback
 
 ### Milestone 2: Vendor Network
 Shared vendor database with personal preference lists.
@@ -482,7 +483,7 @@ Shared vendor database with personal preference lists.
 - [ ] Build vendor detail view (contacts, ports serviced, notes, add/edit forms)
 - [ ] Build "My Preferred Vendors" management UI (toggle preferences per port)
 - [ ] Vendor creation form with multi-port selection and initial contact
-- [ ] Deploy and gather feedback
+- [ ] Deploy on Docker and Fly.io and gather feedback. Use it yourself
 
 ### Milestone 3: Rate Request Generation
 Template-based rate request creation with manual email workflow.
