@@ -62,11 +62,21 @@ Hybrid layout:
 | created_at | DATETIME | |
 | updated_at | DATETIME | |
 
+### Vendor Locations
+| Field | Type | Notes |
+|-------|------|-------|
+| id | TEXT (UUID) | Primary key |
+| vendor_id | TEXT (FK) | References vendors.id |
+| name | TEXT | Location name (e.g. Jacksonville, Los Angeles, |
+| created_at | DATETIME | |
+| updated_at | DATETIME | |
+
 ### Vendor Contacts
 | Field | Type | Notes |
 |-------|------|-------|
 | id | TEXT (UUID) | Primary key |
 | vendor_id | TEXT (FK) | References vendors.id |
+| location_id | TEXT (FK) | References locations.id |
 | name | TEXT | Contact name, optional |
 | email | TEXT | Contact email |
 | phone | TEXT | Optional |
@@ -447,8 +457,8 @@ Foundation: auth, data model, and core lane CRUD with opportunity list.
 
 - [x] Initialize Go project with module structure, Dockerfile, and Fly.io config
 - [x] Set up SQLite database with migrations framework
-- [ ] Configure Litestream for S3 replication
-- [ ] Implement magic link authentication (send link, verify token, session cookie)
+- [x] Configure Litestream for S3 replication
+- [x] Implement magic link authentication (send link, verify token, session cookie)
 - [ ] Build base HTML layout and HTMX infrastructure (templates, partials, static assets)
 - [ ] Create users table and seed initial rep accounts
 - [ ] Create customers table with CRUD (name + optional LP#)
