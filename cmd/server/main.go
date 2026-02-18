@@ -18,7 +18,12 @@ func main() {
 
 	dbPath := os.Getenv("DB_PATH")
 	if dbPath == "" {
-		dbPath = "/data/drayage.db"
+		dbPath = "./data/drayage.db"
+	}
+
+	baseURL := os.Getenv("BASE_URL")
+	if baseURL == "" {
+		baseURL = fmt.Sprintf("http://localhost:%s", port)
 	}
 
 	// Ensure the parent directory exists.
