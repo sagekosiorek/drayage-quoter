@@ -53,6 +53,7 @@ func main() {
 	loginTmpl := templates.MustParse("layout.html", "login.html")
 	loginSentTmpl := templates.MustParse("layout.html", "login_sent.html")
 	dashboardTmpl := templates.MustParse("layout.html", "dashboard.html")
+	laneNewTmpl := templates.MustParse("layout.html", "lane_new.html")
 
 	mux := http.NewServeMux()
 
@@ -65,7 +66,25 @@ func main() {
 	// Protected routes
 	mux.HandleFunc("GET /{$}", authService.RequireAuth(func(w http.ResponseWriter, r *http.Request) {
 		user := auth.UserFromContext(r.Context())
-		dashboardTmpl.ExecuteTemplate(w, "layout.html", map[string]any{"User": user})
+		dashboardTmpl.ExecuteTemplate(w, "layout.html", map[string]any{
+			"User":   user,
+			"Lanes":  nil,
+			"Query":  r.URL.Query().Get("q"),
+			"Status": r.URL.Query().Get("status"),
+		})
+	}))
+
+	mux.HandleFunc("GET /lanes/new", authService.RequireAuth(func(w http.ResponseWriter, r *http.Request) {
+		user := auth.UserFromContext(r.Context())
+		laneNewTmpl.ExecuteTemplate(w, "layout.html", map[string]any{
+			"User":  user,
+			"Ports": nil, // TODO: populate from DB once ports migration is in place
+		})
+	}))
+
+	mux.HandleFunc("POST /lanes", authService.RequireAuth(func(w http.ResponseWriter, r *http.Request) {
+		// TODO: implement once lanes/customers/ports migrations are in place
+		http.Redirect(w, r, "/", http.StatusSeeOther)
 	}))
 
 	log.Printf("listening on :%s", port)
