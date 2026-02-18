@@ -1,7 +1,56 @@
 {{ define "content" }}
-<h1>Dashboard</h1>
-<p>Welcome, {{ .User.Name }}.</p>
-<form method="POST" action="/logout">
-    <button type="submit">Log out</button>
+<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1.25rem;">
+    <h1 style="margin:0">Lanes</h1>
+    <a href="/lanes/new"><button class="primary">+ New Lane</button></a>
+</div>
+
+<form style="display:flex; gap:.5rem; margin-bottom:1rem;" method="GET" action="/">
+    <input type="text" name="q" placeholder="Search customer, destination..." style="max-width:280px;" value="{{ .Query }}">
+    <select name="status" style="width:auto;">
+        <option value="">All statuses</option>
+        <option value="draft"{{ if eq .Status "draft" }} selected{{ end }}>Draft</option>
+        <option value="rates_requested"{{ if eq .Status "rates_requested" }} selected{{ end }}>Rates Requested</option>
+        <option value="rates_received"{{ if eq .Status "rates_received" }} selected{{ end }}>Rates Received</option>
+        <option value="quoting"{{ if eq .Status "quoting" }} selected{{ end }}>Quoting</option>
+        <option value="quoted"{{ if eq .Status "quoted" }} selected{{ end }}>Quoted</option>
+    </select>
+    <button type="submit">Filter</button>
 </form>
+
+<table>
+    <thead>
+        <tr>
+            <th>Customer</th>
+            <th>Origin</th>
+            <th>Destination</th>
+            <th>Container</th>
+            <th>Direction</th>
+            <th>Status</th>
+            <th>Owner</th>
+            <th>Created</th>
+        </tr>
+    </thead>
+    <tbody>
+        {{- if .Lanes }}
+        {{- range .Lanes }}
+        <tr>
+            <td>{{ .CustomerName }}</td>
+            <td>{{ .OriginPort }}</td>
+            <td>{{ .Destination }}</td>
+            <td>{{ .ContainerSize }}</td>
+            <td>{{ .Direction }}</td>
+            <td>{{ .Status }}</td>
+            <td>{{ .OwnerName }}</td>
+            <td>{{ .CreatedAt }}</td>
+        </tr>
+        {{- end }}
+        {{- else }}
+        <tr>
+            <td colspan="8" class="empty-state">
+                No lanes yet. <a href="/lanes/new">Create your first lane</a>.
+            </td>
+        </tr>
+        {{- end }}
+    </tbody>
+</table>
 {{ end }}

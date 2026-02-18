@@ -459,7 +459,7 @@ Foundation: auth, data model, and core lane CRUD with opportunity list.
 - [x] Set up SQLite database with migrations framework
 - [x] Configure Litestream for S3 replication
 - [x] Implement magic link authentication (send link, verify token, session cookie)
-- [ ] Build base HTML layout and HTMX infrastructure (templates, partials, static assets)
+- [x] Build base HTML layout and HTMX infrastructure (templates, partials, static assets)
 - [ ] Create users table and seed initial rep accounts
 - [ ] Create customers table with CRUD (name + optional LP#)
 - [ ] Create ports table and seed with known ports/rail heads
