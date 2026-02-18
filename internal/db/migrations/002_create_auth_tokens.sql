@@ -1,0 +1,8 @@
+CREATE TABLE auth_tokens (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    token TEXT NOT NULL UNIQUE,
+    expires_at DATETIME NOT NULL,
+    used_at DATETIME,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);

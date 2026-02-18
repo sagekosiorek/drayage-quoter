@@ -1,0 +1,18 @@
+{{ define "layout.html" }}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Drayage Quoter</title>
+    <style>
+        body { font-family: system-ui, sans-serif; max-width: 480px; margin: 60px auto; padding: 0 20px; }
+        input[type="email"] { width: 100%; padding: 8px; margin: 8px 0; box-sizing: border-box; }
+        button { padding: 8px 16px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    {{ template "content" . }}
+</body>
+</html>
+{{ end }}

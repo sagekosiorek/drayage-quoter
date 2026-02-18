@@ -1,0 +1,7 @@
+{{ define "content" }}
+<h1>Dashboard</h1>
+<p>Welcome, {{ .User.Name }}.</p>
+<form method="POST" action="/logout">
+    <button type="submit">Log out</button>
+</form>
+{{ end }}
