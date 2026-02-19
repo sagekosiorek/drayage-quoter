@@ -460,10 +460,10 @@ Foundation: auth, data model, and core lane CRUD with opportunity list.
 - [x] Configure Litestream for S3 replication
 - [x] Implement magic link authentication (send link, verify token, session cookie)
 - [x] Build base HTML layout and HTMX infrastructure (templates, partials, static assets)
-- [ ] Before going any further, create a .css file and clean up existing templates.
-- [ ] Create users table and seed initial rep accounts
-- [ ] Create customers table with CRUD (name + optional LP#)
-- [ ] Create ports table and seed with known ports/rail heads
+- [x] Before going any further, create a .css file and clean up existing templates.
+- [x] Create users table and seed initial rep accounts
+- [x] Create customers table with CRUD (name + optional LP#)
+- [ ] Create ports table and seed with known ports/rail heads (make this an admin function)
 - [ ] Create lanes table with full field set
 - [ ] Build "New Lane" form (wizard-style, fields pre-validated)
 - [ ] Build lane detail view (read-only for non-owners, editable for owner)
@@ -551,3 +551,8 @@ Apply markups, preview, and export customer-facing CSV.
 - [ ] Update lane status to "quoted" on export
 - [ ] Quote history: persist all generated quotes, viewable from lane detail and customer views
 - [ ] Deploy and gather feedback
+
+### Milestone 7: Loose ends
+Styling, last-min changes
+
+- [ ] Map FreightPower Shipper styling
