@@ -1,0 +1,57 @@
+{{ define "content" }}
+<div class="page-header">
+    <h1>Users</h1>
+</div>
+
+<div class="form-narrow">
+    <p class="form-section">Add User</p>
+    <form method="POST" action="/admin/users">
+        <div class="form-cols">
+            <div>
+                <label for="name">Name</label>
+                <input type="text" id="name" name="name" required placeholder="Travis Bryant">
+            </div>
+            <div>
+                <label for="email">Email</label>
+                <input type="email" id="email" name="email" required placeholder="you@schneider.com">
+            </div>
+        </div>
+        <div class="form-actions">
+            <button type="submit" class="primary">Add User</button>
+        </div>
+    </form>
+</div>
+
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Email</th>
+            <th>Role</th>
+            <th>Joined</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {{- if .Users }}
+        {{- range .Users }}
+        <tr>
+            <td>{{ .Name }}</td>
+            <td>{{ .Email }}</td>
+            <td>{{ if .IsAdmin }}Admin{{ else }}Rep{{ end }}</td>
+            <td>{{ .CreatedAt }}</td>
+            <td>
+                <form method="POST" action="/admin/users/{{ .ID }}/delete">
+                    <button type="submit">Delete</button>
+                </form>
+            </td>
+        </tr>
+        {{- end }}
+        {{- else }}
+        <tr>
+            <td colspan="5" class="empty-state">No users yet.</td>
+        </tr>
+        {{- end }}
+    </tbody>
+</table>
+{{ end }}
