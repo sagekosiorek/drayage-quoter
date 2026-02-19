@@ -5,51 +5,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Drayage Quoter</title>
+    <link rel="stylesheet" href="/static/style.css">
     <script src="https://unpkg.com/htmx.org@2.0.4" defer></script>
-    <style>
-        *, *::before, *::after { box-sizing: border-box; }
-        body { margin: 0; font-family: system-ui, sans-serif; color: #111; }
-
-        /* App shell */
-        .app-nav {
-            display: flex; align-items: center; gap: 1rem;
-            padding: .5rem 1.5rem; border-bottom: 1px solid #ddd;
-            background: #fff;
-        }
-        .app-nav-brand { font-weight: 600; text-decoration: none; color: #111; margin-right: .5rem; }
-        .app-nav a { text-decoration: none; color: #444; }
-        .app-nav a:hover { color: #111; }
-        .app-nav-right { margin-left: auto; display: flex; align-items: center; gap: 1rem; }
-        .app-nav form { margin: 0; }
-        .app-content { padding: 1.5rem 2rem; }
-
-        /* Auth pages */
-        .auth-content { max-width: 480px; margin: 60px auto; padding: 0 20px; }
-
-        /* Forms */
-        label { display: block; font-size: .875rem; font-weight: 500; margin-top: .75rem; }
-        input[type="text"], input[type="email"], input[type="number"],
-        select, textarea {
-            width: 100%; padding: 6px 8px; margin-top: 3px;
-            border: 1px solid #ccc; border-radius: 3px; font-size: .9rem;
-        }
-        input[type="checkbox"] { width: auto; margin-right: .25rem; }
-        fieldset { border: 1px solid #ddd; border-radius: 3px; padding: .5rem .75rem; margin-top: .75rem; }
-        fieldset legend { font-size: .875rem; font-weight: 500; padding: 0 .25rem; }
-        fieldset label { display: inline; font-weight: normal; margin-right: 1.25rem; }
-        textarea { resize: vertical; }
-        button { padding: 6px 14px; cursor: pointer; border: 1px solid #bbb; border-radius: 3px; background: #f5f5f5; font-size: .9rem; }
-        button:hover { background: #eee; }
-        button.primary { background: #1a56db; color: #fff; border-color: #1a56db; }
-        button.primary:hover { background: #1648c4; }
-
-        /* Tables */
-        table { width: 100%; border-collapse: collapse; font-size: .9rem; }
-        th { text-align: left; padding: 7px 10px; background: #f5f5f5; border-bottom: 2px solid #ddd; font-weight: 600; }
-        td { padding: 7px 10px; border-bottom: 1px solid #eee; }
-        tr:last-child td { border-bottom: none; }
-        .empty-state { text-align: center; color: #888; padding: 2rem; }
-    </style>
 </head>
 <body>
     {{ if .User }}
@@ -58,6 +15,9 @@
         <a href="/">Lanes</a>
         <div class="app-nav-right">
             <span>{{ .User.Name }}</span>
+            {{ if .User.IsAdmin }}
+            <a href="/admin/users">Admin</a>
+            {{ end }}
             <form method="POST" action="/logout">
                 <button type="submit">Log out</button>
             </form>

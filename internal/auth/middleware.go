@@ -16,6 +16,19 @@ func UserFromContext(ctx context.Context) *User {
 	return u
 }
 
+// RequireAdmin wraps RequireAuth and additionally requires the user to be an admin.
+// Returns 403 Forbidden (not a redirect) for authenticated non-admins.
+func (s *Service) RequireAdmin(next http.HandlerFunc) http.HandlerFunc {
+	return s.RequireAuth(func(w http.ResponseWriter, r *http.Request) {
+		user := UserFromContext(r.Context())
+		if !user.IsAdmin {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		next(w, r)
+	})
+}
+
 // RequireAuth wraps a handler, redirecting unauthenticated requests to /login.
 func (s *Service) RequireAuth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -27,11 +40,11 @@ func (s *Service) RequireAuth(next http.HandlerFunc) http.HandlerFunc {
 
 		var user User
 		err = s.DB.QueryRow(`
-			SELECT u.id, u.name, u.email
+			SELECT u.id, u.name, u.email, u.is_admin
 			FROM sessions s
 			JOIN users u ON u.id = s.user_id
 			WHERE s.token = ? AND s.expires_at > CURRENT_TIMESTAMP
-		`, cookie.Value).Scan(&user.ID, &user.Name, &user.Email)
+		`, cookie.Value).Scan(&user.ID, &user.Name, &user.Email, &user.IsAdmin)
 		if err == sql.ErrNoRows {
 			http.SetCookie(w, &http.Cookie{
 				Name:     "session",

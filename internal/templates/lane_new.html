@@ -1,17 +1,17 @@
 {{ define "content" }}
-<p style="margin-bottom:1rem;"><a href="/">← Back to lanes</a></p>
-<h1 style="margin:0 0 1.5rem;">New Lane</h1>
+<p class="back-link"><a href="/">← Back to lanes</a></p>
+<h1 class="page-title">New Lane</h1>
 
-<form method="POST" action="/lanes" style="max-width:640px;">
-    <h2 style="margin:0 0 .5rem; font-size:1rem; text-transform:uppercase; color:#666; letter-spacing:.05em;">Customer</h2>
+<form method="POST" action="/lanes" class="form-narrow">
+    <h2 class="form-section">Customer</h2>
 
     <label for="customer_name">Customer Name</label>
     <input type="text" id="customer_name" name="customer_name" placeholder="Acme Corp" required>
 
-    <label for="lp_number">LP Number <span style="font-weight:normal;color:#888;">(MasterMind CRM)</span></label>
+    <label for="lp_number">LP Number <span class="form-hint">(MasterMind CRM)</span></label>
     <input type="text" id="lp_number" name="lp_number" placeholder="LP-12345">
 
-    <h2 style="margin:1.5rem 0 .5rem; font-size:1rem; text-transform:uppercase; color:#666; letter-spacing:.05em;">Lane Details</h2>
+    <h2 class="form-section">Lane Details</h2>
 
     <label for="origin_port_id">Origin Port / Rail Head</label>
     <select id="origin_port_id" name="origin_port_id" required>
@@ -24,7 +24,7 @@
     <label for="destination">Destination</label>
     <input type="text" id="destination" name="destination" placeholder="City, State or ZIP" required>
 
-    <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-top:.75rem;">
+    <div class="form-cols">
         <div>
             <label for="container_size">Container Size</label>
             <select id="container_size" name="container_size">
@@ -40,7 +40,7 @@
         </div>
     </div>
 
-    <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-top:.75rem;">
+    <div class="form-cols">
         <div>
             <label for="direction">Direction</label>
             <select id="direction" name="direction">
@@ -70,10 +70,10 @@
     <label for="notes">Notes</label>
     <textarea id="notes" name="notes" rows="3" placeholder="Optional lane notes"></textarea>
 
-    <div style="display:flex; gap:.75rem; margin-top:1.5rem; align-items:center;">
+    <div class="form-actions">
         <button class="primary" type="submit" name="action" value="save">Save Draft</button>
         <button type="submit" name="action" value="request_rates">Save &amp; Request Rates</button>
-        <a href="/" style="margin-left:.25rem; color:#666;">Cancel</a>
+        <a href="/">Cancel</a>
     </div>
 </form>
 {{ end }}
