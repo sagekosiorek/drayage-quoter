@@ -1,0 +1,5 @@
+CREATE TABLE ports (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    type TEXT NOT NULL
+);

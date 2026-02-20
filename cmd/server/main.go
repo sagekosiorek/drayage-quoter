@@ -86,6 +86,10 @@ func main() {
 	mux.HandleFunc("GET /admin/users", authService.RequireAdmin(adminSvc.HandleUsers(adminUsersTmpl)))
 	mux.HandleFunc("POST /admin/users", authService.RequireAdmin(adminSvc.HandleAddUser()))
 	mux.HandleFunc("POST /admin/users/{id}/delete", authService.RequireAdmin(adminSvc.HandleDeleteUser()))
+	mux.HandleFunc("GET /admin/ports", authService.RequireAdmin(adminSvc.HandlePorts(adminPortsTmpl)))
+  mux.HandleFunc("POST /admin/ports", authService.RequireAdmin(adminSvc.HandleAddPort()))
+	mux.HandleFunc("POST /admin/ports/{id}/delete", authService.RequireAdmin(adminSvc.HandleDeletePort()))
+
 
 	// TODO: consolidate later, as it grows, need dedicated handler functions in separate file, similar to /auth/handlers.go
 	// Protected routes
@@ -101,9 +105,27 @@ func main() {
 
 	mux.HandleFunc("GET /lanes/new", authService.RequireAuth(func(w http.ResponseWriter, r *http.Request) {
 		user := auth.UserFromContext(r.Context())
+		rows, err := database.Query(`SELECT id, name FROM ports ORDER BY type, name`)
+		if err != nil {
+				http.Error(w, "Internal server error", http.StatusInternalServerError)
+			  return
+		}
+		defer rows.Close()
+		var ports []struct {
+				ID   int
+				Name string
+		}
+		for rows.Next() {
+				var p struct{ ID int; Name string }
+				if err := rows.Scan(&p.ID, &p.Name); err != nil {
+						http.Error(w, "Internal server error", http.StatusInternalServerError)
+						return
+				}
+				ports = append(ports, p)
+		}
 		laneNewTmpl.ExecuteTemplate(w, "layout.html", map[string]any{
 			"User":  user,
-			"Ports": nil, // TODO: populate from DB once ports migration is in place
+			"Ports": ports,
 		})
 	}))
 
