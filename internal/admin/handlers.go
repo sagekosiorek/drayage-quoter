@@ -24,6 +24,13 @@ type UserRow struct {
 	CreatedAt string
 }
 
+ // PortRow represents a port for display in the admin view.
+ type PortRow struct {
+     ID   int
+     Name string
+     Type string
+ }
+
 // HandleUsers renders the admin user list.
 func (s *Service) HandleUsers(tmpl *template.Template) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -103,4 +110,69 @@ func (s *Service) HandleDeleteUser() http.HandlerFunc {
 		}
 		http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
 	}
+}
+
+// HandlePorts renders the admin port list.
+func (s *Service) HandlePorts(tmpl *template.Template) http.HandlerFunc {
+	 return func(w http.ResponseWriter, r *http.Request) {
+			 currentUser := auth.UserFromContext(r.Context())
+			 rows, err := s.DB.Query(`SELECT id, name, type FROM ports ORDER BY type, name`)
+			 if err != nil {
+					 http.Error(w, "Internal server error", http.StatusInternalServerError)
+					 return
+			 }
+			 defer rows.Close()
+			 var ports []PortRow
+			 for rows.Next() {
+					 var p PortRow
+					 if err := rows.Scan(&p.ID, &p.Name, &p.Type); err != nil {
+							 http.Error(w, "Internal server error", http.StatusInternalServerError)
+							 return
+					 }
+					 ports = append(ports, p)
+			 }
+			 tmpl.ExecuteTemplate(w, "layout.html", map[string]any{
+					 "User":  currentUser,
+					 "Ports": ports,
+			 })
+	 }
+}
+
+// HandleAddPort adds a new port by name and type.
+func (s *Service) HandleAddPort() http.HandlerFunc {
+	 return func(w http.ResponseWriter, r *http.Request) {
+			 name := r.FormValue("name")
+			 portType := r.FormValue("type")
+			 if name == "" || portType == "" {
+					 http.Error(w, "Name and type are required", http.StatusBadRequest)
+					 return
+			 }
+			 if portType != "Seaport" && portType != "Rail Ramp" {
+					 http.Error(w, "Invalid port type", http.StatusBadRequest)
+					 return
+			 }
+			 _, err := s.DB.Exec("INSERT INTO ports (name, type) VALUES (?, ?)", name, portType)
+			 if err != nil {
+					 http.Error(w, "Internal server error", http.StatusInternalServerError)
+					 return
+			 }
+			 http.Redirect(w, r, "/admin/ports", http.StatusSeeOther)
+	 }
+}
+
+// HandleDeletePort removes a port by id.
+func (s *Service) HandleDeletePort() http.HandlerFunc {
+	 return func(w http.ResponseWriter, r *http.Request) {
+			 id, err := strconv.Atoi(r.PathValue("id"))
+			 if err != nil || id <= 0 {
+					 http.Error(w, "Invalid port id", http.StatusBadRequest)
+					 return
+			 }
+			 if _, err = s.DB.Exec("DELETE FROM ports WHERE id = ?", id);
+			 err != nil {
+					 http.Error(w, "Internal server error", http.StatusInternalServerError)
+					 return
+			 }
+			 http.Redirect(w, r, "/admin/ports", http.StatusSeeOther)
+	 }
 }
