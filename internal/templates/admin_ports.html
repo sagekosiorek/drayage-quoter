@@ -1,0 +1,62 @@
+{{ define "content" }}
+<div class="page-header">
+   <h1>Ports</h1>
+</div>
+
+<nav class="admin-subnav">
+   <a href="/admin/users">Users</a>
+   <a href="/admin/ports" class="active">Ports</a>
+</nav>
+
+<div class="form-narrow">
+   <p class="form-section">Add Port</p>
+   <form method="POST" action="/admin/ports">
+       <div class="form-cols">
+           <div>
+               <label for="name">Name</label>
+               <input type="text" id="name" name="name" required placeholder="Port of Oakland">
+           </div>
+           <div>
+               <label for="type">Type</label>
+               <select id="type" name="type" required>
+                   <option value="">Select type...</option>
+                   <option value="Seaport">Seaport</option>
+                   <option value="Rail Ramp">Rail Ramp</option>
+               </select>
+           </div>
+       </div>
+       <div class="form-actions">
+           <button type="submit" class="primary">Add Port</button>
+       </div>
+   </form>
+</div>
+
+<table>
+   <thead>
+       <tr>
+           <th>Name</th>
+           <th>Type</th>
+           <th>Actions</th>
+       </tr>
+   </thead>
+   <tbody>
+       {{- if .Ports }}
+       {{- range .Ports }}
+       <tr>
+           <td>{{ .Name }}</td>
+           <td>{{ .Type }}</td>
+           <td>
+               <form method="POST" action="/admin/ports/{{ .ID }}/delete">
+                   <button type="submit">Delete</button>
+               </form>
+           </td>
+       </tr>
+       {{- end }}
+       {{- else }}
+       <tr>
+           <td colspan="3" class="empty-state">No ports yet.</td>
+       </tr>
+       {{- end }}
+   </tbody>
+</table>
+{{ end }}
