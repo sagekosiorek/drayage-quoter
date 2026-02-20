@@ -77,3 +77,48 @@ tr:last-child td { border-bottom: none; }
 .form-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: .75rem; }
 .form-actions { display: flex; gap: .75rem; margin-top: 1.5rem; align-items: center; }
 .form-actions a { color: #666; }
+
+/* -------------------------------------------------------
+   Customer autocomplete
+------------------------------------------------------- */
+.suggestions {
+    border: 1px solid #ccc; border-top: none;
+    border-radius: 0 0 3px 3px; background: #fff;
+    max-height: 200px; overflow-y: auto;
+}
+.suggestion-item {
+    display: block; width: 100%; text-align: left;
+    padding: .4rem .75rem; background: none;
+    border: none; border-bottom: 1px solid #eee; border-radius: 0;
+    cursor: pointer; font-size: .9rem; color: #111;
+}
+.suggestion-item:last-child { border-bottom: none; }
+.suggestion-item:hover { background: #f0f4ff; }
+.suggestion-lp { color: #888; font-size: .8em; margin-left: .5rem; }
+
+/* -------------------------------------------------------
+    Admin sub-navigation
+ ------------------------------------------------------- */
+ .admin-subnav {
+     display: flex;
+     gap: .25rem;
+     margin-bottom: 1.5rem;
+     border-bottom: 1px solid #ddd;
+ }
+ .admin-subnav a {
+     text-decoration: none;
+     color: #444;
+     padding: .4rem .75rem;
+     border-radius: 3px 3px 0 0;
+     border: 1px solid transparent;
+     border-bottom: none;
+     font-size: .875rem;
+     margin-bottom: -1px;
+ }
+ .admin-subnav a:hover { color: #111; background: #f5f5f5; }
+ .admin-subnav a.active {
+     color: #111;
+     background: #fff;
+     border-color: #ddd;
+     font-weight: 600;
+ }

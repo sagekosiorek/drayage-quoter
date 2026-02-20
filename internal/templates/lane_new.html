@@ -5,11 +5,19 @@
 <form method="POST" action="/lanes" class="form-narrow">
     <h2 class="form-section">Customer</h2>
 
+    <input type="hidden" id="customer_id" name="customer_id" value="">
+
     <label for="customer_name">Customer Name</label>
-    <input type="text" id="customer_name" name="customer_name" placeholder="Acme Corp" required>
+    <input type="text" id="customer_name" name="customer_name"
+           placeholder="Zorp Corp" required autocomplete="off"
+           hx-get="/customers/search"
+           hx-trigger="input changed delay:300ms"
+           hx-target="#customer-suggestions"
+           hx-include="this">
+    <div id="customer-suggestions" class="suggestions"></div>
 
     <label for="lp_number">LP Number <span class="form-hint">(MasterMind CRM)</span></label>
-    <input type="text" id="lp_number" name="lp_number" placeholder="LP-12345">
+    <input type="text" id="lp_number" name="lp_number" placeholder="12345" required>
 
     <h2 class="form-section">Lane Details</h2>
 
@@ -28,8 +36,9 @@
         <div>
             <label for="container_size">Container Size</label>
             <select id="container_size" name="container_size">
+                <option value="20_40" selected>20' / 40'</option>
                 <option value="20">20'</option>
-                <option value="40" selected>40'</option>
+                <option value="40">40'</option>
                 <option value="40HC">40' High Cube</option>
                 <option value="Flat Rack">Flat Rack</option>
             </select>
@@ -52,7 +61,7 @@
             <label for="load_type">Load Type</label>
             <select id="load_type" name="load_type">
                 <option value="live" selected>Live</option>
-                <option value="drop">Drop</option>
+                <option value="drop_pick">Drop / Pick</option>
             </select>
         </div>
     </div>
@@ -76,4 +85,13 @@
         <a href="/">Cancel</a>
     </div>
 </form>
+
+<script>
+function selectCustomer(el) {
+    document.getElementById('customer_id').value = el.dataset.id;
+    document.getElementById('customer_name').value = el.dataset.name;
+    document.getElementById('lp_number').value = el.dataset.lp;
+    document.getElementById('customer-suggestions').innerHTML = '';
+}
+</script>
 {{ end }}
