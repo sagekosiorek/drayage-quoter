@@ -463,11 +463,11 @@ Foundation: auth, data model, and core lane CRUD with opportunity list.
 - [x] Before going any further, create a .css file and clean up existing templates.
 - [x] Create users table and seed initial rep accounts
 - [x] Create customers table with CRUD (name + optional LP#)
-- [ ] Create ports table and seed with known ports/rail heads (make this an admin function)
-- [ ] Create lanes table with full field set
-- [ ] Build "New Lane" form (wizard-style, fields pre-validated)
+- [x] Create ports table and seed with known ports/rail heads (make this an admin function)
+- [x] Create lanes table with full field set
+- [x] Build "New Lane" form (wizard-style, fields pre-validated)
 - [ ] Build lane detail view (read-only for non-owners, editable for owner)
-- [ ] Build opportunity list dashboard (flat list, filterable by customer, port, status, owner)
+- [ ] Fill in opportunity list dashboard (flat list, filterable by customer, port, status, owner); click lane to open detailed view
 - [ ] Implement lane status state machine (draft -> rates_requested -> rates_received -> quoting -> quoted)
 - [ ] Deploy on Docker and gather feedback
 
