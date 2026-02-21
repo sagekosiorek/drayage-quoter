@@ -1,0 +1,100 @@
+{{ define "content" }}
+<p class="back-link"><a href="/lanes/{{ .Lane.ID }}">← Back to lane</a></p>
+<h1 class="page-title">Edit Lane</h1>
+
+<form method="POST" action="/lanes/{{ .Lane.ID }}" class="form-narrow">
+    <h2 class="form-section">Customer</h2>
+
+    <input type="hidden" id="customer_id" name="customer_id" value="{{ .Lane.CustomerID }}">
+
+    <label for="customer_name">Customer Name</label>
+    <input type="text" id="customer_name" name="customer_name"
+           value="{{ .Lane.CustomerName }}" required autocomplete="off"
+           hx-get="/customers/search"
+           hx-trigger="input changed delay:300ms"
+           hx-target="#customer-suggestions"
+           hx-include="this">
+    <div id="customer-suggestions" class="suggestions"></div>
+
+    <label for="lp_number">LP Number <span class="form-hint">(MasterMind CRM)</span></label>
+    <input type="text" id="lp_number" name="lp_number" value="{{ .Lane.CustomerLP }}" required>
+
+    <h2 class="form-section">Lane Details</h2>
+
+    <label for="origin_port_id">Origin Port / Rail Head</label>
+    <select id="origin_port_id" name="origin_port_id" required>
+        <option value="">Select port...</option>
+        {{- range .Ports }}
+        <option value="{{ .ID }}"{{ if eq .ID $.Lane.OriginPortID }} selected{{ end }}>{{ .Name }}</option>
+        {{- end }}
+    </select>
+
+    <label for="destination">Destination</label>
+    <input type="text" id="destination" name="destination" value="{{ .Lane.Destination }}" required>
+
+    <div class="form-cols">
+        <div>
+            <label for="container_size">Container Size</label>
+            <select id="container_size" name="container_size">
+                <option value="20_40"{{ if eq .Lane.ContainerSize "20_40" }} selected{{ end }}>20' / 40'</option>
+                <option value="20"{{ if eq .Lane.ContainerSize "20" }} selected{{ end }}>20'</option>
+                <option value="40"{{ if eq .Lane.ContainerSize "40" }} selected{{ end }}>40'</option>
+                <option value="40HC"{{ if eq .Lane.ContainerSize "40HC" }} selected{{ end }}>40' High Cube</option>
+                <option value="Flat Rack"{{ if eq .Lane.ContainerSize "Flat Rack" }} selected{{ end }}>Flat Rack</option>
+            </select>
+        </div>
+        <div>
+            <label for="weight">Weight (lbs)</label>
+            <input type="number" id="weight" name="weight"
+                   value="{{ if .Lane.Weight }}{{ .Lane.Weight }}{{ end }}"
+                   placeholder="Optional" min="0">
+        </div>
+    </div>
+
+    <div class="form-cols">
+        <div>
+            <label for="direction">Direction</label>
+            <select id="direction" name="direction">
+                <option value="import"{{ if eq .Lane.Direction "import" }} selected{{ end }}>Import</option>
+                <option value="export"{{ if eq .Lane.Direction "export" }} selected{{ end }}>Export</option>
+            </select>
+        </div>
+        <div>
+            <label for="load_type">Load Type</label>
+            <select id="load_type" name="load_type">
+                <option value="live"{{ if eq .Lane.LoadType "live" }} selected{{ end }}>Live</option>
+                <option value="drop_pick"{{ if eq .Lane.LoadType "drop_pick" }} selected{{ end }}>Drop / Pick</option>
+            </select>
+        </div>
+    </div>
+
+    <label for="commodity">Commodity</label>
+    <input type="text" id="commodity" name="commodity"
+           value="{{ if .Lane.Commodity }}{{ .Lane.Commodity }}{{ end }}"
+           placeholder="Optional">
+
+    <fieldset>
+        <legend>Special Requirements</legend>
+        <label><input type="checkbox" name="hazmat" value="1"{{ if .Lane.Hazmat }} checked{{ end }}> Hazmat</label>
+        <label><input type="checkbox" name="overweight" value="1"{{ if .Lane.Overweight }} checked{{ end }}> Overweight</label>
+        <label><input type="checkbox" name="out_of_gauge" value="1"{{ if .Lane.OutOfGauge }} checked{{ end }}> Out of Gauge</label>
+    </fieldset>
+
+    <label for="notes">Notes</label>
+    <textarea id="notes" name="notes" rows="3" placeholder="Optional lane notes">{{ if .Lane.Notes }}{{ .Lane.Notes }}{{ end }}</textarea>
+
+    <div class="form-actions">
+        <button class="primary" type="submit">Save Changes</button>
+        <a href="/lanes/{{ .Lane.ID }}">Cancel</a>
+    </div>
+</form>
+
+<script>
+function selectCustomer(el) {
+    document.getElementById('customer_id').value = el.dataset.id;
+    document.getElementById('customer_name').value = el.dataset.name;
+    document.getElementById('lp_number').value = el.dataset.lp;
+    document.getElementById('customer-suggestions').innerHTML = '';
+}
+</script>
+{{ end }}
