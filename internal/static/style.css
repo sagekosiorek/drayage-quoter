@@ -122,3 +122,35 @@ tr:last-child td { border-bottom: none; }
      border-color: #ddd;
      font-weight: 600;
  }
+
+/* -------------------------------------------------------
+   Lane detail view
+------------------------------------------------------- */
+.detail-section {
+    font-size: .75rem; text-transform: uppercase; color: #666;
+    font-weight: 600; letter-spacing: .06em;
+    margin: 1.25rem 0 .4rem; border-bottom: 1px solid #eee; padding-bottom: .25rem;
+}
+.detail-grid {
+    display: grid; grid-template-columns: 160px 1fr;
+    gap: .35rem .75rem; margin: .75rem 0 1.25rem;
+}
+.detail-label { font-size: .8rem; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: .04em; padding-top: 2px; }
+.detail-value { font-size: .9rem; }
+.detail-footer { font-size: .8rem; color: #aaa; margin-top: 1.5rem; }
+
+/* Status badges */
+.status-badge {
+    display: inline-block; padding: 2px 9px; border-radius: 10px;
+    font-size: .72rem; font-weight: 600; text-transform: uppercase; letter-spacing: .04em;
+}
+.status-draft           { background: #f0f0f0; color: #666; }
+.status-pending         { background: #fef9c3; color: #854d0e; }
+.status-rates_requested { background: #fef9c3; color: #854d0e; }
+.status-rates_received  { background: #dbeafe; color: #1e40af; }
+.status-quoting         { background: #e0e7ff; color: #3730a3; }
+.status-quoted          { background: #dcfce7; color: #166534; }
+
+/* Special-requirement tags */
+.req-tags { display: flex; gap: .4rem; flex-wrap: wrap; margin: .75rem 0 1.25rem; }
+.req-tag { padding: 2px 9px; border-radius: 3px; font-size: .8rem; background: #fee2e2; color: #991b1b; font-weight: 500; }

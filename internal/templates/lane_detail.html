@@ -1,0 +1,82 @@
+{{ define "content" }}
+<p class="back-link"><a href="/">← Back to lanes</a></p>
+
+<div class="page-header">
+    <div style="display:flex; align-items:center; gap:.75rem;">
+        <h1 class="page-title" style="margin:0;">
+            {{- if eq .Lane.Direction "import" -}}
+            {{ .Lane.OriginPort }} {{ .Lane.OriginPortType }} → {{ .Lane.Destination }}
+            {{- else -}}
+            {{ .Lane.Destination }} → {{ .Lane.OriginPort }} {{ .Lane.OriginPortType }}
+            {{- end -}}
+        </h1>
+        <span class="status-badge status-{{ .Lane.Status }}">{{ .Lane.Status }}</span>
+    </div>
+    {{ if .Lane.IsOwner }}
+    <a href="/lanes/{{ .Lane.ID }}/edit"><button>Edit</button></a>
+    {{ end }}
+</div>
+
+<div style="max-width: 680px;">
+
+    <p class="detail-section">Customer</p>
+    <div class="detail-grid">
+        <span class="detail-label">Name</span>
+        <span class="detail-value">{{ .Lane.CustomerName }}</span>
+        <span class="detail-label">LP Number</span>
+        <span class="detail-value">{{ .Lane.CustomerLP }}</span>
+    </div>
+
+    <p class="detail-section">Lane Details</p>
+    <div class="detail-grid">
+        <span class="detail-label">Origin Port</span>
+        <span class="detail-value">{{ .Lane.OriginPort }} {{ .Lane.OriginPortType }}</span>
+        <span class="detail-label">Destination</span>
+        <span class="detail-value">{{ .Lane.Destination }}</span>
+        <span class="detail-label">Direction</span>
+        <span class="detail-value">{{ if eq .Lane.Direction "import" }}Import{{ else }}Export{{ end }}</span>
+        <span class="detail-label">Load Type</span>
+        <span class="detail-value">{{ if eq .Lane.LoadType "live" }}Live{{ else }}Drop / Pick{{ end }}</span>
+        <span class="detail-label">Container</span>
+        <span class="detail-value">
+            {{- if eq .Lane.ContainerSize "20_40" }}20' / 40'
+            {{- else if eq .Lane.ContainerSize "20" }}20'
+            {{- else if eq .Lane.ContainerSize "40" }}40'
+            {{- else if eq .Lane.ContainerSize "40HC" }}40' High Cube
+            {{- else }}{{ .Lane.ContainerSize }}
+            {{- end -}}
+        </span>
+        {{ if .Lane.Weight }}
+        <span class="detail-label">Weight</span>
+        <span class="detail-value">{{ .Lane.Weight }} lbs</span>
+        {{ end }}
+        {{ if .Lane.Commodity }}
+        <span class="detail-label">Commodity</span>
+        <span class="detail-value">{{ .Lane.Commodity }}</span>
+        {{ end }}
+    </div>
+
+    {{ if or .Lane.Hazmat .Lane.Overweight .Lane.OutOfGauge }}
+    <p class="detail-section">Special Requirements</p>
+    <div style="margin:.75rem 0 1.25rem;">
+        <div class="req-tags">
+            {{ if .Lane.Hazmat }}<span class="req-tag">Hazmat</span>{{ end }}
+            {{ if .Lane.Overweight }}<span class="req-tag">Overweight</span>{{ end }}
+            {{ if .Lane.OutOfGauge }}<span class="req-tag">Out of Gauge</span>{{ end }}
+        </div>
+    </div>
+    {{ end }}
+
+    {{ if .Lane.Notes }}
+    <p class="detail-section">Notes</p>
+    <p style="margin:.5rem 0 1.25rem; font-size:.9rem; white-space:pre-wrap;">{{ .Lane.Notes }}</p>
+    {{ end }}
+
+    <p class="detail-footer">
+        Owner: {{ .Lane.OwnerName }} &nbsp;·&nbsp;
+        Created {{ .Lane.CreatedAt }} &nbsp;·&nbsp;
+        Updated {{ .Lane.UpdatedAt }}
+    </p>
+
+</div>
+{{ end }}

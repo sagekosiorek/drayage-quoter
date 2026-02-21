@@ -14,7 +14,22 @@
         <option value="quoting"{{ if eq .Status "quoting" }} selected{{ end }}>Quoting</option>
         <option value="quoted"{{ if eq .Status "quoted" }} selected{{ end }}>Quoted</option>
     </select>
+    <select name="port">
+        <option value="">All ports</option>
+        {{- range .Ports }}
+        <option value="{{ .ID }}"{{ if eq .ID $.PortID }} selected{{ end }}>{{ .Name }}</option>
+        {{- end }}
+    </select>
+    <select name="owner">
+        <option value="0"{{ if eq .OwnerID 0 }} selected{{ end }}>All reps</option>
+        {{- range .AllUsers }}
+        <option value="{{ .ID }}"{{ if eq .ID $.OwnerID }} selected{{ end }}>{{ .Name }}</option>
+        {{- end }}
+    </select>
     <button type="submit">Filter</button>
+    {{- if or .Query .Status .PortID }}
+    <a href="/" style="font-size:.85rem; color:#888;">Clear</a>
+    {{- end }}
 </form>
 
 <table>
@@ -34,12 +49,12 @@
         {{- if .Lanes }}
         {{- range .Lanes }}
         <tr>
-            <td>{{ .CustomerName }}</td>
+            <td><a href="/lanes/{{ .ID }}">{{ .CustomerName }}</a></td>
             <td>{{ .OriginPort }}</td>
             <td>{{ .Destination }}</td>
             <td>{{ .ContainerSize }}</td>
             <td>{{ .Direction }}</td>
-            <td>{{ .Status }}</td>
+            <td><span class="status-badge status-{{ .Status }}">{{ .Status }}</span></td>
             <td>{{ .OwnerName }}</td>
             <td>{{ .CreatedAt }}</td>
         </tr>
@@ -47,11 +62,14 @@
         {{- else }}
         <tr>
             <td colspan="8" class="empty-state">
+                {{- if or .Query .Status .PortID .OwnerID }}
+                No lanes match your filters.
+                {{- else }}
                 No lanes yet. <a href="/lanes/new">Create your first lane</a>.
+                {{- end }}
             </td>
         </tr>
         {{- end }}
     </tbody>
 </table>
 {{ end }}
-

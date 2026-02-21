@@ -7,7 +7,7 @@
 
     <input type="hidden" id="customer_id" name="customer_id" value="">
 
-    <label for="customer_name">Customer Name</label>
+    <label for="customer_name">Customer Name*</label>
     <input type="text" id="customer_name" name="customer_name"
            placeholder="Zorp Corp" required autocomplete="off"
            hx-get="/customers/search"
@@ -16,12 +16,12 @@
            hx-include="this">
     <div id="customer-suggestions" class="suggestions"></div>
 
-    <label for="lp_number">LP Number <span class="form-hint">(MasterMind CRM)</span></label>
+    <label for="lp_number">LP Number* <span class="form-hint">(MasterMind CRM)</span></label>
     <input type="text" id="lp_number" name="lp_number" placeholder="12345" required>
 
     <h2 class="form-section">Lane Details</h2>
 
-    <label for="origin_port_id">Origin Port / Rail Head</label>
+    <label for="origin_port_id">Origin Port / Rail Head*</label>
     <select id="origin_port_id" name="origin_port_id" required>
         <option value="">Select port...</option>
         {{- range .Ports }}
@@ -29,7 +29,7 @@
         {{- end }}
     </select>
 
-    <label for="destination">Destination</label>
+    <label for="destination">Destination*</label>
     <input type="text" id="destination" name="destination" placeholder="City, State or ZIP" required>
 
     <div class="form-cols">
@@ -78,6 +78,8 @@
 
     <label for="notes">Notes</label>
     <textarea id="notes" name="notes" rows="3" placeholder="Optional lane notes"></textarea>
+
+    <span class="form-hint">Required fields*</span>
 
     <div class="form-actions">
         <button class="primary" type="submit" name="action" value="save">Save Draft</button>
