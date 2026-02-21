@@ -10,11 +10,19 @@
             {{ .Lane.Destination }} → {{ .Lane.OriginPort }} {{ .Lane.OriginPortType }}
             {{- end -}}
         </h1>
-        <span class="status-badge status-{{ .Lane.Status }}">{{ .Lane.Status }}</span>
+        <span class="status-badge status-{{ .Lane.Status }}">{{ .Lane.StatusLabel }}</span>
     </div>
-    {{ if .Lane.IsOwner }}
-    <a href="/lanes/{{ .Lane.ID }}/edit"><button>Edit</button></a>
-    {{ end }}
+    <div style="display:flex; gap:.5rem;">
+        {{ if .Lane.IsOwner }}
+        <a href="/lanes/{{ .Lane.ID }}/edit"><button>Edit</button></a>
+        {{ end }}
+        {{ if and .Lane.IsOwner .Lane.NextStatus }}
+        <form method="POST" action="/lanes/{{ .Lane.ID }}/status" style="margin:0;">
+            <input type="hidden" name="next" value="{{ .Lane.NextStatus }}">
+            <button type="submit">{{ .Lane.NextStatusLabel }}</button>
+        </form>
+        {{ end }}
+    </div>
 </div>
 
 <div style="max-width: 680px;">

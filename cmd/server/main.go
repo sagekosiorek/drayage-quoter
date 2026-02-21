@@ -144,6 +144,7 @@ func main() {
 	mux.HandleFunc("GET /lanes/{id}", authService.RequireAuth(lanesSvc.HandleDetail(laneDetailTmpl)))
 	mux.HandleFunc("GET /lanes/{id}/edit", authService.RequireAuth(lanesSvc.HandleEditForm(laneEditTmpl)))
 	mux.HandleFunc("POST /lanes/{id}", authService.RequireAuth(lanesSvc.HandleUpdate()))
+	mux.HandleFunc("POST /lanes/{id}/status", authService.RequireAuth(lanesSvc.HandleAdvanceStatus()))
 
 	log.Printf("listening on :%s", port)
 	if err := http.ListenAndServe(":"+port, mux); err != nil {
