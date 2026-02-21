@@ -18,29 +18,74 @@ type Service struct {
 
 // LaneDetail holds all data needed to render the lane detail/edit views.
 type LaneDetail struct {
-	ID             int
-	OwnerID        int
-	IsOwner        bool
-	OwnerName      string
-	CustomerID     int
-	CustomerName   string
-	CustomerLP     string
-	OriginPortID   int
-	OriginPort     string
-	OriginPortType string
-	Destination    string
-	ContainerSize  string
-	Weight         *int
-	Direction      string
-	LoadType       string
-	Commodity      *string
-	Hazmat         bool
-	Overweight     bool
-	OutOfGauge     bool
-	Notes          *string
-	Status         string
-	CreatedAt      string
-	UpdatedAt      string
+	ID              int
+	OwnerID         int
+	IsOwner         bool
+	OwnerName       string
+	CustomerID      int
+	CustomerName    string
+	CustomerLP      string
+	OriginPortID    int
+	OriginPort      string
+	OriginPortType  string
+	Destination     string
+	ContainerSize   string
+	Weight          *int
+	Direction       string
+	LoadType        string
+	Commodity       *string
+	Hazmat          bool
+	Overweight      bool
+	OutOfGauge      bool
+	Notes           *string
+	Status          string
+	StatusLabel     string // e.g. "Rates Requested"
+	NextStatus      string // next valid status, or "" if terminal
+	NextStatusLabel string // button label for the advance action
+	CreatedAt       string
+	UpdatedAt       string
+}
+
+// nextStatus maps each status to its single valid successor.
+var nextStatus = map[string]string{
+	"draft":           "rates_requested",
+	"rates_requested": "rates_received",
+	"rates_received":  "quoting",
+	"quoting":         "quoted",
+}
+
+// statusLabel returns the human-readable display label for a status value.
+func statusLabel(s string) string {
+	switch s {
+	case "draft":
+		return "Draft"
+	case "rates_requested":
+		return "Rates Requested"
+	case "rates_received":
+		return "Rates Received"
+	case "quoting":
+		return "Quoting"
+	case "quoted":
+		return "Quoted"
+	default:
+		return s
+	}
+}
+
+// advanceLabel returns the action-phrased label for the button that moves to `to`.
+func advanceLabel(to string) string {
+	switch to {
+	case "rates_requested":
+		return "Request Rates →"
+	case "rates_received":
+		return "Mark Rates Received →"
+	case "quoting":
+		return "Build Lineup →"
+	case "quoted":
+		return "Mark as Quoted →"
+	default:
+		return "Advance →"
+	}
 }
 
 // LaneRow holds the data needed for a single row in the dashboard list.
@@ -96,6 +141,10 @@ func (s *Service) fetchLane(id int) (*LaneDetail, error) {
 	l.Hazmat = hazmat == 1
 	l.Overweight = overweight == 1
 	l.OutOfGauge = outOfGauge == 1
+
+	l.StatusLabel = statusLabel(l.Status)
+	l.NextStatus = nextStatus[l.Status]
+	l.NextStatusLabel = advanceLabel(l.NextStatus)
 
 	if t, err := time.Parse("2006-01-02 15:04:05", createdStr); err == nil {
 		l.CreatedAt = t.Format("Jan 2, 2006")
@@ -295,7 +344,6 @@ func (s *Service) HandleCreate() http.HandlerFunc {
 		loadType := r.FormValue("load_type")
 		commodity := r.FormValue("commodity")
 		notes := r.FormValue("notes")
-		action := r.FormValue("action")
 
 		hazmat := r.FormValue("hazmat") == "1"
 		overweightChecked := r.FormValue("overweight") == "1"
@@ -364,11 +412,6 @@ func (s *Service) HandleCreate() http.HandlerFunc {
 			return 0
 		}
 
-		status := "draft"
-		if action == "request_rates" {
-			status = "pending"
-		}
-
 		_, err = s.DB.Exec(`
 			INSERT INTO lanes (
 				owner_id, customer_id, origin_port_id, destination,
@@ -379,7 +422,7 @@ func (s *Service) HandleCreate() http.HandlerFunc {
 			user.ID, customerID, originPortID, destination,
 			containerSize, weight, direction, loadType,
 			nullableStr(commodity), btoi(hazmat), btoi(overweightChecked), btoi(outOfGauge),
-			nullableStr(notes), status,
+			nullableStr(notes), "draft",
 		)
 		if err != nil {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
@@ -387,6 +430,51 @@ func (s *Service) HandleCreate() http.HandlerFunc {
 		}
 
 		http.Redirect(w, r, "/", http.StatusSeeOther)
+	}
+}
+
+// HandleAdvanceStatus advances a lane to its next valid status (owner only).
+func (s *Service) HandleAdvanceStatus() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		user := auth.UserFromContext(r.Context())
+
+		id, err := strconv.Atoi(r.PathValue("id"))
+		if err != nil || id <= 0 {
+			http.Error(w, "Not found", http.StatusNotFound)
+			return
+		}
+
+		var currentStatus string
+		var ownerID int
+		if err := s.DB.QueryRow("SELECT owner_id, status FROM lanes WHERE id = ?", id).Scan(&ownerID, &currentStatus); err == sql.ErrNoRows {
+			http.Error(w, "Not found", http.StatusNotFound)
+			return
+		} else if err != nil {
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+
+		if ownerID != user.ID {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+
+		to := r.FormValue("next")
+		if nextStatus[currentStatus] != to {
+			http.Error(w, "Invalid status transition", http.StatusBadRequest)
+			return
+		}
+
+		_, err = s.DB.Exec(
+			"UPDATE lanes SET status = ?, updated_at = ? WHERE id = ?",
+			to, time.Now().UTC().Format("2006-01-02 15:04:05"), id,
+		)
+		if err != nil {
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+
+		http.Redirect(w, r, fmt.Sprintf("/lanes/%d", id), http.StatusSeeOther)
 	}
 }
 
