@@ -8,7 +8,13 @@ primary_region = 'ewr'
 
 [build]
 
-[mounts]
+[env]
+  DB_PATH = "/data/drayage.db"
+  BASE_URL = "https://drayage-quoter.fly.dev"
+
+[[mounts]]
+  source = "drayage_data"
+  destination = "/data"
 
 [http_service]
   internal_port = 8080

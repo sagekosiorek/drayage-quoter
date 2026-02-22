@@ -1,0 +1,32 @@
+services:
+  app:
+    build: .
+    # Skip Litestream entrypoint for local dev; run app directly against bind-mounted ./data.
+    entrypoint: ["/drayage-quoter"]
+    ports:
+      - "8080:8080"
+    environment:
+      DB_PATH: /data/drayage.db
+      BASE_URL: http://localhost:8080
+      ADMIN_EMAIL: admin@example.com  # override as needed
+    volumes:
+      - ./data:/data
+    depends_on:
+      - minio
+
+  # MinIO provides S3-compatible storage for Litestream backup testing.
+  # Console: http://localhost:9001  (minioadmin / minioadmin)
+  minio:
+    image: minio/minio
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    volumes:
+      - minio-data:/data
+
+volumes:
+  minio-data:
