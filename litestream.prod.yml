@@ -1,0 +1,11 @@
+# Production Litestream config.
+# All credentials must be provided as environment variables (Fly.io secrets).
+dbs:
+  - path: /data/drayage.db
+    replicas:
+      - type: s3
+        bucket: ${BUCKET_NAME}
+        region: ${AWS_REGION}
+        endpoint: ${AWS_ENDPOINT_URL_S3}
+        access-key-id: ${AWS_ACCESS_KEY_ID}
+        secret-access-key: ${AWS_SECRET_ACCESS_KEY}
