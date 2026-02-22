@@ -469,7 +469,7 @@ Foundation: auth, data model, and core lane CRUD with opportunity list.
 - [x] Build lane detail view (read-only for non-owners, editable for owner)
 - [x] Fill in opportunity list dashboard (flat list, filterable by customer, port, status, owner); click lane to open detailed view
 - [x] Implement lane status state machine (draft -> rates_requested -> rates_received -> quoting -> quoted)
-- [ ] Deploy on Docker and gather feedback
+- [ ] Deploy on Docker and Fly.io and gather feedback
 
 ### Milestone 2: Vendor Network
 Shared vendor database with personal preference lists.
