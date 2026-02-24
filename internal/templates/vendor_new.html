@@ -1,0 +1,74 @@
+{{ define "content" }}
+<p class="back-link"><a href="/vendors">← Back to vendors</a></p>
+<h1 class="page-title">Add Vendor</h1>
+
+<form method="POST" action="/vendors" class="form-narrow">
+
+    <h2 class="form-section">Vendor</h2>
+    <input type="hidden" id="vendor_id" name="vendor_id" value="">
+    <label for="vendor_name">Company Name*</label>
+    <input type="text" id="vendor_name" name="name" placeholder="Acme Drayage Co." required
+           autocomplete="off"
+           hx-get="/vendors/search"
+           hx-trigger="input changed delay:300ms"
+           hx-target="#vendor-suggestions"
+           hx-params="name"
+           hx-include="this">
+    <div id="vendor-suggestions" class="suggestions"></div>
+
+    <h2 class="form-section">Port</h2>
+    <label for="port_id">Port / Rail Head*</label>
+    <select id="port_id" name="port_id" required>
+        <option value="">Select port...</option>
+        {{ range .Ports }}
+        <option value="{{ .ID }}">{{ .Name }}</option>
+        {{ end }}
+    </select>
+
+    <h2 class="form-section">Contacts <span class="form-hint">(for this port)</span></h2>
+    <div id="contacts-list">
+        <div class="contact-group">
+            <div class="form-cols">
+                <div>
+                    <label>Name</label>
+                    <input type="text" name="contact_name" placeholder="Optional">
+                </div>
+                <div>
+                    <label>Phone</label>
+                    <input type="text" name="contact_phone" placeholder="Optional">
+                </div>
+            </div>
+            <label>Email</label>
+            <input type="email" name="contact_email" placeholder="dispatch@vendor.com">
+        </div>
+    </div>
+    <button type="button" onclick="addContact()" style="margin-top:.75rem; font-size:.85rem;">+ Add Another Contact</button>
+
+    <div class="form-actions">
+        <button class="primary" type="submit">Save</button>
+        <a href="/vendors">Cancel</a>
+    </div>
+</form>
+
+<script>
+function selectVendor(el) {
+    document.getElementById('vendor_id').value = el.dataset.id;
+    document.getElementById('vendor_name').value = el.dataset.name;
+    document.getElementById('vendor-suggestions').innerHTML = '';
+}
+
+function addContact() {
+    const list = document.getElementById('contacts-list');
+    const tmpl = list.querySelector('.contact-group');
+    const group = tmpl.cloneNode(true);
+    group.querySelectorAll('input').forEach(i => { i.value = ''; i.required = false; });
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = '× Remove';
+    btn.style.cssText = 'margin-top:.4rem; font-size:.8rem; color:#991b1b; background:none; border:none; cursor:pointer; padding:0;';
+    btn.onclick = () => group.remove();
+    group.appendChild(btn);
+    list.appendChild(group);
+}
+</script>
+{{ end }}

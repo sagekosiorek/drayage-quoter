@@ -154,3 +154,44 @@ tr:last-child td { border-bottom: none; }
 /* Special-requirement tags */
 .req-tags { display: flex; gap: .4rem; flex-wrap: wrap; margin: .75rem 0 1.25rem; }
 .req-tag { padding: 2px 9px; border-radius: 3px; font-size: .8rem; background: #fee2e2; color: #991b1b; font-weight: 500; }
+
+/* -------------------------------------------------------
+   Vendor views
+------------------------------------------------------- */
+/* Preferred star indicator in the vendor list */
+.pref-star { color: #ca8a04; margin-left: .3rem; font-size: .9em; }
+
+/* Preference toggle button in vendor detail */
+.pref-toggle {
+    font-size: .8rem; padding: 2px 8px;
+    border: 1px solid #d1d5db; border-radius: 10px;
+    background: #f9fafb; color: #555; cursor: pointer;
+}
+.pref-toggle:hover { background: #f0f4ff; border-color: #93c5fd; color: #1e40af; }
+.pref-toggle.pref-on { background: #fef9c3; border-color: #fbbf24; color: #92400e; }
+.pref-toggle.pref-on:hover { background: #fef3c7; }
+
+/* Danger link-style button (remove/delete in tables) */
+.btn-link-danger {
+    background: none; border: none; padding: 0;
+    color: #991b1b; font-size: .85rem; cursor: pointer; text-decoration: underline;
+}
+.btn-link-danger:hover { color: #7f1d1d; }
+
+/* Vendor notes */
+.note-item { padding: .6rem 0; border-bottom: 1px solid #f0f0f0; }
+.note-item:last-child { border-bottom: none; }
+.note-content { margin: 0 0 .2rem; font-size: .9rem; white-space: pre-wrap; }
+.note-meta { margin: 0; font-size: .75rem; color: #999; }
+
+/* Vendor port blocks */
+.port-block { margin: .75rem 0 1.25rem; border: 1px solid #e5e7eb; border-radius: 4px; }
+.port-block-header {
+    display: flex; align-items: center; gap: .75rem;
+    padding: .4rem .75rem; background: #f9fafb;
+    border-bottom: 1px solid #e5e7eb;
+}
+.port-block-name { font-weight: 600; font-size: .9rem; }
+.port-block-type { color: #666; font-size: .78rem; padding: 1px 6px; background: #eee; border-radius: 3px; }
+.port-block-actions { margin-left: auto; display: flex; gap: .5rem; align-items: center; }
+.port-block-body { padding: .5rem .75rem .75rem; }

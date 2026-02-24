@@ -62,30 +62,23 @@ Hybrid layout:
 | created_at | DATETIME | |
 | updated_at | DATETIME | |
 
-### Vendor Locations
+### Vendor Ports
 | Field | Type | Notes |
 |-------|------|-------|
-| id | TEXT (UUID) | Primary key |
-| vendor_id | TEXT (FK) | References vendors.id |
-| name | TEXT | Location name (e.g. Jacksonville, Los Angeles, |
-| created_at | DATETIME | |
-| updated_at | DATETIME | |
+| id | INTEGER | Primary key (autoincrement) |
+| vendor_id | INTEGER (FK) | References vendors.id |
+| port_id | INTEGER (FK) | References ports.id |
+| contact_id | INTEGER | Soft ref to vendor_contacts.id (primary contact for this port); no DB-enforced FK to avoid circular reference |
+| | | UNIQUE(vendor_id, port_id) |
 
 ### Vendor Contacts
 | Field | Type | Notes |
 |-------|------|-------|
-| id | TEXT (UUID) | Primary key |
-| vendor_id | TEXT (FK) | References vendors.id |
-| location_id | TEXT (FK) | References locations.id |
+| id | INTEGER | Primary key (autoincrement) |
+| vendor_ports_id | INTEGER (FK) | References vendor_ports.id; contacts are port-specific |
 | name | TEXT | Contact name, optional |
-| email | TEXT | Contact email |
+| email | TEXT | Contact email (required) |
 | phone | TEXT | Optional |
-
-### Vendor Ports
-| Field | Type | Notes |
-|-------|------|-------|
-| vendor_id | TEXT (FK) | References vendors.id |
-| port_id | TEXT (FK) | References ports.id |
 
 ### Ports
 | Field | Type | Notes |
@@ -469,20 +462,21 @@ Foundation: auth, data model, and core lane CRUD with opportunity list.
 - [x] Build lane detail view (read-only for non-owners, editable for owner)
 - [x] Fill in opportunity list dashboard (flat list, filterable by customer, port, status, owner); click lane to open detailed view
 - [x] Implement lane status state machine (draft -> rates_requested -> rates_received -> quoting -> quoted)
-- [ ] Deploy on Docker and Fly.io and gather feedback
+- [x] Deploy on Docker and Fly.io and gather feedback
 
 ### Milestone 2: Vendor Network
 Shared vendor database with personal preference lists.
 
-- [ ] Create vendors table with CRUD
-- [ ] Create vendor_contacts table (multiple contacts per vendor)
-- [ ] Create vendor_ports junction table (vendors <-> ports)
-- [ ] Create vendor_notes table (author-attributed, all shared)
-- [ ] Create vendor_preferences table (per-user, per-port)
-- [ ] Build vendor list view (filterable by port, name, searchable)
-- [ ] Build vendor detail view (contacts, ports serviced, notes, add/edit forms)
-- [ ] Build "My Preferred Vendors" management UI (toggle preferences per port)
-- [ ] Vendor creation form with multi-port selection and initial contact
+- [x] Create vendors table with CRUD
+- [x] Create vendor_contacts table (port-specific contacts via vendor_ports_id)
+- [x] Create vendor_ports table (id PK, vendor_id, port_id, contact_id soft ref, UNIQUE constraint)
+- [x] Create vendor_notes table (author-attributed, all shared)
+- [x] Create vendor_preferences table (per-user, per-port)
+- [x] Build vendor list view (filterable by port, name, searchable)
+- [x] Build vendor detail view (contacts grouped by port, notes, add/edit forms)
+- [x] Build "My Preferred Vendors" management UI (toggle preferences per port)
+- [x] Vendor creation form (autocomplete existing vendors, port select, n contacts)
+- [ ] Vendor notes should be vendor_port specific; not vendor specific. If only one port is associated, show the notes section (for that port) on the vendors home-page. A quick-view of sorts.
 - [ ] Deploy on Docker and Fly.io and gather feedback. Use it yourself
 
 ### Milestone 3: Rate Request Generation

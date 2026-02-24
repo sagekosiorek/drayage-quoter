@@ -1,0 +1,137 @@
+{{ define "content" }}
+<p class="back-link"><a href="/vendors">← Back to vendors</a></p>
+
+<div class="page-header">
+    <h1>{{ .Vendor.Name }}</h1>
+    <div style="display:flex; gap:.5rem; align-items:center;">
+        <a href="/vendors/{{ .Vendor.ID }}/edit"><button>Edit Name</button></a>
+        <form method="POST" action="/vendors/{{ .Vendor.ID }}/delete" style="margin:0;"
+              onsubmit="return confirm('Delete {{ .Vendor.Name }}? This cannot be undone.')">
+            <button type="submit" style="color:#991b1b;">Delete</button>
+        </form>
+    </div>
+</div>
+
+<div style="max-width:860px;">
+
+    {{/* ── Ports & Contacts ──────────────────────────────────── */}}
+    <p class="detail-section">Ports &amp; Contacts</p>
+
+    {{ if .Vendor.AvailablePorts }}
+    <form method="POST" action="/vendors/{{ .Vendor.ID }}/ports"
+          style="display:flex; gap:.5rem; margin-top:.75rem; align-items:center;">
+        <select name="port_id" style="width:auto;">
+            <option value="">Select port...</option>
+            {{ range .Vendor.AvailablePorts }}
+            <option value="{{ .ID }}">{{ .Name }}</option>
+            {{ end }}
+        </select>
+        <button type="submit" class="primary">Add Port</button>
+    </form>
+    {{ end }}
+
+    {{ if .Vendor.AssignedPorts }}
+    {{ range .Vendor.AssignedPorts }}
+    {{ $vp := . }}
+    <div class="port-block">
+        <div class="port-block-header">
+            <span class="port-block-name">{{ .Name }}</span>
+            <span class="port-block-type">{{ .Type }}</span>
+            <div class="port-block-actions">
+                <form method="POST" action="/vendors/{{ $.Vendor.ID }}/preferences/{{ .PortID }}" style="margin:0;">
+                    <button type="submit" class="pref-toggle {{ if .Preferred }}pref-on{{ end }}"
+                            title="{{ if .Preferred }}Remove preference{{ else }}Mark as preferred{{ end }}">
+                        {{ if .Preferred }}★ Preferred{{ else }}☆ Prefer{{ end }}
+                    </button>
+                </form>
+                <form method="POST" action="/vendors/{{ $.Vendor.ID }}/ports/{{ .ID }}/delete" style="margin:0;"
+                      onsubmit="return confirm('Remove this port and all its contacts?')">
+                    <button type="submit" class="btn-link-danger">Remove Port</button>
+                </form>
+            </div>
+        </div>
+
+        <div class="port-block-body">
+            {{ if .Contacts }}
+            <table>
+                <thead>
+                    <tr><th>Name</th><th>Email</th><th>Phone</th><th style="width:70px;"></th></tr>
+                </thead>
+                <tbody>
+                    {{ range .Contacts }}
+                    <tr>
+                        <td>{{ if .Name }}{{ .Name }}{{ else }}<span style="color:#aaa;">—</span>{{ end }}</td>
+                        <td><a href="mailto:{{ .Email }}">{{ .Email }}</a></td>
+                        <td style="color:#666;">{{ if .Phone }}{{ .Phone }}{{ else }}<span style="color:#aaa;">—</span>{{ end }}</td>
+                        <td>
+                            <form method="POST"
+                                  action="/vendors/{{ $.Vendor.ID }}/ports/{{ $vp.ID }}/contacts/{{ .ID }}/delete"
+                                  style="margin:0;">
+                                <button type="submit" class="btn-link-danger">Remove</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {{ end }}
+                </tbody>
+            </table>
+            {{ else }}
+            <p style="color:#888; font-size:.875rem; margin:.25rem 0 .75rem;">No contacts for this port yet.</p>
+            {{ end }}
+
+            <details style="margin-top:.75rem;">
+                <summary style="cursor:pointer; font-size:.875rem; color:#444; user-select:none;">+ Add Contact</summary>
+                <form method="POST" action="/vendors/{{ $.Vendor.ID }}/ports/{{ $vp.ID }}/contacts"
+                      style="margin-top:.75rem; max-width:500px;">
+                    <div class="form-cols">
+                        <div>
+                            <label>Name</label>
+                            <input type="text" name="name" placeholder="Optional">
+                        </div>
+                        <div>
+                            <label>Phone</label>
+                            <input type="text" name="phone" placeholder="Optional">
+                        </div>
+                    </div>
+                    <label>Email*</label>
+                    <input type="email" name="email" placeholder="dispatch@vendor.com" required>
+                    <div class="form-actions">
+                        <button class="primary" type="submit">Add Contact</button>
+                    </div>
+                </form>
+            </details>
+        </div>
+    </div>
+    {{ end }}
+    {{ else }}
+    <p style="color:#888; font-size:.9rem; margin:.5rem 0 1rem;">No ports assigned yet.</p>
+    {{ end }}
+
+    {{/* ── Notes ───────────────────────────────────────────────── */}}
+    <p class="detail-section" style="margin-top:2rem;">Notes</p>
+
+    {{ if .Vendor.Notes }}
+    <div style="margin-bottom:1rem;">
+        {{ range .Vendor.Notes }}
+        <div class="note-item">
+            <p class="note-content">{{ .Content }}</p>
+            <p class="note-meta">{{ .AuthorName }} &middot; {{ .CreatedAt }}</p>
+        </div>
+        {{ end }}
+    </div>
+    {{ else }}
+    <p style="color:#888; font-size:.9rem; margin:.5rem 0 1rem;">No notes yet.</p>
+    {{ end }}
+
+    <form method="POST" action="/vendors/{{ .Vendor.ID }}/notes" style="max-width:520px;">
+        <textarea name="content" rows="3" placeholder="Add a shared note..."></textarea>
+        <div class="form-actions">
+            <button class="primary" type="submit">Add Note</button>
+        </div>
+    </form>
+
+    <p class="detail-footer" style="margin-top:2rem;">
+        Created {{ .Vendor.CreatedAt }} &nbsp;·&nbsp; Updated {{ .Vendor.UpdatedAt }}
+    </p>
+
+</div>
+{{ end }}

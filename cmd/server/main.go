@@ -14,6 +14,7 @@ import (
 	"gitlab.com/perenne/clients/schneider/drayage-quoter/internal/lanes"
 	"gitlab.com/perenne/clients/schneider/drayage-quoter/internal/static"
 	"gitlab.com/perenne/clients/schneider/drayage-quoter/internal/templates"
+	"gitlab.com/perenne/clients/schneider/drayage-quoter/internal/vendors"
 )
 
 func main() {
@@ -66,6 +67,7 @@ func main() {
 
 	adminSvc := &admin.Service{DB: database}
 	lanesSvc := &lanes.Service{DB: database}
+	vendorsSvc := &vendors.Service{DB: database}
 
 	// Parse templates
 	loginTmpl := templates.MustParse("layout.html", "login.html")
@@ -76,6 +78,10 @@ func main() {
 	laneEditTmpl := templates.MustParse("layout.html", "lane_edit.html")
 	adminUsersTmpl := templates.MustParse("layout.html", "admin_users.html")
 	adminPortsTmpl := templates.MustParse("layout.html", "admin_ports.html")
+	vendorListTmpl := templates.MustParse("layout.html", "vendor_list.html")
+	vendorNewTmpl := templates.MustParse("layout.html", "vendor_new.html")
+	vendorDetailTmpl := templates.MustParse("layout.html", "vendor_detail.html")
+	vendorEditTmpl := templates.MustParse("layout.html", "vendor_edit.html")
 
 	customerSuggTmpl := template.Must(template.New("suggestions").Parse(
 		`{{range .}}<button type="button" class="suggestion-item" ` +
@@ -145,6 +151,22 @@ func main() {
 	mux.HandleFunc("GET /lanes/{id}/edit", authService.RequireAuth(lanesSvc.HandleEditForm(laneEditTmpl)))
 	mux.HandleFunc("POST /lanes/{id}", authService.RequireAuth(lanesSvc.HandleUpdate()))
 	mux.HandleFunc("POST /lanes/{id}/status", authService.RequireAuth(lanesSvc.HandleAdvanceStatus()))
+
+	// Vendor routes
+	mux.HandleFunc("GET /vendors", authService.RequireAuth(vendorsSvc.HandleList(vendorListTmpl)))
+	mux.HandleFunc("GET /vendors/search", authService.RequireAuth(vendorsSvc.HandleSearch()))
+	mux.HandleFunc("GET /vendors/new", authService.RequireAuth(vendorsSvc.HandleNewForm(vendorNewTmpl)))
+	mux.HandleFunc("POST /vendors", authService.RequireAuth(vendorsSvc.HandleCreate()))
+	mux.HandleFunc("GET /vendors/{id}", authService.RequireAuth(vendorsSvc.HandleDetail(vendorDetailTmpl)))
+	mux.HandleFunc("GET /vendors/{id}/edit", authService.RequireAuth(vendorsSvc.HandleEditForm(vendorEditTmpl)))
+	mux.HandleFunc("POST /vendors/{id}", authService.RequireAuth(vendorsSvc.HandleUpdate()))
+	mux.HandleFunc("POST /vendors/{id}/delete", authService.RequireAuth(vendorsSvc.HandleDelete()))
+	mux.HandleFunc("POST /vendors/{id}/ports", authService.RequireAuth(vendorsSvc.HandleAddPort()))
+	mux.HandleFunc("POST /vendors/{id}/ports/{vpid}/delete", authService.RequireAuth(vendorsSvc.HandleRemovePort()))
+	mux.HandleFunc("POST /vendors/{id}/ports/{vpid}/contacts", authService.RequireAuth(vendorsSvc.HandleAddContact()))
+	mux.HandleFunc("POST /vendors/{id}/ports/{vpid}/contacts/{cid}/delete", authService.RequireAuth(vendorsSvc.HandleDeleteContact()))
+	mux.HandleFunc("POST /vendors/{id}/notes", authService.RequireAuth(vendorsSvc.HandleAddNote()))
+	mux.HandleFunc("POST /vendors/{id}/preferences/{pid}", authService.RequireAuth(vendorsSvc.HandleTogglePreference()))
 
 	log.Printf("listening on :%s", port)
 	if err := http.ListenAndServe(":"+port, mux); err != nil {
