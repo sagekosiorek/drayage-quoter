@@ -4,7 +4,6 @@
 
 <form method="POST" action="/vendors" class="form-narrow">
 
-    <h2 class="form-section">Vendor</h2>
     <input type="hidden" id="vendor_id" name="vendor_id" value="">
     <label for="vendor_name">Company Name*</label>
     <input type="text" id="vendor_name" name="name" placeholder="Acme Drayage Co." required
@@ -15,34 +14,7 @@
            hx-params="name"
            hx-include="this">
     <div id="vendor-suggestions" class="suggestions"></div>
-
-    <h2 class="form-section">Port</h2>
-    <label for="port_id">Port / Rail Head*</label>
-    <select id="port_id" name="port_id" required>
-        <option value="">Select port...</option>
-        {{ range .Ports }}
-        <option value="{{ .ID }}">{{ .Name }}</option>
-        {{ end }}
-    </select>
-
-    <h2 class="form-section">Contacts <span class="form-hint">(for this port)</span></h2>
-    <div id="contacts-list">
-        <div class="contact-group">
-            <div class="form-cols">
-                <div>
-                    <label>Name</label>
-                    <input type="text" name="contact_name" placeholder="Optional">
-                </div>
-                <div>
-                    <label>Phone</label>
-                    <input type="text" name="contact_phone" placeholder="Optional">
-                </div>
-            </div>
-            <label>Email</label>
-            <input type="email" name="contact_email" placeholder="dispatch@vendor.com">
-        </div>
-    </div>
-    <button type="button" onclick="addContact()" style="margin-top:.75rem; font-size:.85rem;">+ Add Another Contact</button>
+        <p style="color:#888; font-size:.9rem; margin:.5rem 0 1rem;">You'll be able to add ports this vendor services + contacts once they're created.</p>
 
     <div class="form-actions">
         <button class="primary" type="submit">Save</button>

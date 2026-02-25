@@ -30,21 +30,21 @@ type VendorRow struct {
 type VendorDetail struct {
 	ID             int
 	Name           string
-	AssignedPorts  []VendorPort // ports this vendor services, each with their contacts
+	AssignedPorts  []VendorPort // ports this vendor services, each with their contacts and notes
 	AvailablePorts []PortRef    // ports not yet assigned (for add dropdown)
-	Notes          []NoteRow
 	CreatedAt      string
 	UpdatedAt      string
 }
 
-// VendorPort is a vendor_ports row joined with port name/type and its contacts.
+// VendorPort is a vendor_ports row joined with port name/type, its contacts, and port-scoped notes.
 type VendorPort struct {
-	ID        int // vendor_ports.id (used for contact and remove-port routes)
+	ID        int // vendor_ports.id (used for contact, note, and remove-port routes)
 	PortID    int // ports.id (used for preference toggle route)
 	Name      string
 	Type      string
 	Preferred bool
 	Contacts  []ContactRow
+	Notes     []NoteRow
 }
 
 // PortRef is a minimal port record for dropdowns.
@@ -108,12 +108,14 @@ func (s *Service) fetchVendorDetail(vendorID, userID int) (*VendorDetail, error)
 	}
 	pRows.Close()
 
-	// Contacts for each assigned port (N queries, but N is small).
+	// Contacts and notes for each assigned port (N queries each, but N is small).
 	for i := range v.AssignedPorts {
+		vpID := v.AssignedPorts[i].ID
+
 		cRows, err := s.DB.Query(
 			`SELECT id, COALESCE(name,''), email, COALESCE(phone,'')
 			 FROM vendor_contacts WHERE vendor_ports_id = ? ORDER BY id`,
-			v.AssignedPorts[i].ID,
+			vpID,
 		)
 		if err != nil {
 			return nil, err
@@ -127,6 +129,27 @@ func (s *Service) fetchVendorDetail(vendorID, userID int) (*VendorDetail, error)
 			v.AssignedPorts[i].Contacts = append(v.AssignedPorts[i].Contacts, c)
 		}
 		cRows.Close()
+
+		nRows, err := s.DB.Query(`
+			SELECT n.id, u.name, n.content, n.created_at
+			FROM vendor_notes n
+			JOIN users u ON n.author_id = u.id
+			WHERE n.vendor_ports_id = ? ORDER BY n.created_at DESC
+		`, vpID)
+		if err != nil {
+			return nil, err
+		}
+		for nRows.Next() {
+			var n NoteRow
+			var ts string
+			if err := nRows.Scan(&n.ID, &n.AuthorName, &n.Content, &ts); err != nil {
+				nRows.Close()
+				return nil, err
+			}
+			n.CreatedAt = fmtDate(ts)
+			v.AssignedPorts[i].Notes = append(v.AssignedPorts[i].Notes, n)
+		}
+		nRows.Close()
 	}
 
 	// Available ports: those not yet assigned to this vendor.
@@ -147,28 +170,6 @@ func (s *Service) fetchVendorDetail(vendorID, userID int) (*VendorDetail, error)
 		v.AvailablePorts = append(v.AvailablePorts, p)
 	}
 	avRows.Close()
-
-	// Notes newest-first with author name.
-	nRows, err := s.DB.Query(`
-		SELECT n.id, u.name, n.content, n.created_at
-		FROM vendor_notes n
-		JOIN users u ON n.author_id = u.id
-		WHERE n.vendor_id = ? ORDER BY n.created_at DESC
-	`, vendorID)
-	if err != nil {
-		return nil, err
-	}
-	for nRows.Next() {
-		var n NoteRow
-		var ts string
-		if err := nRows.Scan(&n.ID, &n.AuthorName, &n.Content, &ts); err != nil {
-			nRows.Close()
-			return nil, err
-		}
-		n.CreatedAt = fmtDate(ts)
-		v.Notes = append(v.Notes, n)
-	}
-	nRows.Close()
 
 	return &v, nil
 }
@@ -346,11 +347,9 @@ func (s *Service) HandleNewForm(tmpl *template.Template) http.HandlerFunc {
 func (s *Service) HandleCreate() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		name := strings.TrimSpace(r.FormValue("name"))
-		portIDStr := r.FormValue("port_id")
-		portID, _ := strconv.Atoi(portIDStr)
 
-		if name == "" || portID <= 0 {
-			http.Error(w, "Vendor name and port are required", http.StatusBadRequest)
+		if name == "" {
+			http.Error(w, "Vendor name is required", http.StatusBadRequest)
 			return
 		}
 
@@ -372,45 +371,6 @@ func (s *Service) HandleCreate() http.HandlerFunc {
 				http.Error(w, "Internal server error", http.StatusInternalServerError)
 				return
 			}
-		}
-
-		// Insert vendor_ports row; if this port is already assigned, find the existing row.
-		var vpID int64
-		res, err := s.DB.Exec(
-			`INSERT OR IGNORE INTO vendor_ports (vendor_id, port_id) VALUES (?, ?)`, vendorID, portID,
-		)
-		if err != nil {
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
-			return
-		}
-		if n, _ := res.RowsAffected(); n == 0 {
-			s.DB.QueryRow(
-				`SELECT id FROM vendor_ports WHERE vendor_id = ? AND port_id = ?`, vendorID, portID,
-			).Scan(&vpID)
-		} else {
-			vpID, _ = res.LastInsertId()
-		}
-
-		// Insert contacts for this port; skip rows where email is blank.
-		emails := r.Form["contact_email"]
-		names := r.Form["contact_name"]
-		phones := r.Form["contact_phone"]
-		for i, email := range emails {
-			email = strings.TrimSpace(email)
-			if email == "" {
-				continue
-			}
-			cname, cphone := "", ""
-			if i < len(names) {
-				cname = strings.TrimSpace(names[i])
-			}
-			if i < len(phones) {
-				cphone = strings.TrimSpace(phones[i])
-			}
-			s.DB.Exec(
-				`INSERT INTO vendor_contacts (vendor_ports_id, name, email, phone) VALUES (?, ?, ?, ?)`,
-				vpID, nullableStr(cname), email, nullableStr(cphone),
-			)
 		}
 
 		http.Redirect(w, r, fmt.Sprintf("/vendors/%d", vendorID), http.StatusSeeOther)
@@ -626,7 +586,7 @@ func (s *Service) HandleDeleteContact() http.HandlerFunc {
 	}
 }
 
-// HandleAddNote appends a shared note to a vendor (author = current user).
+// HandleAddNote appends a shared note to a vendor_port (author = current user).
 func (s *Service) HandleAddNote() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user := auth.UserFromContext(r.Context())
@@ -635,11 +595,25 @@ func (s *Service) HandleAddNote() http.HandlerFunc {
 			http.Error(w, "Not found", http.StatusNotFound)
 			return
 		}
+		vpid, err := strconv.Atoi(r.PathValue("vpid"))
+		if err != nil || vpid <= 0 {
+			http.Error(w, "Not found", http.StatusNotFound)
+			return
+		}
+		// Verify the vendor_ports row belongs to this vendor.
+		var exists int
+		s.DB.QueryRow(
+			`SELECT COUNT(*) FROM vendor_ports WHERE id = ? AND vendor_id = ?`, vpid, id,
+		).Scan(&exists)
+		if exists == 0 {
+			http.Error(w, "Not found", http.StatusNotFound)
+			return
+		}
 		content := strings.TrimSpace(r.FormValue("content"))
 		if content != "" {
 			s.DB.Exec(
-				`INSERT INTO vendor_notes (vendor_id, author_id, content) VALUES (?, ?, ?)`,
-				id, user.ID, content,
+				`INSERT INTO vendor_notes (vendor_ports_id, author_id, content) VALUES (?, ?, ?)`,
+				vpid, user.ID, content,
 			)
 		}
 		http.Redirect(w, r, fmt.Sprintf("/vendors/%d", id), http.StatusSeeOther)

@@ -476,8 +476,7 @@ Shared vendor database with personal preference lists.
 - [x] Build vendor detail view (contacts grouped by port, notes, add/edit forms)
 - [x] Build "My Preferred Vendors" management UI (toggle preferences per port)
 - [x] Vendor creation form (autocomplete existing vendors, port select, n contacts)
-- [ ] Vendor notes should be vendor_port specific; not vendor specific. If only one port is associated, show the notes section (for that port) on the vendors home-page. A quick-view of sorts.
-- [ ] Deploy on Docker and Fly.io and gather feedback. Use it yourself
+- [x] Vendor notes should be vendor_port specific; not vendor specific.
 
 ### Milestone 3: Rate Request Generation
 Template-based rate request creation with manual email workflow.
@@ -549,4 +548,5 @@ Apply markups, preview, and export customer-facing CSV.
 ### Milestone 7: Loose ends
 Styling, last-min changes
 
+- [ ] Polish some of the reactivity; e.g. utilize HTMX more for small components that otherwise require full page refresh
 - [ ] Map FreightPower Shipper styling

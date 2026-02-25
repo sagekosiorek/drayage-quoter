@@ -22,8 +22,6 @@
         <tr>
             <th>Vendor</th>
             <th>Ports Serviced</th>
-            <th>Contacts</th>
-            <th></th>
         </tr>
     </thead>
     <tbody>
@@ -34,8 +32,6 @@
                 {{ if .IsPreferred }}<span class="pref-star" title="Preferred">★</span>{{ end }}
             </td>
             <td style="color:#666; font-size:.85rem;">{{ if .Ports }}{{ .Ports }}{{ else }}&mdash;{{ end }}</td>
-            <td style="color:#888; font-size:.85rem;">{{ .ContactCount }}</td>
-            <td><a href="/vendors/{{ .ID }}" style="font-size:.85rem;">View →</a></td>
         </tr>
         {{ end }}
     </tbody>
