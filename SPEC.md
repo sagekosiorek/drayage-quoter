@@ -350,17 +350,18 @@ Email Content (raw text/HTML)
 
 ### Flow 3: Create and Send Rate Request
 1. If not coming from Flow 1, rep opens a lane -> clicks "Request Rates"
-2. App shows vendors filtered by the lane's origin port, with rep's preferred vendors selected
-3. Rep has option to deselect vendors, ignoring them for this blast (checkboxes). Notably, this does not modify their underlying preferred vendor list
+2. App shows vendors filtered by the lane's origin port, with rep's preferred vendors selected. There are button options to: toggle "all" selection and toggle "preferred" selection
+3. Rep has option to deselect vendors, ignoring them for this blast (checkboxes). Notably, this does not modify their underlying preferred vendor list.
 4. App generates rate request template:
    - Subject: `Rate Request: [Port Name] - [Destination] - [Direction] - [REF_ID]`
-   - Body: Pre-populated with lane defaults (port, container, weight, direction, hazmat, etc.)
+   - Body: Pre-populated with all lane details (port, container size, weight, direction, hazmat, etc.).
+   - *No customer information is included in any of this.
 5. Rep can edit subject and body
 6. Rep sets response threshold (e.g., "notify me after 3 responses")
-7. Rep optionally sets a deadline (e.g., "notify me after 24 hours regardless")
+7. Rep optionally sets a deadline (e.g., "notify me after X hours regardless")
 8. Vendor contact emails shown as `mailto:` links
-9. Rep clicks each (automatically populating vendor-related placeholders into the email), copy/pastes content, sends from Outlook
-10. Lane status updates to "rates_requested"
+9. Rep clicks each (automatically populating vendor-related placeholders into the email - e.g. first name of vendor_contacts.name), copy/pastes content, sends from Outlook.
+10. Lane status updates to "rates_requested" after the first vendor contact email is clicked.
 
 ### Flow 4: Rate Comparison
 1. Forwarded vendor rate emails are parsed and matched to rate requests
@@ -483,7 +484,7 @@ Template-based rate request creation with manual email workflow.
 
 - [ ] Create rate_requests table with reference ID generation (e.g., RR-YYYY-NNNNN)
 - [ ] Create rate_request_vendors junction table
-- [ ] Build vendor selection UI: filtered by lane's origin port, rep's preferences highlighted, checkbox selection
+- [ ] Build vendor selection UI. Kicked off from either the exiting 'Request Rates ->' button on the lane_detail.html page, or a button on the lane_new.html page called 'Save & Request Rates'.
 - [ ] Build rate request template engine: subject line and body generation from lane data
 - [ ] Pre-populate template defaults (port name, container size, legal weight, non-haz, etc.)
 - [ ] Editable subject and body fields with live preview
@@ -548,5 +549,11 @@ Apply markups, preview, and export customer-facing CSV.
 ### Milestone 7: Loose ends
 Styling, last-min changes
 
+- [ ] Refactor main.go - modularizing the route library into a separate file.
+- [ ] User can modify the default rate request email body template
+- [ ] Modify all dates to be human readable
+- [ ] Add UI error message handling
 - [ ] Polish some of the reactivity; e.g. utilize HTMX more for small components that otherwise require full page refresh
 - [ ] Map FreightPower Shipper styling
+- [ ] Add multi-lane rate request for lanes with the same Origin Port.
+

@@ -13,14 +13,18 @@
         <span class="status-badge status-{{ .Lane.Status }}">{{ .Lane.StatusLabel }}</span>
     </div>
     <div style="display:flex; gap:.5rem;">
-        {{ if .Lane.IsOwner }}
+        {{ if and .Lane.IsOwner (eq .Lane.Status "draft") }}
         <a href="/lanes/{{ .Lane.ID }}/edit"><button>Edit</button></a>
         {{ end }}
         {{ if and .Lane.IsOwner .Lane.NextStatus }}
+        {{ if eq .Lane.Status "draft" }}
+        <a href="/lanes/{{ .Lane.ID }}/rate-request/new"><button class="primary">Request Rates →</button></a>
+        {{ else }}
         <form method="POST" action="/lanes/{{ .Lane.ID }}/status" style="margin:0;">
             <input type="hidden" name="next" value="{{ .Lane.NextStatus }}">
             <button type="submit">{{ .Lane.NextStatusLabel }}</button>
         </form>
+        {{ end }}
         {{ end }}
     </div>
 </div>
@@ -78,6 +82,18 @@
     {{ if .Lane.Notes }}
     <p class="detail-section">Notes</p>
     <p style="margin:.5rem 0 1.25rem; font-size:.9rem; white-space:pre-wrap;">{{ .Lane.Notes }}</p>
+    {{ end }}
+
+    {{ if .RateRequest }}
+    <p class="detail-section">Rate Request</p>
+    <div class="detail-grid">
+        <span class="detail-label">Reference</span>
+        <span class="detail-value"><a href="/rate-requests/{{ .RateRequest.ID }}">{{ .RateRequest.ReferenceID }}</a></span>
+        <span class="detail-label">Vendors</span>
+        <span class="detail-value">{{ .RateRequest.VendorCount }}</span>
+        <span class="detail-label">Responses</span>
+        <span class="detail-value">{{ .RateRequest.ResponsesReceived }}</span>
+    </div>
     {{ end }}
 
     <p class="detail-footer">

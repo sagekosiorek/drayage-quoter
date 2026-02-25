@@ -1,0 +1,106 @@
+{{ define "content" }}
+<p class="back-link"><a href="/lanes/{{ .RateRequest.Lane.ID }}">← Back to lane</a></p>
+
+<div class="page-header">
+    <div style="display:flex;align-items:center;gap:.75rem;">
+        <h1 class="page-title" style="margin:0;">
+            {{- if eq .RateRequest.Lane.Direction "import" -}}
+            {{ .RateRequest.Lane.OriginPort }} {{ .RateRequest.Lane.OriginPortType }} → {{ .RateRequest.Lane.Destination }}
+            {{- else -}}
+            {{ .RateRequest.Lane.Destination }} → {{ .RateRequest.Lane.OriginPort }} {{ .RateRequest.Lane.OriginPortType }}
+            {{- end -}}
+        </h1>
+        <span class="status-badge status-{{ .RateRequest.Lane.Status }}">{{ .RateRequest.Lane.StatusLabel }}</span>
+    </div>
+</div>
+
+<div style="display:flex;gap:1.5rem;flex-wrap:wrap;margin-bottom:1.5rem;font-size:.85rem;color:#555;">
+    <span><strong>Ref:</strong> {{ .RateRequest.ReferenceID }}</span>
+    <span><strong>Created:</strong> {{ .RateRequest.CreatedAt }}</span>
+    <span><strong>Responses:</strong> {{ .RateRequest.ResponsesReceived }} / {{ len .RateRequest.Vendors }}</span>
+    {{ if .RateRequest.Threshold }}<span><strong>Threshold:</strong> {{ .RateRequest.Threshold }} responses</span>{{ end }}
+    {{ if .RateRequest.Deadline }}<span><strong>Deadline:</strong> {{ .RateRequest.Deadline }}</span>{{ end }}
+</div>
+
+<div class="rr-layout">
+
+    <!-- Left: Email draft (read-only display) -->
+    <div>
+        <p class="detail-section">Email Draft</p>
+
+        <p style="font-size:.78rem;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.04em;margin:.75rem 0 .25rem;">Subject</p>
+        <div style="display:flex;gap:.5rem;align-items:flex-start;">
+            <div id="subject-display" style="flex:1;padding:6px 8px;border:1px solid #e5e7eb;border-radius:3px;font-size:.9rem;background:#f9fafb;word-break:break-word;">{{ .RateRequest.Subject }}</div>
+        </div>
+
+        <p style="font-size:.78rem;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.04em;margin:.75rem 0 .25rem;">Body</p>
+        <p style="font-size:.78rem;color:#888;margin-top:.35rem;">Use each vendor's "Copy Body" button in the table to fill in their first name.</p>
+        <div style="display:flex;gap:.5rem;align-items:flex-start;">
+            <pre id="body-display" style="flex:1;padding:8px;border:1px solid #e5e7eb;border-radius:3px;font-size:.85rem;background:#f9fafb;white-space:pre-wrap;margin:0;font-family:inherit;word-break:break-word;">{{ .RateRequest.Body }}</pre>
+        </div>
+    </div>
+
+    <!-- Right: Blast status table -->
+    <div>
+        <p class="detail-section">Blast Status</p>
+
+        {{ if .RateRequest.Vendors }}
+        <table>
+            <thead>
+                <tr>
+                    <th>Vendor</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{ range .RateRequest.Vendors }}
+                <tr class="{{ if .Responded }}rr-responded{{ end }}">
+                    <td>
+                        <div style="font-weight:500;">{{ .VendorName }}</div>
+                        {{ range .Contacts }}
+                        <div style="font-size:.78rem;color:#666;">
+                            {{ .Name }}{{ if and .Name .Email }} · {{ end }}<a href="mailto:{{ .Email }}">{{ .Email }}</a>
+                        </div>
+                        {{ end }}
+                        {{ if not .Contacts }}
+                        <div class="rr-vendor-item-warn">(no contact on file)</div>
+                        {{ end }}
+                    </td>
+                    <td>
+                        {{ if .Responded }}
+                        <span style="color:#166534;font-weight:600;">Responded</span>
+                        {{ else }}
+                        <span style="color:#888;">Pending</span>
+                        {{ end }}
+                    </td>
+                    <td>
+                        <div style="display:flex;gap:.35rem;flex-wrap:wrap;">
+                            {{ if .MailtoHref }}
+                            <a href="{{ .MailtoHref }}"><button type="button">Open Draft</button></a>
+                            {{ end }}
+                            <button type="button" onclick="copyBodyFor('{{ .GreetingName }}')">Copy Body</button>
+                        </div>
+                    </td>
+                </tr>
+                {{ end }}
+            </tbody>
+        </table>
+        {{ else }}
+        <p class="empty-state">No vendors on this rate request.</p>
+        {{ end }}
+    </div>
+
+</div>
+
+<script>
+function copyElem(id) {
+    navigator.clipboard.writeText(document.getElementById(id).textContent.trim());
+}
+function copyBodyFor(firstName) {
+    const body = document.getElementById('body-display').textContent;
+    const filled = firstName ? body.replace('[First Name]', firstName) : body;
+    navigator.clipboard.writeText(filled);
+}
+</script>
+{{ end }}

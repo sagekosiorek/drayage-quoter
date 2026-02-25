@@ -16,6 +16,14 @@ type Service struct {
 	DB *sql.DB
 }
 
+// RateRequestSnippet holds the minimal rate request data shown on the lane detail page.
+type RateRequestSnippet struct {
+	ID                int
+	ReferenceID       string
+	VendorCount       int
+	ResponsesReceived int
+}
+
 // LaneDetail holds all data needed to render the lane detail/edit views.
 type LaneDetail struct {
 	ID              int
@@ -412,7 +420,7 @@ func (s *Service) HandleCreate() http.HandlerFunc {
 			return 0
 		}
 
-		_, err = s.DB.Exec(`
+		res, err := s.DB.Exec(`
 			INSERT INTO lanes (
 				owner_id, customer_id, origin_port_id, destination,
 				container_size, weight, direction, load_type,
@@ -429,6 +437,11 @@ func (s *Service) HandleCreate() http.HandlerFunc {
 			return
 		}
 
+		laneID, _ := res.LastInsertId()
+		if r.FormValue("action") == "request_rates" {
+			http.Redirect(w, r, fmt.Sprintf("/lanes/%d/rate-request/new", laneID), http.StatusSeeOther)
+			return
+		}
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 	}
 }
@@ -501,9 +514,29 @@ func (s *Service) HandleDetail(tmpl *template.Template) http.HandlerFunc {
 
 		lane.IsOwner = lane.OwnerID == user.ID
 
+		var rr *RateRequestSnippet
+		var rrID, rrVendorCount, rrResponsesReceived int
+		var rrRefID string
+		err = s.DB.QueryRow(`
+			SELECT rr.id, rr.reference_id, rr.responses_received,
+			       (SELECT COUNT(*) FROM rate_request_vendors WHERE rate_request_id = rr.id)
+			FROM rate_requests rr
+			WHERE rr.lane_id = ?
+			ORDER BY rr.created_at DESC LIMIT 1
+		`, id).Scan(&rrID, &rrRefID, &rrResponsesReceived, &rrVendorCount)
+		if err == nil {
+			rr = &RateRequestSnippet{
+				ID:                rrID,
+				ReferenceID:       rrRefID,
+				VendorCount:       rrVendorCount,
+				ResponsesReceived: rrResponsesReceived,
+			}
+		}
+
 		tmpl.ExecuteTemplate(w, "layout.html", map[string]any{
-			"User": user,
-			"Lane": lane,
+			"User":        user,
+			"Lane":        lane,
+			"RateRequest": rr,
 		})
 	}
 }
