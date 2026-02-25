@@ -12,6 +12,7 @@ import (
 	"gitlab.com/perenne/clients/schneider/drayage-quoter/internal/auth"
 	"gitlab.com/perenne/clients/schneider/drayage-quoter/internal/db"
 	"gitlab.com/perenne/clients/schneider/drayage-quoter/internal/lanes"
+	rate_requests "gitlab.com/perenne/clients/schneider/drayage-quoter/internal/rate_requests"
 	"gitlab.com/perenne/clients/schneider/drayage-quoter/internal/static"
 	"gitlab.com/perenne/clients/schneider/drayage-quoter/internal/templates"
 	"gitlab.com/perenne/clients/schneider/drayage-quoter/internal/vendors"
@@ -68,6 +69,7 @@ func main() {
 	adminSvc := &admin.Service{DB: database}
 	lanesSvc := &lanes.Service{DB: database}
 	vendorsSvc := &vendors.Service{DB: database}
+	rrSvc := &rate_requests.Service{DB: database}
 
 	// Parse templates
 	loginTmpl := templates.MustParse("layout.html", "login.html")
@@ -82,6 +84,8 @@ func main() {
 	vendorNewTmpl := templates.MustParse("layout.html", "vendor_new.html")
 	vendorDetailTmpl := templates.MustParse("layout.html", "vendor_detail.html")
 	vendorEditTmpl := templates.MustParse("layout.html", "vendor_edit.html")
+	rrNewTmpl := templates.MustParse("layout.html", "rate_request_new.html")
+	rrDetailTmpl := templates.MustParse("layout.html", "rate_request_detail.html")
 
 	customerSuggTmpl := template.Must(template.New("suggestions").Parse(
 		`{{range .}}<button type="button" class="suggestion-item" ` +
@@ -151,6 +155,11 @@ func main() {
 	mux.HandleFunc("GET /lanes/{id}/edit", authService.RequireAuth(lanesSvc.HandleEditForm(laneEditTmpl)))
 	mux.HandleFunc("POST /lanes/{id}", authService.RequireAuth(lanesSvc.HandleUpdate()))
 	mux.HandleFunc("POST /lanes/{id}/status", authService.RequireAuth(lanesSvc.HandleAdvanceStatus()))
+
+	// Rate request routes
+	mux.HandleFunc("GET /lanes/{id}/rate-request/new", authService.RequireAuth(rrSvc.HandleNewForm(rrNewTmpl)))
+	mux.HandleFunc("POST /lanes/{id}/rate-request", authService.RequireAuth(rrSvc.HandleCreate()))
+	mux.HandleFunc("GET /rate-requests/{id}", authService.RequireAuth(rrSvc.HandleDetail(rrDetailTmpl)))
 
 	// Vendor routes
 	mux.HandleFunc("GET /vendors", authService.RequireAuth(vendorsSvc.HandleList(vendorListTmpl)))
