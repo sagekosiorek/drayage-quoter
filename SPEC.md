@@ -482,18 +482,18 @@ Shared vendor database with personal preference lists.
 ### Milestone 3: Rate Request Generation
 Template-based rate request creation with manual email workflow.
 
-- [ ] Create rate_requests table with reference ID generation (e.g., RR-YYYY-NNNNN)
-- [ ] Create rate_request_vendors junction table
-- [ ] Build vendor selection UI. Kicked off from either the exiting 'Request Rates ->' button on the lane_detail.html page, or a button on the lane_new.html page called 'Save & Request Rates'.
-- [ ] Build rate request template engine: subject line and body generation from lane data
-- [ ] Pre-populate template defaults (port name, container size, legal weight, non-haz, etc.)
-- [ ] Editable subject and body fields with live preview
-- [ ] "Copy Subject" and "Copy Body" one-click clipboard buttons
-- [ ] Render selected vendor contacts as `mailto:` links which also update the email body with vendor contact name (i.e. "Hi Muphy,")
-- [ ] Response threshold input (number of vendors)
-- [ ] Deadline input (datetime picker)
-- [ ] Save rate request and update lane status to "rates_requested"
-- [ ] Rate request detail view showing blast status (which vendors, responded/pending)
+- [x] Create rate_requests table with reference ID generation (e.g., RR-YYYY-NNNNN)
+- [x] Create rate_request_vendors junction table
+- [x] Build vendor selection UI. Kicked off from either the exiting 'Request Rates ->' button on the lane_detail.html page, or a button on the lane_new.html page called 'Save & Request Rates'.
+- [x] Build rate request template engine: subject line and body generation from lane data
+- [x] Pre-populate template defaults (port name, container size, legal weight, non-haz, etc.)
+- [x] Editable subject and body fields with live preview
+- [x] "Copy Subject" and "Copy Body" one-click clipboard buttons
+- [x] Render selected vendor contacts as `mailto:` links which also update the email body with vendor contact name (i.e. "Hi Muphy,")
+- [x] Response threshold input (number of vendors)
+- [x] Deadline input (datetime picker)
+- [x] Save rate request and update lane status to "rates_requested"
+- [x] Rate request detail view showing blast status (which vendors, responded/pending)
 - [ ] Deploy and gather feedback
 
 ### Milestone 4: Rate Parsing + Ingestion
