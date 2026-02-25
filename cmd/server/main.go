@@ -163,9 +163,9 @@ func main() {
 	mux.HandleFunc("POST /vendors/{id}/delete", authService.RequireAuth(vendorsSvc.HandleDelete()))
 	mux.HandleFunc("POST /vendors/{id}/ports", authService.RequireAuth(vendorsSvc.HandleAddPort()))
 	mux.HandleFunc("POST /vendors/{id}/ports/{vpid}/delete", authService.RequireAuth(vendorsSvc.HandleRemovePort()))
+	mux.HandleFunc("POST /vendors/{id}/ports/{vpid}/notes", authService.RequireAuth(vendorsSvc.HandleAddNote()))
 	mux.HandleFunc("POST /vendors/{id}/ports/{vpid}/contacts", authService.RequireAuth(vendorsSvc.HandleAddContact()))
 	mux.HandleFunc("POST /vendors/{id}/ports/{vpid}/contacts/{cid}/delete", authService.RequireAuth(vendorsSvc.HandleDeleteContact()))
-	mux.HandleFunc("POST /vendors/{id}/notes", authService.RequireAuth(vendorsSvc.HandleAddNote()))
 	mux.HandleFunc("POST /vendors/{id}/preferences/{pid}", authService.RequireAuth(vendorsSvc.HandleTogglePreference()))
 
 	log.Printf("listening on :%s", port)

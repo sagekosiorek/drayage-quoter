@@ -17,19 +17,6 @@
     {{/* ── Ports & Contacts ──────────────────────────────────── */}}
     <p class="detail-section">Ports &amp; Contacts</p>
 
-    {{ if .Vendor.AvailablePorts }}
-    <form method="POST" action="/vendors/{{ .Vendor.ID }}/ports"
-          style="display:flex; gap:.5rem; margin-top:.75rem; align-items:center;">
-        <select name="port_id" style="width:auto;">
-            <option value="">Select port...</option>
-            {{ range .Vendor.AvailablePorts }}
-            <option value="{{ .ID }}">{{ .Name }}</option>
-            {{ end }}
-        </select>
-        <button type="submit" class="primary">Add Port</button>
-    </form>
-    {{ end }}
-
     {{ if .Vendor.AssignedPorts }}
     {{ range .Vendor.AssignedPorts }}
     {{ $vp := . }}
@@ -79,7 +66,7 @@
             {{ end }}
 
             <details style="margin-top:.75rem;">
-                <summary style="cursor:pointer; font-size:.875rem; color:#444; user-select:none;">+ Add Contact</summary>
+                <summary style="cursor:pointer; font-size:.875rem; color:#444; user-select:none;">Add Contact</summary>
                 <form method="POST" action="/vendors/{{ $.Vendor.ID }}/ports/{{ $vp.ID }}/contacts"
                       style="margin-top:.75rem; max-width:500px;">
                     <div class="form-cols">
@@ -99,6 +86,31 @@
                     </div>
                 </form>
             </details>
+
+            <details style="margin-top:.5rem;">
+                <summary style="cursor:pointer; font-size:.875rem; color:#444; user-select:none;">
+                    Notes{{ if .Notes }} ({{ len .Notes }}){{ end }}
+                </summary>
+                <div style="margin-top:.75rem;">
+                    {{ if .Notes }}
+                    {{ range .Notes }}
+                    <div class="note-item">
+                        <p class="note-content">{{ .Content }}</p>
+                        <p class="note-meta">{{ .AuthorName }} &middot; {{ .CreatedAt }}</p>
+                    </div>
+                    {{ end }}
+                    {{ else }}
+                    <p style="color:#888; font-size:.875rem; margin:.25rem 0 .75rem;">No notes for this port yet.</p>
+                    {{ end }}
+                    <form method="POST" action="/vendors/{{ $.Vendor.ID }}/ports/{{ $vp.ID }}/notes"
+                          style="margin-top:.75rem; max-width:500px;">
+                        <textarea name="content" rows="3" placeholder="Add a shared note..."></textarea>
+                        <div class="form-actions">
+                            <button class="primary" type="submit">Add Note</button>
+                        </div>
+                    </form>
+                </div>
+            </details>
         </div>
     </div>
     {{ end }}
@@ -106,28 +118,18 @@
     <p style="color:#888; font-size:.9rem; margin:.5rem 0 1rem;">No ports assigned yet.</p>
     {{ end }}
 
-    {{/* ── Notes ───────────────────────────────────────────────── */}}
-    <p class="detail-section" style="margin-top:2rem;">Notes</p>
-
-    {{ if .Vendor.Notes }}
-    <div style="margin-bottom:1rem;">
-        {{ range .Vendor.Notes }}
-        <div class="note-item">
-            <p class="note-content">{{ .Content }}</p>
-            <p class="note-meta">{{ .AuthorName }} &middot; {{ .CreatedAt }}</p>
-        </div>
-        {{ end }}
-    </div>
-    {{ else }}
-    <p style="color:#888; font-size:.9rem; margin:.5rem 0 1rem;">No notes yet.</p>
-    {{ end }}
-
-    <form method="POST" action="/vendors/{{ .Vendor.ID }}/notes" style="max-width:520px;">
-        <textarea name="content" rows="3" placeholder="Add a shared note..."></textarea>
-        <div class="form-actions">
-            <button class="primary" type="submit">Add Note</button>
-        </div>
+    {{ if .Vendor.AvailablePorts }}
+    <form method="POST" action="/vendors/{{ .Vendor.ID }}/ports"
+          style="display:flex; gap:.5rem; margin-top:.75rem; align-items:center;">
+        <select name="port_id" style="width:auto;">
+            <option value="">Select port...</option>
+            {{ range .Vendor.AvailablePorts }}
+            <option value="{{ .ID }}">{{ .Name }}</option>
+            {{ end }}
+        </select>
+        <button type="submit" class="primary">Add Port</button>
     </form>
+    {{ end }}
 
     <p class="detail-footer" style="margin-top:2rem;">
         Created {{ .Vendor.CreatedAt }} &nbsp;·&nbsp; Updated {{ .Vendor.UpdatedAt }}
