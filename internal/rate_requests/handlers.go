@@ -97,11 +97,15 @@ func generateReferenceID(db *sql.DB) (string, error) {
 // The reference ID is appended by HandleCreate so it only appears on saved records.
 func buildSubjectBase(lane *LaneSnippet) string {
 	dir := "Import"
+	typ := "Port"
 	if lane.Direction == "export" {
 		dir = "Export"
 	}
+	if lane.OriginPortType == "Rail Ramp" {
+		typ = "Rail Ramp"
+	}
 	return fmt.Sprintf("Rate Request: %s %s - %s - %s",
-		lane.OriginPort, lane.OriginPortType, lane.Destination, dir)
+		lane.OriginPort, typ, lane.Destination, dir)
 }
 
 // buildBody generates the standard rate request email body with a [First Name] placeholder.

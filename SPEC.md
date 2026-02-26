@@ -290,7 +290,6 @@ Email Content (raw text/HTML)
 
 ### Parser Requirements
 - Accept HTML email bodies (70% of inputs), plain text (20%), and document attachments (10%)
-- Handle multi-lane responses in a single email (detect and split)
 - The LLM interface is abstracted: accepts `(rawEmail string, regexOutput []RateItem) -> []RateItem`
 - Model choice (Claude Haiku, Sonnet, or other) is a runtime configuration
 - All parsed rates are tagged with their source: "regex", "llm", or "manual"
@@ -365,15 +364,15 @@ Email Content (raw text/HTML)
 
 ### Flow 4: Rate Comparison
 1. Forwarded vendor rate emails are parsed and matched to rate requests
-2. When threshold or deadline is met, rep receives notification (in-app badge + email)
-3. Rep opens the rate request -> sees comparison table:
+2. Lane status updates to "rates_received" after one or more vendor responses is matched to the request. This causes the 'Build Lineup' button on the lane_detail.html page to show which takes them to the rate comparison page.
+3. When threshold or deadline is met, rep receives notification via email
+4. Rep opens the rate comparison page -> sees comparison table:
    - Rows: standardized rate buckets
    - Columns: vendors, sorted by cheapest total (linehaul + fuel)
    - Cells: parsed amounts with visual indicator if LLM-corrected
-4. "View Original" button per vendor opens the raw email side-by-side
-5. Any cell is inline-editable; edits are flagged as "manually_edited"
-6. Rep can also manually enter rates for a vendor (e.g., if they got rates verbally)
-7. Lane status updates to "rates_received"
+5. "View Original" button per vendor opens the raw email side-by-side
+6. Any cell is inline-editable; edits are flagged as "manually_edited"
+7. Rep can also manually enter rates for a vendor (e.g., if they got rates verbally)
 
 ### Flow 5: Build Vendor Lineup
 1. From the comparison view, rep selects vendors in ranked order
@@ -398,10 +397,6 @@ Email Content (raw text/HTML)
 ---
 
 ## Notifications
-
-### In-App
-- Badge/indicator on the dashboard when a rate request has enough responses
-- Visual status on each lane in the opportunity list
 
 ### Email (from app's own address)
 - Sent when a rate request hits its response threshold
@@ -499,19 +494,18 @@ Template-based rate request creation with manual email workflow.
 ### Milestone 4: Rate Parsing + Ingestion
 Parse forwarded vendor rate emails into standardized buckets.
 
-- [ ] Design and implement `POST /api/rates/parse` endpoint (accepts raw email content: subject, body, sender)
-- [ ] Port existing regex/template parser to Go as Stage 1
-- [ ] Implement LLM correction layer as Stage 2 (model-agnostic interface: input = raw email + regex output, output = corrected rate items)
-- [ ] Build standardization layer: map extracted rates to 27 fixed charge types with unit validation
-- [ ] Handle multi-lane responses: detect and split into separate vendor_rate records
-- [ ] Implement reference ID matching: extract reference ID from subject line, match to rate_request
-- [ ] Create orphan_emails table and pool UI for unmatched emails (list + manual assignment to rate request)
-- [ ] Create vendor_rates and vendor_rate_items tables
-- [ ] Track parse source per rate item ("regex", "llm", "manual")
-- [ ] Persist original email content on vendor_rate record
-- [ ] Update response count on rate_request; check threshold/deadline
-- [ ] Build manual rate entry form (for verbal quotes or unparseable emails)
-- [ ] Temporary UI for manual email paste/upload until email ingestion infra is built
+- [x] Design and implement `POST /api/rates/parse` endpoint (accepts raw email content: subject, body, sender)
+- [x] Port existing regex/template parser to Go as Stage 1
+- [x] Implement LLM correction layer as Stage 2 (model-agnostic interface: input = raw email + regex output, output = corrected rate items)
+- [x] Build standardization layer: map extracted rates to 27 fixed charge types with unit validation
+- [x] Implement reference ID matching: extract reference ID from subject line, match to rate_request
+- [x] Create orphan_emails table and pool UI for unmatched emails (list + manual assignment to rate request)
+- [x] Create vendor_rates and vendor_rate_items tables
+- [x] Track parse source per rate item ("regex", "llm", "manual")
+- [x] Persist original email content on vendor_rate record
+- [x] Update response count on rate_request; check threshold/deadline
+- [x] Build manual rate entry form (for verbal quotes or unparseable emails)
+- [x] Temporary UI for manual email paste/upload until email ingestion infra is built
 - [ ] Deploy and gather feedback
 
 ### Milestone 5: Rate Comparison + Vendor Lineup
@@ -547,13 +541,15 @@ Apply markups, preview, and export customer-facing CSV.
 - [ ] Deploy and gather feedback
 
 ### Milestone 7: Loose ends
-Styling, last-min changes
+Styling, last-min changes, stress-testing.
 
+- [ ] LP number should be optional given that majority will not be in MM. Perhaps, remove it entirely.
 - [ ] Refactor main.go - modularizing the route library into a separate file.
 - [ ] User can modify the default rate request email body template
 - [ ] Modify all dates to be human readable
 - [ ] Add UI error message handling
 - [ ] Polish some of the reactivity; e.g. utilize HTMX more for small components that otherwise require full page refresh
 - [ ] Map FreightPower Shipper styling
-- [ ] Add multi-lane rate request for lanes with the same Origin Port.
+- [ ] Stress-test the performance, pagination, and UI using a lot of dummy data (github.com/brianvoe/gofakeit/v7).
+- [ ] File-parsing support for rate ingestion
 
