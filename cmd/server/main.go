@@ -13,6 +13,7 @@ import (
 	"gitlab.com/perenne/clients/schneider/drayage-quoter/internal/db"
 	"gitlab.com/perenne/clients/schneider/drayage-quoter/internal/lanes"
 	rate_requests "gitlab.com/perenne/clients/schneider/drayage-quoter/internal/rate_requests"
+	rates "gitlab.com/perenne/clients/schneider/drayage-quoter/internal/rates"
 	"gitlab.com/perenne/clients/schneider/drayage-quoter/internal/static"
 	"gitlab.com/perenne/clients/schneider/drayage-quoter/internal/templates"
 	"gitlab.com/perenne/clients/schneider/drayage-quoter/internal/vendors"
@@ -70,6 +71,7 @@ func main() {
 	lanesSvc := &lanes.Service{DB: database}
 	vendorsSvc := &vendors.Service{DB: database}
 	rrSvc := &rate_requests.Service{DB: database}
+	ratesSvc := &rates.Service{DB: database, LLM: nil}
 
 	// Parse templates
 	loginTmpl := templates.MustParse("layout.html", "login.html")
@@ -86,6 +88,8 @@ func main() {
 	vendorEditTmpl := templates.MustParse("layout.html", "vendor_edit.html")
 	rrNewTmpl := templates.MustParse("layout.html", "rate_request_new.html")
 	rrDetailTmpl := templates.MustParse("layout.html", "rate_request_detail.html")
+	rateIngestTmpl := templates.MustParse("layout.html", "rate_ingest.html")
+	rateResultTmpl := templates.MustParse("layout.html", "rate_ingest_result.html")
 
 	customerSuggTmpl := template.Must(template.New("suggestions").Parse(
 		`{{range .}}<button type="button" class="suggestion-item" ` +
@@ -160,6 +164,12 @@ func main() {
 	mux.HandleFunc("GET /lanes/{id}/rate-request/new", authService.RequireAuth(rrSvc.HandleNewForm(rrNewTmpl)))
 	mux.HandleFunc("POST /lanes/{id}/rate-request", authService.RequireAuth(rrSvc.HandleCreate()))
 	mux.HandleFunc("GET /rate-requests/{id}", authService.RequireAuth(rrSvc.HandleDetail(rrDetailTmpl)))
+
+	// Rate ingestion routes
+	mux.HandleFunc("POST /api/rates/parse", authService.RequireAuth(ratesSvc.HandleAPIIngest()))
+	mux.HandleFunc("GET /rate-requests/{id}/ingest", authService.RequireAuth(ratesSvc.HandleIngestForm(rateIngestTmpl)))
+	mux.HandleFunc("POST /rate-requests/{id}/ingest", authService.RequireAuth(ratesSvc.HandleIngestSubmit(rateResultTmpl)))
+	mux.HandleFunc("POST /rate-requests/{id}/ingest/confirm", authService.RequireAuth(ratesSvc.HandleIngestConfirm()))
 
 	// Vendor routes
 	mux.HandleFunc("GET /vendors", authService.RequireAuth(vendorsSvc.HandleList(vendorListTmpl)))

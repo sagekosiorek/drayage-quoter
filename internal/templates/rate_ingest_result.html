@@ -1,0 +1,60 @@
+{{ define "content" }}
+<p class="back-link"><a href="/rate-requests/{{ .Data.RateRequestID }}">← Back to rate request</a></p>
+
+<div class="page-header">
+    <h1 class="page-title">Parsed Rates — {{ .Data.VendorName }}</h1>
+</div>
+
+{{ if .Data.Notes }}
+<div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:4px;padding:.75rem 1rem;margin-bottom:1.25rem;font-size:.85rem;">
+    <strong style="color:#92400e;">Parser notes:</strong>
+    <ul style="margin:.35rem 0 0 1.25rem;padding:0;">
+        {{ range .Data.Notes }}<li>{{ . }}</li>{{ end }}
+    </ul>
+</div>
+{{ end }}
+
+{{ if not .Data.Items }}
+<p class="empty-state">No rates were detected. Enter them manually below or go back and edit the email.</p>
+{{ end }}
+
+<form method="POST" action="/rate-requests/{{ .Data.RateRequestID }}/ingest/confirm">
+    <input type="hidden" name="vendor_id" value="{{ .Data.VendorID }}">
+    <input type="hidden" name="raw_email" value="{{ .Data.RawEmail }}">
+
+    {{ if .Data.Items }}
+    <table style="margin-bottom:1.25rem;">
+        <thead>
+            <tr>
+                <th>Charge Type</th>
+                <th style="text-align:right;">Amount</th>
+                <th>Unit</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{ range .Data.Items }}
+            <tr>
+                <td>
+                    {{ .ChargeType }}
+                    {{ if .Note }}<span style="font-size:.75rem;color:#888;margin-left:.4rem;">({{ .Note }})</span>{{ end }}
+                    <input type="hidden" name="charge_type[]" value="{{ .ChargeType }}">
+                    <input type="hidden" name="unit[]" value="{{ .Unit }}">
+                    <input type="hidden" name="original_amount[]" value="{{ .Amount }}">
+                </td>
+                <td style="text-align:right;">
+                    <input type="number" name="amount[]" value="{{ .Amount }}"
+                        step="0.01" style="width:100px;text-align:right;padding:4px 6px;border:1px solid #d1d5db;border-radius:3px;">
+                </td>
+                <td style="color:#666;font-size:.85rem;">{{ .Unit }}</td>
+            </tr>
+            {{ end }}
+        </tbody>
+    </table>
+    {{ end }}
+
+    <div style="display:flex;gap:.75rem;align-items:center;">
+        <button type="submit">Save Rates</button>
+        <a href="/rate-requests/{{ .Data.RateRequestID }}/ingest?vendor_id={{ .Data.VendorID }}">← Re-paste</a>
+    </div>
+</form>
+{{ end }}

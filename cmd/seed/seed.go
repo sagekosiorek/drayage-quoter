@@ -491,7 +491,7 @@ func buildSeedSubject(l laneRecord, refID string) string {
 		dir = "Export"
 	}
 	return fmt.Sprintf("Rate Request: %s %s - %s - %s - %s",
-		l.portName, l.portType, l.dest, dir, refID)
+		l.portName, l.dest, dir, refID)
 }
 
 func buildSeedBody(l laneRecord, refID string) string {

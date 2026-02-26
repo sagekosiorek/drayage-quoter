@@ -1,0 +1,27 @@
+{{ define "content" }}
+<p class="back-link"><a href="/rate-requests/{{ .Data.RateRequestID }}">← Back to rate request</a></p>
+
+<div class="page-header">
+    <h1 class="page-title">Ingest Vendor Response</h1>
+    <p style="color:#555;font-size:.9rem;margin:.25rem 0 0;">{{ .Data.ReferenceID }}</p>
+</div>
+
+<form method="POST" action="/rate-requests/{{ .Data.RateRequestID }}/ingest" style="max-width:680px;">
+    <label class="field-label" for="vendor_id">Vendor</label>
+    <select id="vendor_id" name="vendor_id" required style="width:100%;margin-bottom:1.25rem;">
+        <option value="">— select vendor —</option>
+        {{ range .Data.Vendors }}
+        <option value="{{ .ID }}" {{ if eq .ID $.Data.PreVendorID }}selected{{ end }}>{{ .Name }}</option>
+        {{ end }}
+    </select>
+
+    <label class="field-label" for="raw_email">Paste Email Body</label>
+    <textarea id="raw_email" name="raw_email" rows="16" required
+        placeholder="Paste the vendor's reply email here — plain text or HTML both work."
+        style="width:100%;font-family:inherit;font-size:.9rem;padding:.6rem .75rem;border:1px solid #d1d5db;border-radius:4px;resize:vertical;"></textarea>
+
+    <div style="margin-top:1rem;">
+        <button type="submit">Parse →</button>
+    </div>
+</form>
+{{ end }}
