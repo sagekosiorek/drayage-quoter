@@ -58,5 +58,22 @@ litestream restore -config litestream.yml -o
 ./restored.db /data/drayage.db
 ```
 
+### Seed with dummy data
+There's a separate `/cmd/seed` binary that can be used to inject dummy data into an instance for testing purposes. These are the commands it accepts:
+```
+go run ./cmd/seed # seeds if the DB is empty, skips otherwise
+go run ./cmd/seed --reset # wipes all non-port/user data and re-seeds
+go run ./cmd/seed --db <path> # targets a specific DB file
+```
+
+To seed the production instance, ensure the `/cmd/seed` binary is added to the Docker image and built upon deployment. Then run via SSH:
+```
+fly ssh console -C "/seed --db /data/drayage.db"
+```
+Or to reset:
+```
+fly ssh console -C "/seed --db /data/drayage.db" --reset
+```
+
 
 
