@@ -16,9 +16,6 @@
            hx-include="this">
     <div id="customer-suggestions" class="suggestions"></div>
 
-    <label for="lp_number">LP Number* <span class="form-hint">(MasterMind CRM)</span></label>
-    <input type="text" id="lp_number" name="lp_number" placeholder="12345" required>
-
     <h2 class="form-section">Lane Details</h2>
 
     <label for="origin_port_id">Origin Port / Rail Head*</label>
@@ -92,7 +89,6 @@
 function selectCustomer(el) {
     document.getElementById('customer_id').value = el.dataset.id;
     document.getElementById('customer_name').value = el.dataset.name;
-    document.getElementById('lp_number').value = el.dataset.lp;
     document.getElementById('customer-suggestions').innerHTML = '';
 }
 </script>

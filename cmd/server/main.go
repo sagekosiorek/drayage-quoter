@@ -93,8 +93,8 @@ func main() {
 
 	customerSuggTmpl := template.Must(template.New("suggestions").Parse(
 		`{{range .}}<button type="button" class="suggestion-item" ` +
-			`data-id="{{.ID}}" data-name="{{.Name}}" data-lp="{{.LPNumber}}" ` +
-			`onclick="selectCustomer(this)">{{.Name}}<span class="suggestion-lp">{{.LPNumber}}</span></button>{{end}}`,
+			`data-id="{{.ID}}" data-name="{{.Name}}" ` +
+			`onclick="selectCustomer(this)">{{.Name}}</button>{{end}}`,
 	))
 
 	mux := http.NewServeMux()
@@ -124,7 +124,7 @@ func main() {
 			return
 		}
 		rows, err := database.Query(
-			`SELECT id, name, lp_number FROM customers WHERE name LIKE ? ORDER BY name LIMIT 8`,
+			`SELECT id, name FROM customers WHERE name LIKE ? ORDER BY name LIMIT 8`,
 			"%"+q+"%",
 		)
 		if err != nil {
@@ -135,12 +135,11 @@ func main() {
 		type suggestion struct {
 			ID       int
 			Name     string
-			LPNumber string
 		}
 		var matches []suggestion
 		for rows.Next() {
 			var s suggestion
-			if err := rows.Scan(&s.ID, &s.Name, &s.LPNumber); err != nil {
+			if err := rows.Scan(&s.ID, &s.Name); err != nil {
 				http.Error(w, "Internal server error", http.StatusInternalServerError)
 				return
 			}

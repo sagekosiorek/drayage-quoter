@@ -108,17 +108,17 @@ func portTypeFor(ports portMap, db *sql.DB, substr string) string {
 // ── customers ────────────────────────────────────────────────────────────────
 
 func mustSeedCustomers(db *sql.DB) map[string]int {
-	rows := []struct{ name, lp string }{
-		{"Pacific Rim Imports LLC", "10234"},
-		{"Target Global Sourcing", "20891"},
-		{"Home Depot Supply Chain", "31204"},
-		{"Costco Wholesale Corp", "45678"},
-		{"Best Buy Logistics", "56234"},
-		{"Harbor Freight Tools", "67891"},
+	rows := []struct{ name string }{
+		{"Pacific Rim Imports LLC"},
+		{"Target Global Sourcing"},
+		{"Home Depot Supply Chain"},
+		{"Costco Wholesale Corp"},
+		{"Best Buy Logistics"},
+		{"Harbor Freight Tools"},
 	}
 	ids := map[string]int{}
 	for _, c := range rows {
-		res, err := db.Exec("INSERT INTO customers (name, lp_number) VALUES (?, ?)", c.name, c.lp)
+		res, err := db.Exec("INSERT INTO customers (name) VALUES (?)", c.name)
 		if err != nil {
 			log.Fatalf("insert customer %q: %v", c.name, err)
 		}
@@ -132,7 +132,7 @@ func mustSeedCustomers(db *sql.DB) map[string]int {
 // ── vendors ──────────────────────────────────────────────────────────────────
 
 func mustSeedVendors(db *sql.DB, adminID int, ports portMap) map[string]vendorInfo {
-	type contact struct{ name, email, phone string }
+	type contact struct{ name, email string }
 	type portDef struct {
 		sub       string // substring used to match port name
 		preferred bool
@@ -148,14 +148,14 @@ func mustSeedVendors(db *sql.DB, adminID int, ports portMap) map[string]vendorIn
 			name: "Pacific Coast Drayage",
 			ports: []portDef{
 				{sub: "los angeles", preferred: true, contacts: []contact{
-					{"Tom Chen", "tom.chen@pacificcoastdray.com", "310-555-0142"},
-					{"Maria Rodriguez", "m.rodriguez@pacificcoastdray.com", ""},
+					{"Tom Chen", "tom.chen@pacificcoastdray.com"},
+					{"Maria Rodriguez", "m.rodriguez@pacificcoastdray.com"},
 				}},
 				{sub: "seattle", preferred: false, contacts: []contact{
-					{"James Park", "j.park@pacificcoastdray.com", "206-555-0198"},
+					{"James Park", "j.park@pacificcoastdray.com"},
 				}},
 				{sub: "oakland", preferred: false, contacts: []contact{
-					{"Sandra Okafor", "s.okafor@pacificcoastdray.com", "510-555-0077"},
+					{"Sandra Okafor", "s.okafor@pacificcoastdray.com"},
 				}},
 			},
 		},
@@ -163,11 +163,11 @@ func mustSeedVendors(db *sql.DB, adminID int, ports portMap) map[string]vendorIn
 			name: "Harbor Logistics Group",
 			ports: []portDef{
 				{sub: "los angeles", preferred: false, contacts: []contact{
-					{"Sandra Lee", "s.lee@harborlogisticsgrp.com", "310-555-0277"},
+					{"Sandra Lee", "s.lee@harborlogisticsgrp.com"},
 				}},
 				{sub: "houston", preferred: true, contacts: []contact{
-					{"Derek Williams", "d.williams@harborlogisticsgrp.com", "713-555-0331"},
-					{"Priya Patel", "p.patel@harborlogisticsgrp.com", "713-555-0332"},
+					{"Derek Williams", "d.williams@harborlogisticsgrp.com"},
+					{"Priya Patel", "p.patel@harborlogisticsgrp.com"},
 				}},
 			},
 		},
@@ -175,13 +175,13 @@ func mustSeedVendors(db *sql.DB, adminID int, ports portMap) map[string]vendorIn
 			name: "Intermodal Express LLC",
 			ports: []portDef{
 				{sub: "chicago", preferred: true, contacts: []contact{
-					{"Kevin O'Brien", "k.obrien@intermodalexpress.com", "312-555-0089"},
+					{"Kevin O'Brien", "k.obrien@intermodalexpress.com"},
 				}},
 				{sub: "dallas", preferred: false, contacts: []contact{
-					{"Ashley Grant", "a.grant@intermodalexpress.com", "214-555-0154"},
+					{"Ashley Grant", "a.grant@intermodalexpress.com"},
 				}},
 				{sub: "memphis", preferred: false, contacts: []contact{
-					{"Marcus Johnson", "m.johnson@intermodalexpress.com", "901-555-0213"},
+					{"Marcus Johnson", "m.johnson@intermodalexpress.com"},
 				}},
 			},
 		},
@@ -189,14 +189,14 @@ func mustSeedVendors(db *sql.DB, adminID int, ports portMap) map[string]vendorIn
 			name: "Gulf Transport Solutions",
 			ports: []portDef{
 				{sub: "houston", preferred: false, contacts: []contact{
-					{"Carlos Mendez", "c.mendez@gulftransportsol.com", "713-555-0472"},
+					{"Carlos Mendez", "c.mendez@gulftransportsol.com"},
 				}},
 				{sub: "savannah", preferred: true, contacts: []contact{
-					{"Rachel Kim", "r.kim@gulftransportsol.com", "912-555-0118"},
-					{"Ben Foster", "b.foster@gulftransportsol.com", ""},
+					{"Rachel Kim", "r.kim@gulftransportsol.com"},
+					{"Ben Foster", "b.foster@gulftransportsol.com"},
 				}},
 				{sub: "new orleans", preferred: false, contacts: []contact{
-					{"Louis Tran", "l.tran@gulftransportsol.com", "504-555-0039"},
+					{"Louis Tran", "l.tran@gulftransportsol.com"},
 				}},
 			},
 		},
@@ -204,13 +204,13 @@ func mustSeedVendors(db *sql.DB, adminID int, ports portMap) map[string]vendorIn
 			name: "Atlantic Drayage Co",
 			ports: []portDef{
 				{sub: "new york", preferred: true, contacts: []contact{
-					{"Linda Nguyen", "l.nguyen@atlanticdrayage.com", "718-555-0303"},
+					{"Linda Nguyen", "l.nguyen@atlanticdrayage.com"},
 				}},
 				{sub: "savannah", preferred: false, contacts: []contact{
-					{"Robert Hayes", "r.hayes@atlanticdrayage.com", "912-555-0229"},
+					{"Robert Hayes", "r.hayes@atlanticdrayage.com"},
 				}},
 				{sub: "norfolk", preferred: false, contacts: []contact{
-					{"Emily Russo", "e.russo@atlanticdrayage.com", "757-555-0411"},
+					{"Emily Russo", "e.russo@atlanticdrayage.com"},
 				}},
 			},
 		},
@@ -218,14 +218,14 @@ func mustSeedVendors(db *sql.DB, adminID int, ports portMap) map[string]vendorIn
 			name: "Midwest Container Services",
 			ports: []portDef{
 				{sub: "chicago", preferred: false, contacts: []contact{
-					{"Tina Brooks", "t.brooks@midwestcontainer.com", "312-555-0614"},
-					{"Alan Foster", "a.foster@midwestcontainer.com", ""},
+					{"Tina Brooks", "t.brooks@midwestcontainer.com"},
+					{"Alan Foster", "a.foster@midwestcontainer.com"},
 				}},
 				{sub: "dallas", preferred: true, contacts: []contact{
-					{"George Tan", "g.tan@midwestcontainer.com", "214-555-0388"},
+					{"George Tan", "g.tan@midwestcontainer.com"},
 				}},
 				{sub: "kansas", preferred: false, contacts: []contact{
-					{"Nicole West", "n.west@midwestcontainer.com", "816-555-0091"},
+					{"Nicole West", "n.west@midwestcontainer.com"},
 				}},
 			},
 		},
@@ -253,8 +253,8 @@ func mustSeedVendors(db *sql.DB, adminID int, ports portMap) map[string]vendorIn
 
 			for _, c := range pd.contacts {
 				db.Exec(
-					"INSERT INTO vendor_contacts (vendor_ports_id, name, email, phone) VALUES (?, ?, ?, ?)",
-					vpID, ns(c.name), c.email, ns(c.phone),
+					"INSERT INTO vendor_contacts (vendor_ports_id, name, email) VALUES (?, ?, ?, ?)",
+					vpID, ns(c.name), c.email,
 				)
 			}
 			if pd.preferred {

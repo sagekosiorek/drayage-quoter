@@ -50,7 +50,6 @@ Hybrid layout:
 |-------|------|-------|
 | id | TEXT (UUID) | Primary key |
 | name | TEXT | Customer/prospect name |
-| lp_number | TEXT NOT NULL | MasterMind CRM reference |
 | created_at | DATETIME | |
 | updated_at | DATETIME | |
 
@@ -78,7 +77,6 @@ Hybrid layout:
 | vendor_ports_id | INTEGER (FK) | References vendor_ports.id; contacts are port-specific |
 | name | TEXT | Contact name, optional |
 | email | TEXT | Contact email (required) |
-| phone | TEXT | Optional |
 
 ### Ports
 | Field | Type | Notes |
@@ -342,7 +340,7 @@ Email Content (raw text/HTML)
 3. Option to continue to Flow 3 or stop here, merely logging it in their opportunity list with status "draft"
 
 ### Flow 2: Manage Vendor Network
-1. Any rep can add a new vendor: name, contacts (name, email, phone), ports serviced
+1. Any rep can add a new vendor: name, contacts (name, email), ports serviced
 2. Any rep can add shared notes to any vendor
 3. Each rep can mark vendors as "preferred" per port
 4. Vendor list is searchable/filterable by port, name, preference status
@@ -489,7 +487,7 @@ Template-based rate request creation with manual email workflow.
 - [x] Deadline input (datetime picker)
 - [x] Save rate request and update lane status to "rates_requested"
 - [x] Rate request detail view showing blast status (which vendors, responded/pending)
-- [ ] Deploy and gather feedback
+- [x] Deploy and gather feedback
 
 ### Milestone 4: Rate Parsing + Ingestion
 Parse forwarded vendor rate emails into standardized buckets.
@@ -506,7 +504,10 @@ Parse forwarded vendor rate emails into standardized buckets.
 - [x] Update response count on rate_request; check threshold/deadline
 - [x] Build manual rate entry form (for verbal quotes or unparseable emails)
 - [x] Temporary UI for manual email paste/upload until email ingestion infra is built
-- [ ] Deploy and gather feedback
+- [x] Add a 'deselect all' button for the Blast Status table.
+- [x] Remove Phone from Vendor contact - just name and email is fine
+- [x] Remove LP # (not required and gets in the way)
+- [x] Deploy and gather feedback
 
 ### Milestone 5: Rate Comparison + Vendor Lineup
 Side-by-side comparison table and carrier ranking.
@@ -543,6 +544,7 @@ Apply markups, preview, and export customer-facing CSV.
 ### Milestone 7: Loose ends
 Styling, last-min changes, stress-testing.
 
+- [ ] Granularize the opaque "Internal server error" messages across the codebase.
 - [ ] LP number should be optional given that majority will not be in MM. Perhaps, remove it entirely.
 - [ ] Refactor main.go - modularizing the route library into a separate file.
 - [ ] User can modify the default rate request email body template
@@ -552,4 +554,7 @@ Styling, last-min changes, stress-testing.
 - [ ] Map FreightPower Shipper styling
 - [ ] Stress-test the performance, pagination, and UI using a lot of dummy data (github.com/brianvoe/gofakeit/v7).
 - [ ] File-parsing support for rate ingestion
+- [ ] Wire up LLM for rate parsing
+- [ ] Wire up email forwarding for auto-ingestion
+- [ ] User should not be able to edit the company name on lane_edit.html (it's unchangeable at this point).
 

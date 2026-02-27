@@ -58,7 +58,6 @@ type ContactRow struct {
 	ID    int
 	Name  string
 	Email string
-	Phone string
 }
 
 // NoteRow holds a vendor note with its author's display name.
@@ -113,7 +112,7 @@ func (s *Service) fetchVendorDetail(vendorID, userID int) (*VendorDetail, error)
 		vpID := v.AssignedPorts[i].ID
 
 		cRows, err := s.DB.Query(
-			`SELECT id, COALESCE(name,''), email, COALESCE(phone,'')
+			`SELECT id, COALESCE(name,''), email
 			 FROM vendor_contacts WHERE vendor_ports_id = ? ORDER BY id`,
 			vpID,
 		)
@@ -122,7 +121,7 @@ func (s *Service) fetchVendorDetail(vendorID, userID int) (*VendorDetail, error)
 		}
 		for cRows.Next() {
 			var c ContactRow
-			if err := cRows.Scan(&c.ID, &c.Name, &c.Email, &c.Phone); err != nil {
+			if err := cRows.Scan(&c.ID, &c.Name, &c.Email); err != nil {
 				cRows.Close()
 				return nil, err
 			}
@@ -545,11 +544,10 @@ func (s *Service) HandleAddContact() http.HandlerFunc {
 			return
 		}
 		s.DB.Exec(
-			`INSERT INTO vendor_contacts (vendor_ports_id, name, email, phone) VALUES (?, ?, ?, ?)`,
+			`INSERT INTO vendor_contacts (vendor_ports_id, name, email) VALUES (?, ?, ?)`,
 			vpid,
 			nullableStr(strings.TrimSpace(r.FormValue("name"))),
 			email,
-			nullableStr(strings.TrimSpace(r.FormValue("phone"))),
 		)
 		http.Redirect(w, r, fmt.Sprintf("/vendors/%d", id), http.StatusSeeOther)
 	}
