@@ -524,7 +524,6 @@ Side-by-side comparison table and carrier ranking.
 - [ ] Send in-app notification (badge on dashboard, status update on lane)
 - [ ] Send email notification from app's outbound address
 - [ ] Update lane status to "rates_received" when first rate arrives, "quoting" when lineup is set
-- [ ] Deploy and gather feedback
 
 ### Milestone 6: Markup + Quote Generation
 Apply markups, preview, and export customer-facing CSV.
@@ -539,22 +538,20 @@ Apply markups, preview, and export customer-facing CSV.
 - [ ] CSV download endpoint
 - [ ] Update lane status to "quoted" on export
 - [ ] Quote history: persist all generated quotes, viewable from lane detail and customer views
-- [ ] Deploy and gather feedback
 
 ### Milestone 7: Loose ends
 Styling, last-min changes, stress-testing.
 
 - [ ] Granularize the opaque "Internal server error" messages across the codebase.
-- [ ] LP number should be optional given that majority will not be in MM. Perhaps, remove it entirely.
 - [ ] Refactor main.go - modularizing the route library into a separate file.
 - [ ] User can modify the default rate request email body template
 - [ ] Modify all dates to be human readable
 - [ ] Add UI error message handling
 - [ ] Polish some of the reactivity; e.g. utilize HTMX more for small components that otherwise require full page refresh
 - [ ] Map FreightPower Shipper styling
-- [ ] Stress-test the performance, pagination, and UI using a lot of dummy data (github.com/brianvoe/gofakeit/v7).
 - [ ] File-parsing support for rate ingestion
 - [ ] Wire up LLM for rate parsing
 - [ ] Wire up email forwarding for auto-ingestion
 - [ ] User should not be able to edit the company name on lane_edit.html (it's unchangeable at this point).
+- [ ] Stress-test the performance, pagination, and UI using a lot of dummy data (github.com/brianvoe/gofakeit/v7).
 
