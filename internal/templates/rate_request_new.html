@@ -26,7 +26,8 @@
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.5rem;">
             <p class="detail-section" style="margin:0;">Vendors</p>
             <div style="display:flex;gap:.35rem;">
-                <button type="button" onclick="selectAll()">Select All</button>
+                <button type="button" onclick="selectAll(true)">Select All</button>
+                <button type="button" onclick="selectAll(false)">Deselect All</button>
                 <button type="button" onclick="selectPreferred()">Preferred Only</button>
             </div>
         </div>
@@ -74,8 +75,8 @@
 </form>
 
 <script>
-function selectAll() {
-    document.querySelectorAll('.vendor-checkbox').forEach(cb => cb.checked = true);
+function selectAll(toggle) {
+    document.querySelectorAll('.vendor-checkbox').forEach(cb => cb.checked = toggle);
 }
 function selectPreferred() {
     document.querySelectorAll('.vendor-checkbox').forEach(cb => {
