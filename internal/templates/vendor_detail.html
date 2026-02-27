@@ -42,14 +42,13 @@
             {{ if .Contacts }}
             <table>
                 <thead>
-                    <tr><th>Name</th><th>Email</th><th>Phone</th><th style="width:70px;"></th></tr>
+                    <tr><th>Name</th><th>Email</th><th style="width:70px;"></th></tr>
                 </thead>
                 <tbody>
                     {{ range .Contacts }}
                     <tr>
                         <td>{{ if .Name }}{{ .Name }}{{ else }}<span style="color:#aaa;">—</span>{{ end }}</td>
                         <td><a href="mailto:{{ .Email }}">{{ .Email }}</a></td>
-                        <td style="color:#666;">{{ if .Phone }}{{ .Phone }}{{ else }}<span style="color:#aaa;">—</span>{{ end }}</td>
                         <td>
                             <form method="POST"
                                   action="/vendors/{{ $.Vendor.ID }}/ports/{{ $vp.ID }}/contacts/{{ .ID }}/delete"
@@ -73,10 +72,6 @@
                         <div>
                             <label>Name</label>
                             <input type="text" name="name" placeholder="Optional">
-                        </div>
-                        <div>
-                            <label>Phone</label>
-                            <input type="text" name="phone" placeholder="Optional">
                         </div>
                     </div>
                     <label>Email*</label>

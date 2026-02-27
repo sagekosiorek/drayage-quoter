@@ -32,7 +32,6 @@ type LaneDetail struct {
 	OwnerName       string
 	CustomerID      int
 	CustomerName    string
-	CustomerLP      string
 	OriginPortID    int
 	OriginPort      string
 	OriginPortType  string
@@ -129,7 +128,7 @@ func (s *Service) fetchLane(id int) (*LaneDetail, error) {
 		SELECT l.id, l.owner_id, l.destination, l.container_size, l.weight,
 		       l.direction, l.load_type, l.commodity, l.hazmat, l.overweight,
 		       l.out_of_gauge, l.notes, l.status, l.created_at, l.updated_at,
-		       u.name, c.id, c.name, c.lp_number, p.id, p.name, p.type
+		       u.name, c.id, c.name, p.id, p.name, p.type
 		FROM lanes l
 		JOIN users u ON l.owner_id = u.id
 		JOIN customers c ON l.customer_id = c.id
@@ -139,7 +138,7 @@ func (s *Service) fetchLane(id int) (*LaneDetail, error) {
 		&l.ID, &l.OwnerID, &l.Destination, &l.ContainerSize, &l.Weight,
 		&l.Direction, &l.LoadType, &l.Commodity, &hazmat, &overweight,
 		&outOfGauge, &l.Notes, &l.Status, &createdStr, &updatedStr,
-		&l.OwnerName, &l.CustomerID, &l.CustomerName, &l.CustomerLP,
+		&l.OwnerName, &l.CustomerID, &l.CustomerName,
 		&l.OriginPortID, &l.OriginPort, &l.OriginPortType,
 	)
 	if err != nil {
@@ -343,7 +342,6 @@ func (s *Service) HandleCreate() http.HandlerFunc {
 
 		customerName := r.FormValue("customer_name")
 		customerIDStr := r.FormValue("customer_id")
-		lpNumber := r.FormValue("lp_number")
 		originPortIDStr := r.FormValue("origin_port_id")
 		destination := r.FormValue("destination")
 		containerSize := r.FormValue("container_size")
@@ -357,7 +355,7 @@ func (s *Service) HandleCreate() http.HandlerFunc {
 		overweightChecked := r.FormValue("overweight") == "1"
 		outOfGauge := r.FormValue("out_of_gauge") == "1"
 
-		if customerName == "" || lpNumber == "" || originPortIDStr == "" || destination == "" || containerSize == "" {
+		if customerName == "" || originPortIDStr == "" || destination == "" || containerSize == "" {
 			http.Error(w, "Required fields missing", http.StatusBadRequest)
 			return
 		}
@@ -383,8 +381,8 @@ func (s *Service) HandleCreate() http.HandlerFunc {
 			).Scan(&customerID)
 			if err == sql.ErrNoRows {
 				res, err := s.DB.Exec(
-					"INSERT INTO customers (name, lp_number) VALUES (?, ?)",
-					customerName, lpNumber,
+					"INSERT INTO customers (name) VALUES (?)",
+					customerName,
 				)
 				if err != nil {
 					http.Error(w, "Internal server error", http.StatusInternalServerError)
@@ -608,7 +606,6 @@ func (s *Service) HandleUpdate() http.HandlerFunc {
 
 		customerName := r.FormValue("customer_name")
 		customerIDStr := r.FormValue("customer_id")
-		lpNumber := r.FormValue("lp_number")
 		originPortIDStr := r.FormValue("origin_port_id")
 		destination := r.FormValue("destination")
 		containerSize := r.FormValue("container_size")
@@ -622,7 +619,7 @@ func (s *Service) HandleUpdate() http.HandlerFunc {
 		overweightChecked := r.FormValue("overweight") == "1"
 		outOfGauge := r.FormValue("out_of_gauge") == "1"
 
-		if customerName == "" || lpNumber == "" || originPortIDStr == "" || destination == "" || containerSize == "" {
+		if customerName == "" || originPortIDStr == "" || destination == "" || containerSize == "" {
 			http.Error(w, "Required fields missing", http.StatusBadRequest)
 			return
 		}
@@ -648,8 +645,8 @@ func (s *Service) HandleUpdate() http.HandlerFunc {
 			).Scan(&customerID)
 			if err == sql.ErrNoRows {
 				res, err := s.DB.Exec(
-					"INSERT INTO customers (name, lp_number) VALUES (?, ?)",
-					customerName, lpNumber,
+					"INSERT INTO customers (name) VALUES (?)",
+					customerName, 
 				)
 				if err != nil {
 					http.Error(w, "Internal server error", http.StatusInternalServerError)

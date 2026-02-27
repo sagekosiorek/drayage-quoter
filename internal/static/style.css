@@ -94,7 +94,6 @@ tr:last-child td { border-bottom: none; }
 }
 .suggestion-item:last-child { border-bottom: none; }
 .suggestion-item:hover { background: #f0f4ff; }
-.suggestion-lp { color: #888; font-size: .8em; margin-left: .5rem; }
 
 /* -------------------------------------------------------
     Admin sub-navigation
