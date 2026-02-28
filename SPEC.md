@@ -512,16 +512,17 @@ Parse forwarded vendor rate emails into standardized buckets.
 ### Milestone 5: Rate Comparison + Vendor Lineup
 Side-by-side comparison table and carrier ranking.
 
-- [ ] Build comparison table view: rows = charge types, columns = vendors sorted by total (LH + fuel)
-- [ ] Computed total column per vendor (linehaul + linehaul * fuel%)
-- [ ] Visual indicator on LLM-parsed vs. manually-edited cells
-- [ ] "View Original Email" button per vendor: renders raw email in a side panel
-- [ ] Inline editing on any rate cell (click-to-edit, saves as "manually_edited")
-- [ ] Create vendor_lineups table
-- [ ] Build lineup selection UI: click vendors in rank order (primary, secondary, n-ary)
-- [ ] Lineup is reorderable and editable after creation
+- [x] Build comparison table view: rows = charge types, columns = vendors sorted by total (LH + fuel)
+- [x] Computed total column per vendor (linehaul + linehaul * fuel%) and computed average column per charge type.
+- [x] Visual indicator on LLM-parsed vs. manually-edited cells
+- [x] "View Original Email" button per vendor: renders raw email in a side panel
+- [x] Inline editing on any rate cell (click-to-edit, saves as "manually_edited"). Remove increment arrows from cells - input text only.
+- [x] Create vendor_lineups table
+- [x] Build lineup selection UI within the same comparison table view: click vendors in rank order (primary, secondary, n-ary). Simple select ordering with real-time visual representation.
+- [x] Lineup reorderable and editable after creation. Rates are also editable after creation.
+- [ ] Test end-to-end UX to smooth out.
 - [ ] Implement notification triggers: threshold met OR deadline passed
-- [ ] Send in-app notification (badge on dashboard, status update on lane)
+- [ ] Send in-app notification (status update on lane, via HTMX SSE)
 - [ ] Send email notification from app's outbound address
 - [ ] Update lane status to "rates_received" when first rate arrives, "quoting" when lineup is set
 
@@ -554,4 +555,5 @@ Styling, last-min changes, stress-testing.
 - [ ] Wire up email forwarding for auto-ingestion
 - [ ] User should not be able to edit the company name on lane_edit.html (it's unchangeable at this point).
 - [ ] Stress-test the performance, pagination, and UI using a lot of dummy data (github.com/brianvoe/gofakeit/v7).
+- [ ] Need some UI feedback when clicking buttons that don't redirect: 'Copy Body' @internal/templates/rate_request_detail.html
 

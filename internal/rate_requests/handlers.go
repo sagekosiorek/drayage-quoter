@@ -4,13 +4,16 @@ import (
 	"database/sql"
 	"fmt"
 	"html/template"
+	"log"
 	"net/http"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
 
 	"gitlab.com/perenne/clients/schneider/drayage-quoter/internal/auth"
+	"gitlab.com/perenne/clients/schneider/drayage-quoter/internal/rates"
 )
 
 // Service handles rate request operations.
@@ -77,6 +80,43 @@ type RateRequestDetail struct {
 	CreatedAt         string
 	Lane              LaneSnippet
 	Vendors           []VendorBlastRow
+}
+
+// ctLabel converts a snake_case charge type key to a human-readable label with unit hint.
+func ctLabel(ct string) string {
+	labels := map[string]string{
+		"linehaul":           "Linehaul",
+		"fuel":               "Fuel (%)",
+		"chassis":            "Chassis ($/day)",
+		"chassis_min":        "Chassis Min (days)",
+		"detention":          "Detention ($/hr)",
+		"detention_free":     "Detention Free (hrs)",
+		"storage":            "Storage ($/day)",
+		"yard_pull":          "Yard Pull",
+		"chassis_split":      "Chassis Split",
+		"mount":              "Mount",
+		"lift":               "Lift",
+		"redelivery":         "Redelivery",
+		"dry_run":            "Dry Run",
+		"toll":               "Toll",
+		"triaxle":            "Triaxle ($/day)",
+		"extreme_overweight": "Extreme Overweight",
+		"regular_overweight": "Regular Overweight",
+		"reefer":             "Reefer",
+		"genset":             "Genset ($/day)",
+		"hazmat":             "Hazmat",
+		"stop_off":           "Stop Off",
+		"layover":            "Layover",
+		"drop":               "Drop",
+		"scale":              "Scale",
+		"congestion":         "Congestion ($/hr)",
+		"congestion_free":    "Congestion Free (hrs)",
+		"gate":               "Gate",
+	}
+	if l, ok := labels[ct]; ok {
+		return l
+	}
+	return strings.ReplaceAll(ct, "_", " ")
 }
 
 // generateReferenceID produces the next sequential reference ID for the current year.
@@ -551,6 +591,51 @@ func (s *Service) HandleCreate() http.HandlerFunc {
 	}
 }
 
+// --- Comparison + Lineup types ---
+
+// RateRequestSnippet is minimal rate request info for the comparison page header.
+type RateRequestSnippet struct {
+	ID          int
+	ReferenceID string
+	LaneID      int
+}
+
+// ChargeTypeRow is one row label in the comparison table.
+type ChargeTypeRow struct {
+	Key   string // canonical key, e.g. "chassis_min"
+	Label string // display label, e.g. "Chassis Min (days)"
+}
+
+// RateItemCell is one editable cell in the comparison table.
+type RateItemCell struct {
+	ID             int
+	Amount         float64
+	Unit           string
+	ManuallyEdited bool
+	ParsedBy       string // "regex" | "llm" | "manual"
+	Display        string // pre-formatted for display, e.g. "$1,200.00" or "35%"
+}
+
+// VendorColumn holds one vendor's column in the comparison table.
+type VendorColumn struct {
+	VendorRateID int
+	VendorName   string
+	Total        float64                 // linehaul + (linehaul * fuel / 100)
+	TotalDisplay string                  // pre-formatted total for display
+	Items        map[string]RateItemCell // keyed by charge_type
+}
+
+// ComparisonData is template data for rate_comparison.html.
+type ComparisonData struct {
+	RateRequest  RateRequestSnippet
+	Lane         LaneSnippet
+	ChargeRows   []ChargeTypeRow    // ordered; only types present in ≥1 vendor
+	Vendors      []VendorColumn     // sorted ascending by Total
+	Averages     map[string]string  // pre-formatted average per charge_type
+	AvgTotal     string             // pre-formatted average of vendor totals
+	Lineups      map[int]int        // vendor_rate_id → current rank (0 = unranked)
+}
+
 // HandleDetail renders the rate request detail view with blast status and mailto links.
 // GET /rate-requests/{id}
 func (s *Service) HandleDetail(tmpl *template.Template) http.HandlerFunc {
@@ -577,5 +662,258 @@ func (s *Service) HandleDetail(tmpl *template.Template) http.HandlerFunc {
 			"User":        user,
 			"RateRequest": rr,
 		})
+	}
+}
+
+// HandleComparison renders the side-by-side vendor rate comparison and lineup builder.
+// GET /rate-requests/{id}/comparison
+func (s *Service) HandleComparison(tmpl *template.Template) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		user := auth.UserFromContext(r.Context())
+
+		rrID, err := strconv.Atoi(r.PathValue("id"))
+		if err != nil || rrID <= 0 {
+			http.Error(w, "Not found", http.StatusNotFound)
+			return
+		}
+
+		var rr RateRequestSnippet
+		err = s.DB.QueryRow(`SELECT id, reference_id, lane_id FROM rate_requests WHERE id = ?`, rrID).Scan(
+			&rr.ID, &rr.ReferenceID, &rr.LaneID,
+		)
+		if err == sql.ErrNoRows {
+			http.Error(w, "Not found", http.StatusNotFound)
+			return
+		}
+		if err != nil {
+			log.Printf("HandleComparison: fetch rate request %d: %v", rrID, err)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+
+		lane, err := s.fetchLane(rr.LaneID)
+		if err != nil {
+			log.Printf("HandleComparison: fetch lane %d: %v", rr.LaneID, err)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+
+		// Load all rate items for this rate request, grouped by vendor_rate.
+		itemRows, err := s.DB.Query(`
+			SELECT vr.id, v.name,
+			       vri.id, vri.charge_type, vri.amount, vri.unit, vri.manually_edited, vr.parsed_by
+			FROM vendor_rates vr
+			JOIN vendors v ON vr.vendor_id = v.id
+			JOIN vendor_rate_items vri ON vri.vendor_rate_id = vr.id
+			WHERE vr.rate_request_id = ?
+			ORDER BY vr.id, vri.charge_type
+		`, rrID)
+		if err != nil {
+			log.Printf("HandleComparison: query items rr=%d: %v", rrID, err)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+
+		vendorMap := make(map[int]*VendorColumn)
+		var vendorOrder []int
+
+		for itemRows.Next() {
+			var vrID int
+			var vName string
+			var itemID int
+			var ct, unit, parsedBy string
+			var amount float64
+			var manuallyEdited int
+			if err := itemRows.Scan(&vrID, &vName, &itemID, &ct, &amount, &unit, &manuallyEdited, &parsedBy); err != nil {
+				itemRows.Close()
+				log.Printf("HandleComparison: scan item row: %v", err)
+				http.Error(w, "Internal server error", http.StatusInternalServerError)
+				return
+			}
+			if _, ok := vendorMap[vrID]; !ok {
+				vendorMap[vrID] = &VendorColumn{
+					VendorRateID: vrID,
+					VendorName:   vName,
+					Items:        make(map[string]RateItemCell),
+				}
+				vendorOrder = append(vendorOrder, vrID)
+			}
+			vendorMap[vrID].Items[ct] = RateItemCell{
+				ID:             itemID,
+				Amount:         amount,
+				Unit:           unit,
+				ManuallyEdited: manuallyEdited != 0,
+				ParsedBy:       parsedBy,
+				Display:        rates.FmtCellAmount(amount, unit),
+			}
+		}
+		itemRows.Close()
+
+		// Build vendor slice with computed totals, then sort by total ascending.
+		vendors := make([]VendorColumn, 0, len(vendorOrder))
+		for _, vrID := range vendorOrder {
+			vc := *vendorMap[vrID]
+			lh := vc.Items["linehaul"].Amount
+			fuel := vc.Items["fuel"].Amount
+			vc.Total = lh + lh*fuel/100
+			vc.TotalDisplay = rates.FmtCellAmount(vc.Total, "$")
+			vendors = append(vendors, vc)
+		}
+		sort.Slice(vendors, func(i, j int) bool {
+			return vendors[i].Total < vendors[j].Total
+		})
+
+		// Collect charge types present in any vendor, in canonical FieldOrder.
+		presentTypes := make(map[string]bool)
+		for _, vc := range vendors {
+			for ct := range vc.Items {
+				presentTypes[ct] = true
+			}
+		}
+		var chargeRows []ChargeTypeRow
+		for _, ct := range rates.FieldOrder {
+			if presentTypes[ct] {
+				chargeRows = append(chargeRows, ChargeTypeRow{
+					Key:   ct,
+					Label: ctLabel(ct),
+				})
+			}
+		}
+
+		// Compute per-charge-type averages (formatted) across vendors that have that type.
+		rawAvgAmounts := make(map[string]float64)
+		rawAvgUnits := make(map[string]string)
+		counts := make(map[string]int)
+		for _, vc := range vendors {
+			for ct, cell := range vc.Items {
+				rawAvgAmounts[ct] += cell.Amount
+				rawAvgUnits[ct] = cell.Unit
+				counts[ct]++
+			}
+		}
+		averages := make(map[string]string, len(rawAvgAmounts))
+		for ct, total := range rawAvgAmounts {
+			if counts[ct] > 0 {
+				avg := total / float64(counts[ct])
+				averages[ct] = rates.FmtCellAmount(avg, rawAvgUnits[ct])
+			}
+		}
+
+		// Compute average of vendor totals.
+		var totalSum float64
+		for _, vc := range vendors {
+			totalSum += vc.Total
+		}
+		var avgTotal string
+		if len(vendors) > 0 {
+			avgTotal = rates.FmtCellAmount(totalSum/float64(len(vendors)), "$")
+		}
+
+		// Load existing lineups for this lane (vendor_rate_id → rank).
+		lineups := make(map[int]int)
+		lRows, err := s.DB.Query(`SELECT vendor_rate_id, rank FROM vendor_lineups WHERE lane_id = ?`, rr.LaneID)
+		if err != nil {
+			log.Printf("HandleComparison: query lineups lane=%d: %v", rr.LaneID, err)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+		for lRows.Next() {
+			var vrID, rank int
+			lRows.Scan(&vrID, &rank)
+			lineups[vrID] = rank
+		}
+		lRows.Close()
+
+		if err := tmpl.ExecuteTemplate(w, "layout.html", map[string]any{
+			"User": user,
+			"Data": ComparisonData{
+				RateRequest: rr,
+				Lane:        *lane,
+				ChargeRows:  chargeRows,
+				Vendors:     vendors,
+				Averages:    averages,
+				AvgTotal:    avgTotal,
+				Lineups:     lineups,
+			},
+		}); err != nil {
+			log.Printf("HandleComparison: template execution rr=%d: %v", rrID, err)
+		}
+	}
+}
+
+// HandleSaveLineup saves the vendor ranking for a lane and advances its status to "quoting".
+// POST /rate-requests/{id}/lineup
+func (s *Service) HandleSaveLineup() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		rrID, err := strconv.Atoi(r.PathValue("id"))
+		if err != nil || rrID <= 0 {
+			http.Error(w, "Not found", http.StatusNotFound)
+			return
+		}
+
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "Bad request", http.StatusBadRequest)
+			return
+		}
+
+		var laneID int
+		if err := s.DB.QueryRow(`SELECT lane_id FROM rate_requests WHERE id = ?`, rrID).Scan(&laneID); err != nil {
+			http.Error(w, "Not found", http.StatusNotFound)
+			return
+		}
+
+		// Collect (vendor_rate_id → rank) from form fields named "rank_{vrID}".
+		type lineupEntry struct {
+			vrID int
+			rank int
+		}
+		var selected []lineupEntry
+		for key, vals := range r.Form {
+			if !strings.HasPrefix(key, "rank_") {
+				continue
+			}
+			vrID, err := strconv.Atoi(strings.TrimPrefix(key, "rank_"))
+			if err != nil || vrID <= 0 {
+				continue
+			}
+			rank, err := strconv.Atoi(vals[0])
+			if err != nil || rank <= 0 {
+				continue
+			}
+			selected = append(selected, lineupEntry{vrID: vrID, rank: rank})
+		}
+
+		tx, err := s.DB.Begin()
+		if err != nil {
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+		defer tx.Rollback()
+
+		if _, err := tx.Exec(`DELETE FROM vendor_lineups WHERE lane_id = ?`, laneID); err != nil {
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+		for _, l := range selected {
+			if _, err := tx.Exec(
+				`INSERT INTO vendor_lineups (lane_id, vendor_rate_id, rank) VALUES (?, ?, ?)`,
+				laneID, l.vrID, l.rank,
+			); err != nil {
+				http.Error(w, "Internal server error", http.StatusInternalServerError)
+				return
+			}
+		}
+		if len(selected) > 0 {
+			tx.Exec(
+				`UPDATE lanes SET status = 'quoting', updated_at = ? WHERE id = ? AND status IN ('rates_received', 'quoting')`,
+				time.Now().UTC().Format("2006-01-02 15:04:05"), laneID,
+			)
+		}
+		if err := tx.Commit(); err != nil {
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+
+		http.Redirect(w, r, fmt.Sprintf("/rate-requests/%d/comparison", rrID), http.StatusSeeOther)
 	}
 }

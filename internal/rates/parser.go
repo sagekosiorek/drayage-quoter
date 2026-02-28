@@ -52,9 +52,9 @@ var chargeTypeMeta = map[string]string{
 	"gate":               "$",
 }
 
-// fieldOrder defines extraction order; extreme_overweight before regular_overweight
-// prevents misclassification.
-var fieldOrder = []string{
+// FieldOrder defines the canonical charge type ordering for display and extraction.
+// extreme_overweight must precede regular_overweight to prevent misclassification.
+var FieldOrder = []string{
 	"linehaul",
 	"fuel",
 	"chassis",
@@ -332,7 +332,7 @@ func ExtractRates(text string) ParseResult {
 	var result ParseResult
 	seen := make(map[string]bool)
 
-	for _, ct := range fieldOrder {
+	for _, ct := range FieldOrder {
 		patterns, ok := patternSet[ct]
 		if !ok {
 			continue
