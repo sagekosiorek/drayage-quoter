@@ -1,0 +1,127 @@
+{{ define "content" }}
+<p class="back-link"><a href="/lanes/{{ .Data.Lane.ID }}">← Back to lane</a></p>
+
+<div class="page-header">
+    <div style="display:flex;align-items:center;gap:.75rem;">
+        <h1 class="page-title" style="margin:0;">
+            {{- if eq .Data.Lane.Direction "import" -}}
+            {{ .Data.Lane.OriginPort }} {{ .Data.Lane.OriginPortType }} → {{ .Data.Lane.Destination }}
+            {{- else -}}
+            {{ .Data.Lane.Destination }} → {{ .Data.Lane.OriginPort }} {{ .Data.Lane.OriginPortType }}
+            {{- end -}}
+        </h1>
+        <span class="status-badge status-{{ .Data.Lane.Status }}">{{ .Data.Lane.StatusLabel }}</span>
+    </div>
+    <div style="font-size:.82rem;color:#666;margin-top:.25rem;">
+        Ref: <strong>{{ .Data.RateRequest.ReferenceID }}</strong>
+        &nbsp;·&nbsp; {{ len .Data.Vendors }} vendor{{ if ne (len .Data.Vendors) 1 }}s{{ end }} responded
+    </div>
+</div>
+
+{{ if not .Data.Vendors }}
+<p class="empty-state">No vendor responses yet. <a href="/rate-requests/{{ .Data.RateRequest.ID }}">Ingest a rate response</a> to get started.</p>
+{{ else }}
+
+<div class="comparison-layout">
+
+    <!-- Left: comparison table + lineup save -->
+    <div>
+        <form method="POST" action="/rate-requests/{{ .Data.RateRequest.ID }}/lineup">
+
+            <div class="comparison-table-wrap">
+                <table class="comparison-table">
+                    <thead>
+                        <tr>
+                            <th style="min-width:160px;">Charge Type</th>
+                            <th style="min-width:110px;text-align:center;background:#f9fafb;font-style:italic;color:#666;">Average</th>
+                            {{ range .Data.Vendors }}
+                            <th style="min-width:140px;text-align:center;">
+                                <div style="font-weight:600;">{{ .VendorName }}</div>
+                                {{ $rank := index $.Data.Lineups .VendorRateID }}
+                                <div style="display:flex;align-items:center;justify-content:center;gap:.35rem;margin:.3rem 0;">
+                                    <label style="font-size:.72rem;color:#666;">Rank:</label>
+                                    <input type="number" name="rank_{{ .VendorRateID }}"
+                                           class="rank-input"
+                                           {{ if $rank }}value="{{ $rank }}"{{ end }}
+                                           min="1" max="{{ len $.Data.Vendors }}"
+                                           placeholder="—"
+                                           title="1 = primary carrier, 2 = secondary, etc. Leave blank to exclude.">
+                                </div>
+                                <div style="margin-top:.3rem;">
+                                    <button type="button"
+                                            hx-get="/vendor-rates/{{ .VendorRateID }}/email"
+                                            hx-target="#email-panel"
+                                            hx-swap="innerHTML"
+                                            style="font-size:.72rem;padding:2px 7px;">
+                                        View Email
+                                    </button>
+                                </div>
+                            </th>
+                            {{ end }}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- TOTAL row -->
+                        <tr class="row-total">
+                            <td>Linehaul + Fuel</td>
+                            <td id="avg-total" style="text-align:center;background:#f9fafb;font-style:italic;">{{ .Data.AvgTotal }}</td>
+                            {{ range .Data.Vendors }}
+                            <td id="total-{{ .VendorRateID }}" style="text-align:center;font-weight:700;">{{ .TotalDisplay }}</td>
+                            {{ end }}
+                        </tr>
+                        <!-- Per-charge-type rows -->
+                        {{ range .Data.ChargeRows }}
+                        {{ $ct := .Key }}
+                        <tr>
+                            <td>{{ .Label }}</td>
+                            <td id="avg-{{ $ct }}" style="text-align:center;background:#f9fafb;font-style:italic;color:#555;">
+                                {{ index $.Data.Averages $ct }}
+                            </td>
+                            {{ range $.Data.Vendors }}
+                            {{ $cell := index .Items $ct }}
+                            {{ if $cell.ID }}
+                            <td class="{{ if $cell.ManuallyEdited }}cell-edited{{ else if eq $cell.ParsedBy "llm" }}cell-llm{{ end }}"
+                                hx-get="/vendor-rate-items/{{ $cell.ID }}/edit"
+                                hx-trigger="click"
+                                hx-target="this"
+                                hx-swap="outerHTML"
+                                style="text-align:center;cursor:pointer;"
+                                title="Click to edit">{{ $cell.Display }}</td>
+                            {{ else }}
+                            <td style="text-align:center;color:#ccc;">—</td>
+                            {{ end }}
+                            {{ end }}
+                        </tr>
+                        {{ end }}
+                    </tbody>
+                </table>
+            </div>
+
+            <div style="margin-top:1rem;display:flex;align-items:center;gap:1rem;">
+                <button type="submit" class="primary">Save Lineup</button>
+                <span style="font-size:.78rem;color:#888;">
+                    Set rank 1 = primary carrier, 2 = secondary, etc. Set to 0 or blank to exclude.
+                </span>
+            </div>
+
+        </form>
+
+        <p style="margin-top:1.5rem;font-size:.75rem;color:#aaa;">
+            <span style="display:inline-block;width:12px;height:12px;background:#fef9c3;border:1px solid #e5e7eb;vertical-align:middle;margin-right:4px;"></span> LLM-corrected &nbsp;
+            <span style="display:inline-block;width:12px;height:12px;background:#dbeafe;border:1px solid #e5e7eb;vertical-align:middle;margin-right:4px;"></span> Manually edited &nbsp;
+            Click any cell to edit its value.
+        </p>
+    </div>
+
+    <!-- Right: original email side panel -->
+    <div>
+        <p class="detail-section">Original Email</p>
+        <p style="font-size:.78rem;color:#888;margin:.25rem 0 .75rem;">Click "View Email" on a vendor column to display their rate response here.</p>
+        <div id="email-panel" class="email-panel">
+            <p style="color:#ccc;font-size:.82rem;text-align:center;padding:2rem 0;">No email selected</p>
+        </div>
+    </div>
+
+</div>
+{{ end }}
+{{ end }}

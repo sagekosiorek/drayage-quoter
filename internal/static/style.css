@@ -210,3 +210,26 @@ tr:last-child td { border-bottom: none; }
 .port-block-type { color: #666; font-size: .78rem; padding: 1px 6px; background: #eee; border-radius: 3px; }
 .port-block-actions { margin-left: auto; display: flex; gap: .5rem; align-items: center; }
 .port-block-body { padding: .5rem .75rem .75rem; }
+
+/* Rate Comparison Table */
+.comparison-layout { display: grid; grid-template-columns: 1fr 300px; gap: 1.5rem; align-items: start; }
+.comparison-table-wrap { overflow-x: auto; }
+.comparison-table td:first-child { font-weight: 500; white-space: nowrap; }
+.comparison-table .row-total td { font-weight: 700; border-top: 2px solid #ddd; background: #fafafa; }
+
+/* Comparison cell visual indicators */
+td.cell-llm    { background: #fef9c3; }
+td.cell-edited { background: #dbeafe; }
+td.cell-llm:hover, td.cell-edited:hover { opacity: .85; }
+
+/* Inline cell edit form */
+.cell-edit-form input { width: 75px; padding: 2px 4px; font-size: .88rem; border: 1px solid #aaa; border-radius: 2px; }
+.cell-edit-form button { padding: 2px 6px; font-size: .85rem; cursor: pointer; margin-left: 2px; }
+
+/* Original email side panel */
+.email-panel { border: 1px solid #e5e7eb; border-radius: 4px; padding: .75rem;
+               max-height: 540px; overflow-y: auto; background: #f9fafb; }
+
+/* Lineup rank input */
+.rank-input { width: 44px; font-size: .85rem; text-align: center; padding: 2px 4px;
+              border: 1px solid #d1d5db; border-radius: 3px; }

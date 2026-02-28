@@ -88,6 +88,7 @@ func main() {
 	vendorEditTmpl := templates.MustParse("layout.html", "vendor_edit.html")
 	rrNewTmpl := templates.MustParse("layout.html", "rate_request_new.html")
 	rrDetailTmpl := templates.MustParse("layout.html", "rate_request_detail.html")
+	rrComparisonTmpl := templates.MustParse("layout.html", "rate_comparison.html")
 	rateIngestTmpl := templates.MustParse("layout.html", "rate_ingest.html")
 	rateResultTmpl := templates.MustParse("layout.html", "rate_ingest_result.html")
 
@@ -163,12 +164,18 @@ func main() {
 	mux.HandleFunc("GET /lanes/{id}/rate-request/new", authService.RequireAuth(rrSvc.HandleNewForm(rrNewTmpl)))
 	mux.HandleFunc("POST /lanes/{id}/rate-request", authService.RequireAuth(rrSvc.HandleCreate()))
 	mux.HandleFunc("GET /rate-requests/{id}", authService.RequireAuth(rrSvc.HandleDetail(rrDetailTmpl)))
+	mux.HandleFunc("GET /rate-requests/{id}/comparison", authService.RequireAuth(rrSvc.HandleComparison(rrComparisonTmpl)))
+	mux.HandleFunc("POST /rate-requests/{id}/lineup", authService.RequireAuth(rrSvc.HandleSaveLineup()))
 
-	// Rate ingestion routes
+	// Rate ingestion + inline editing routes
 	mux.HandleFunc("POST /api/rates/parse", authService.RequireAuth(ratesSvc.HandleAPIIngest()))
 	mux.HandleFunc("GET /rate-requests/{id}/ingest", authService.RequireAuth(ratesSvc.HandleIngestForm(rateIngestTmpl)))
 	mux.HandleFunc("POST /rate-requests/{id}/ingest", authService.RequireAuth(ratesSvc.HandleIngestSubmit(rateResultTmpl)))
 	mux.HandleFunc("POST /rate-requests/{id}/ingest/confirm", authService.RequireAuth(ratesSvc.HandleIngestConfirm()))
+	mux.HandleFunc("GET /vendor-rate-items/{id}", authService.RequireAuth(ratesSvc.HandleViewRateItem()))
+	mux.HandleFunc("GET /vendor-rate-items/{id}/edit", authService.RequireAuth(ratesSvc.HandleEditRateItem()))
+	mux.HandleFunc("POST /vendor-rate-items/{id}", authService.RequireAuth(ratesSvc.HandleUpdateRateItem()))
+	mux.HandleFunc("GET /vendor-rates/{id}/email", authService.RequireAuth(ratesSvc.HandleViewOriginalEmail()))
 
 	// Vendor routes
 	mux.HandleFunc("GET /vendors", authService.RequireAuth(vendorsSvc.HandleList(vendorListTmpl)))
