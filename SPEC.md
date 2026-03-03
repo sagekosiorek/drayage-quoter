@@ -520,9 +520,9 @@ Side-by-side comparison table and carrier ranking.
 - [x] Create vendor_lineups table
 - [x] Build lineup selection UI within the same comparison table view: click vendors in rank order (primary, secondary, n-ary). Simple select ordering with real-time visual representation.
 - [x] Lineup reorderable and editable after creation. Rates are also editable after creation.
-- [ ] Test end-to-end UX to smooth out.
-- [ ] Implement notification triggers: threshold met OR deadline passed
-- [ ] Send in-app notification (status update on lane, via HTMX SSE)
+- [x] Test end-to-end UX to smooth out.
+- [x] Implement notification triggers: threshold met OR deadline passed
+- [x] Send in-app notification (status update on lane, via HTMX SSE)
 - [ ] Send email notification from app's outbound address
 - [ ] Update lane status to "rates_received" when first rate arrives, "quoting" when lineup is set
 

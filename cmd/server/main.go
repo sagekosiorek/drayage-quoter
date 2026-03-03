@@ -11,6 +11,7 @@ import (
 	"gitlab.com/perenne/clients/schneider/drayage-quoter/internal/admin"
 	"gitlab.com/perenne/clients/schneider/drayage-quoter/internal/auth"
 	"gitlab.com/perenne/clients/schneider/drayage-quoter/internal/db"
+	"gitlab.com/perenne/clients/schneider/drayage-quoter/internal/events"
 	"gitlab.com/perenne/clients/schneider/drayage-quoter/internal/lanes"
 	rate_requests "gitlab.com/perenne/clients/schneider/drayage-quoter/internal/rate_requests"
 	rates "gitlab.com/perenne/clients/schneider/drayage-quoter/internal/rates"
@@ -67,11 +68,13 @@ func main() {
 		BaseURL: baseURL,
 	}
 
+	broker := &events.Broker{}
+
 	adminSvc := &admin.Service{DB: database}
-	lanesSvc := &lanes.Service{DB: database}
+	lanesSvc := &lanes.Service{DB: database, Broker: broker}
 	vendorsSvc := &vendors.Service{DB: database}
 	rrSvc := &rate_requests.Service{DB: database}
-	ratesSvc := &rates.Service{DB: database, LLM: nil}
+	ratesSvc := &rates.Service{DB: database, LLM: nil, Broker: broker}
 
 	// Parse templates
 	loginTmpl := templates.MustParse("layout.html", "login.html")
@@ -156,6 +159,7 @@ func main() {
 	mux.HandleFunc("GET /lanes/new", authService.RequireAuth(lanesSvc.HandleNewForm(laneNewTmpl)))
 	mux.HandleFunc("POST /lanes", authService.RequireAuth(lanesSvc.HandleCreate()))
 	mux.HandleFunc("GET /lanes/{id}", authService.RequireAuth(lanesSvc.HandleDetail(laneDetailTmpl)))
+	mux.HandleFunc("GET /lanes/{id}/events", authService.RequireAuth(lanesSvc.HandleEvents()))
 	mux.HandleFunc("GET /lanes/{id}/edit", authService.RequireAuth(lanesSvc.HandleEditForm(laneEditTmpl)))
 	mux.HandleFunc("POST /lanes/{id}", authService.RequireAuth(lanesSvc.HandleUpdate()))
 	mux.HandleFunc("POST /lanes/{id}/status", authService.RequireAuth(lanesSvc.HandleAdvanceStatus()))
