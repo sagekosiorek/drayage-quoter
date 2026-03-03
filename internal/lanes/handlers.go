@@ -9,11 +9,13 @@ import (
 	"time"
 
 	"gitlab.com/perenne/clients/schneider/drayage-quoter/internal/auth"
+	"gitlab.com/perenne/clients/schneider/drayage-quoter/internal/events"
 )
 
 // Service handles lane operations.
 type Service struct {
-	DB *sql.DB
+	DB     *sql.DB
+	Broker *events.Broker
 }
 
 // RateRequestSnippet holds the minimal rate request data shown on the lane detail page.
@@ -104,6 +106,7 @@ type LaneRow struct {
 	ContainerSize string
 	Direction     string
 	Status        string
+	StatusLabel   string
 	OwnerName     string
 	CreatedAt     string
 }
@@ -292,6 +295,7 @@ func (s *Service) HandleDashboard(tmpl *template.Template) http.HandlerFunc {
 			} else {
 				l.Direction = "Export"
 			}
+			l.StatusLabel = statusLabel(l.Status)
 			laneRows = append(laneRows, l)
 		}
 
@@ -701,6 +705,56 @@ func (s *Service) HandleUpdate() http.HandlerFunc {
 		}
 
 		http.Redirect(w, r, fmt.Sprintf("/lanes/%d", id), http.StatusSeeOther)
+	}
+}
+
+// HandleEvents streams lane status changes as Server-Sent Events.
+// Clients receive a named "status" event whose data is a ready-to-swap HTML fragment.
+// GET /lanes/{id}/events
+func (s *Service) HandleEvents() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_ = auth.UserFromContext(r.Context())
+
+		id, err := strconv.Atoi(r.PathValue("id"))
+		if err != nil || id <= 0 {
+			http.Error(w, "Not found", http.StatusNotFound)
+			return
+		}
+
+		var exists int
+		if err := s.DB.QueryRow("SELECT COUNT(*) FROM lanes WHERE id = ?", id).Scan(&exists); err != nil || exists == 0 {
+			http.Error(w, "Lane not found", http.StatusNotFound)
+			return
+		}
+
+		flusher, ok := w.(http.Flusher)
+		if !ok {
+			http.Error(w, "Streaming not supported by server", http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Header().Set("Cache-Control", "no-cache")
+		w.Header().Set("Connection", "keep-alive")
+		flusher.Flush()
+
+		topic := fmt.Sprintf("lane:%d", id)
+		ch := s.Broker.Subscribe(topic)
+		defer s.Broker.Unsubscribe(topic, ch)
+
+		for {
+			select {
+			case status, ok := <-ch:
+				if !ok {
+					return
+				}
+				label := statusLabel(status)
+				fmt.Fprintf(w, "event: status\ndata: <span class=\"status-badge status-%s\">%s</span>\n\n", status, label)
+				flusher.Flush()
+			case <-r.Context().Done():
+				return
+			}
+		}
 	}
 }
 

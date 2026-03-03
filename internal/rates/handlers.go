@@ -12,12 +12,14 @@ import (
 	"time"
 
 	"gitlab.com/perenne/clients/schneider/drayage-quoter/internal/auth"
+	"gitlab.com/perenne/clients/schneider/drayage-quoter/internal/events"
 )
 
 // Service orchestrates rate ingestion: DB access and optional LLM correction.
 type Service struct {
-	DB  *sql.DB
-	LLM LLMCorrector // nil → NoopCorrector used in Parse
+	DB     *sql.DB
+	LLM    LLMCorrector   // nil → NoopCorrector used in Parse
+	Broker *events.Broker // nil → no SSE publish
 }
 
 // VendorOption is a minimal vendor row for dropdown rendering.
@@ -313,7 +315,7 @@ func (s *Service) HandleIngestConfirm() http.HandlerFunc {
 
 		tx.Exec(`UPDATE rate_request_vendors SET responded = 1 WHERE rate_request_id = ? AND vendor_id = ?`, rrID, vendorID)
 		tx.Exec(`UPDATE rate_requests SET responses_received = responses_received + 1 WHERE id = ?`, rrID)
-		tx.Exec(`
+		statusRes, _ := tx.Exec(`
 			UPDATE lanes SET status = 'rates_received', updated_at = ?
 			WHERE id = (SELECT lane_id FROM rate_requests WHERE id = ?)
 			  AND status = 'rates_requested'
@@ -322,6 +324,13 @@ func (s *Service) HandleIngestConfirm() http.HandlerFunc {
 		if err := tx.Commit(); err != nil {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
+		}
+
+		if ra, _ := statusRes.RowsAffected(); ra > 0 && s.Broker != nil {
+			var laneID int
+			if s.DB.QueryRow(`SELECT lane_id FROM rate_requests WHERE id = ?`, rrID).Scan(&laneID) == nil {
+				s.Broker.Publish(fmt.Sprintf("lane:%d", laneID), "rates_received")
+			}
 		}
 
 		http.Redirect(w, r, fmt.Sprintf("/rate-requests/%d", rrID), http.StatusSeeOther)
@@ -382,13 +391,23 @@ func (s *Service) saveVendorRate(rrID, vendorID int, rawEmail, parsedBy string, 
 
 	tx.Exec(`UPDATE rate_request_vendors SET responded = 1 WHERE rate_request_id = ? AND vendor_id = ?`, rrID, vendorID)
 	tx.Exec(`UPDATE rate_requests SET responses_received = responses_received + 1 WHERE id = ?`, rrID)
-	tx.Exec(`
+	statusRes, _ := tx.Exec(`
 		UPDATE lanes SET status = 'rates_received', updated_at = ?
 		WHERE id = (SELECT lane_id FROM rate_requests WHERE id = ?)
 		  AND status = 'rates_requested'
 	`, time.Now().UTC().Format("2006-01-02 15:04:05"), rrID)
 
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+
+	if ra, _ := statusRes.RowsAffected(); ra > 0 && s.Broker != nil {
+		var laneID int
+		if s.DB.QueryRow(`SELECT lane_id FROM rate_requests WHERE id = ?`, rrID).Scan(&laneID) == nil {
+			s.Broker.Publish(fmt.Sprintf("lane:%d", laneID), "rates_received")
+		}
+	}
+	return nil
 }
 
 // insertOrphan stores an unmatched email for later manual assignment.

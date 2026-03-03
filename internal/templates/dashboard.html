@@ -54,7 +54,9 @@
             <td>{{ .Destination }}</td>
             <td>{{ .ContainerSize }}</td>
             <td>{{ .Direction }}</td>
-            <td><span class="status-badge status-{{ .Status }}">{{ .Status }}</span></td>
+            <td>{{ if eq .Status "rates_requested" }}<span hx-ext="sse" sse-connect="/lanes/{{ .ID }}/events"
+                      class="status-badge status-{{ .Status }}"
+                      sse-swap="status" hx-swap="outerHTML">{{ .StatusLabel }}</span>{{ else }}<span class="status-badge status-{{ .Status }}">{{ .StatusLabel }}</span>{{ end }}</td>
             <td>{{ .OwnerName }}</td>
             <td>{{ .CreatedAt }}</td>
         </tr>
