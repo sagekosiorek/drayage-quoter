@@ -1,16 +1,19 @@
 package main
 
 import (
+	"database/sql"
 	"fmt"
 	"html/template"
 	"log"
 	"net/http"
 	"os"
 	"path/filepath"
+	"time"
 
 	"gitlab.com/perenne/clients/schneider/drayage-quoter/internal/admin"
 	"gitlab.com/perenne/clients/schneider/drayage-quoter/internal/auth"
 	"gitlab.com/perenne/clients/schneider/drayage-quoter/internal/db"
+	"gitlab.com/perenne/clients/schneider/drayage-quoter/internal/email"
 	"gitlab.com/perenne/clients/schneider/drayage-quoter/internal/events"
 	"gitlab.com/perenne/clients/schneider/drayage-quoter/internal/lanes"
 	rate_requests "gitlab.com/perenne/clients/schneider/drayage-quoter/internal/rate_requests"
@@ -61,10 +64,30 @@ func main() {
 
 	log.Println("database ready")
 
+	// Wire email: use Mailgun in production when env vars are set; log-only in dev.
+	mailgunKey := os.Getenv("MAILGUN_API_KEY")
+	mailgunDomain := os.Getenv("MAILGUN_DOMAIN")
+	mailgunFrom := os.Getenv("MAILGUN_FROM") // e.g. "Drayage Quoter <noreply@mail.example.com>"
+	mailgunWebhookKey := os.Getenv("MAILGUN_WEBHOOK_SIGNING_KEY")
+
+	var emailSender auth.EmailSender = auth.LogEmailSender{}
+	var notifyFn func(to, subject, body string) error
+	if mailgunKey != "" && mailgunDomain != "" {
+		if mailgunFrom == "" {
+			mailgunFrom = fmt.Sprintf("Drayage Quoter <noreply@%s>", mailgunDomain)
+		}
+		mg := &email.Sender{APIKey: mailgunKey, Domain: mailgunDomain, From: mailgunFrom}
+		emailSender = mg
+		notifyFn = mg.Send
+		log.Printf("email: Mailgun enabled (domain: %s)", mailgunDomain)
+	} else {
+		log.Println("email: MAILGUN_API_KEY/MAILGUN_DOMAIN not set — logging only (dev mode)")
+	}
+
 	// Services
 	authService := &auth.Service{
 		DB:      database,
-		Email:   auth.LogEmailSender{},
+		Email:   emailSender,
 		BaseURL: baseURL,
 	}
 
@@ -74,7 +97,22 @@ func main() {
 	lanesSvc := &lanes.Service{DB: database, Broker: broker}
 	vendorsSvc := &vendors.Service{DB: database}
 	rrSvc := &rate_requests.Service{DB: database}
-	ratesSvc := &rates.Service{DB: database, LLM: nil, Broker: broker}
+	ratesSvc := &rates.Service{
+		DB:      database,
+		LLM:     nil,
+		Broker:  broker,
+		Notify:  notifyFn,
+		BaseURL: baseURL,
+	}
+
+	// Deadline poller: check for expired rate request deadlines every 5 minutes.
+	go func() {
+		ticker := time.NewTicker(5 * time.Minute)
+		defer ticker.Stop()
+		for range ticker.C {
+			checkDeadlines(database, notifyFn, baseURL)
+		}
+	}()
 
 	// Parse templates
 	loginTmpl := templates.MustParse("layout.html", "login.html")
@@ -112,6 +150,9 @@ func main() {
 	mux.HandleFunc("GET /auth/verify", authService.HandleVerify())
 	mux.HandleFunc("POST /logout", authService.HandleLogout())
 
+	// Mailgun inbound webhook (unauthenticated; HMAC-verified inside handler)
+	mux.HandleFunc("POST /webhooks/email/inbound", email.HandleInbound(ratesSvc, mailgunWebhookKey))
+
 	// Admin routes
 	mux.HandleFunc("GET /admin/users", authService.RequireAdmin(adminSvc.HandleUsers(adminUsersTmpl)))
 	mux.HandleFunc("POST /admin/users", authService.RequireAdmin(adminSvc.HandleAddUser()))
@@ -137,8 +178,8 @@ func main() {
 		}
 		defer rows.Close()
 		type suggestion struct {
-			ID       int
-			Name     string
+			ID   int
+			Name string
 		}
 		var matches []suggestion
 		for rows.Next() {
@@ -200,5 +241,79 @@ func main() {
 	log.Printf("listening on :%s", port)
 	if err := http.ListenAndServe(":"+port, mux); err != nil {
 		log.Fatal(err)
+	}
+}
+
+// checkDeadlines finds rate requests whose deadline has passed without notification
+// and sends a notification email to the lane owner. Called by the background poller.
+func checkDeadlines(database *sql.DB, notify func(to, subject, body string) error, baseURL string) {
+	if notify == nil {
+		return
+	}
+
+	rows, err := database.Query(`
+		SELECT rr.id, rr.reference_id, rr.responses_received,
+		       p.name, l.destination, l.direction,
+		       u.email
+		FROM rate_requests rr
+		JOIN lanes l ON l.id = rr.lane_id
+		JOIN ports p ON p.id = l.origin_port_id
+		JOIN users u ON u.id = l.owner_id
+		WHERE rr.deadline < CURRENT_TIMESTAMP
+		  AND rr.notified = 0
+	`)
+	if err != nil {
+		log.Printf("deadline poller: query error: %v", err)
+		return
+	}
+	defer rows.Close()
+
+	type deadlineRow struct {
+		rrID              int
+		refID             string
+		responsesReceived int
+		originPort        string
+		destination       string
+		direction         string
+		ownerEmail        string
+	}
+
+	var due []deadlineRow
+	for rows.Next() {
+		var d deadlineRow
+		if err := rows.Scan(&d.rrID, &d.refID, &d.responsesReceived, &d.originPort, &d.destination, &d.direction, &d.ownerEmail); err != nil {
+			log.Printf("deadline poller: scan error: %v", err)
+			continue
+		}
+		due = append(due, d)
+	}
+
+	for _, d := range due {
+		// Mark notified first (CAS) to prevent duplicate sends across poller ticks.
+		res, err := database.Exec(`UPDATE rate_requests SET notified = 1 WHERE id = ? AND notified = 0`, d.rrID)
+		if err != nil {
+			log.Printf("deadline poller: mark notified rr=%d: %v", d.rrID, err)
+			continue
+		}
+		if ra, _ := res.RowsAffected(); ra == 0 {
+			continue // another goroutine beat us to it
+		}
+
+		dir := "Import"
+		if d.direction == "export" {
+			dir = "Export"
+		}
+		compURL := fmt.Sprintf("%s/rate-requests/%d/comparison", baseURL, d.rrID)
+		subject := fmt.Sprintf("[Drayage Quoter] Rate request deadline passed — %s → %s — %s", d.originPort, d.destination, d.refID)
+		body := fmt.Sprintf(
+			"The deadline for your rate request has passed.\n\n%s → %s (%s)\n%d response(s) received.\n\nView comparison:\n%s",
+			d.originPort, d.destination, dir, d.responsesReceived, compURL,
+		)
+
+		if err := notify(d.ownerEmail, subject, body); err != nil {
+			log.Printf("deadline poller: send notification to %s rr=%d: %v", d.ownerEmail, d.rrID, err)
+		} else {
+			log.Printf("deadline poller: notified %s for rr=%d (%s)", d.ownerEmail, d.rrID, d.refID)
+		}
 	}
 }

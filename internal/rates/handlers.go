@@ -15,11 +15,14 @@ import (
 	"gitlab.com/perenne/clients/schneider/drayage-quoter/internal/events"
 )
 
-// Service orchestrates rate ingestion: DB access and optional LLM correction.
+// Service orchestrates rate ingestion: DB access, optional LLM correction, and notifications.
 type Service struct {
 	DB     *sql.DB
-	LLM    LLMCorrector   // nil → NoopCorrector used in Parse
-	Broker *events.Broker // nil → no SSE publish
+	LLM    LLMCorrector                         // nil → NoopCorrector used in Parse
+	Broker *events.Broker                       // nil → no SSE publish
+	Notify func(to, subject, body string) error // nil → skip email notifications
+	// BaseURL is used to build comparison page links in notification emails.
+	BaseURL string
 }
 
 // VendorOption is a minimal vendor row for dropdown rendering.
@@ -74,73 +77,70 @@ type apiIngestRequest struct {
 	Sender  string `json:"sender"`
 }
 
+// IngestEmail is the shared core for processing an inbound rate response email.
+// It parses, matches the reference ID, identifies the vendor, and saves or orphans the result.
+// Returns a status string ("matched" or "orphaned") and any hard error.
+func (s *Service) IngestEmail(subject, body, sender string) (string, error) {
+	result, err := s.Parse(body)
+	if err != nil {
+		return "", fmt.Errorf("parse email: %w", err)
+	}
+
+	refMatch := reReferenceID.FindString(subject)
+	if refMatch == "" {
+		s.insertOrphan(body, subject, sender, 0)
+		return "orphaned", nil
+	}
+
+	var rrID int
+	err = s.DB.QueryRow(`SELECT id FROM rate_requests WHERE reference_id = ?`, refMatch).Scan(&rrID)
+	if err == sql.ErrNoRows {
+		s.insertOrphan(body, subject, sender, 0)
+		return "orphaned", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("lookup rate request %s: %w", refMatch, err)
+	}
+
+	var vendorID int
+	err = s.DB.QueryRow(`
+		SELECT vp.vendor_id
+		FROM vendor_contacts vc
+		JOIN vendor_ports vp ON vc.vendor_ports_id = vp.id
+		JOIN rate_request_vendors rrv ON rrv.vendor_id = vp.vendor_id
+		WHERE vc.email = ? AND rrv.rate_request_id = ?
+		LIMIT 1
+	`, sender, rrID).Scan(&vendorID)
+	if err == sql.ErrNoRows {
+		s.insertOrphan(body, subject, sender, rrID)
+		return "orphaned", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("match vendor for sender %s on rr %d: %w", sender, rrID, err)
+	}
+
+	if err := s.saveVendorRate(rrID, vendorID, body, "regex", result.Items); err != nil {
+		return "", fmt.Errorf("save vendor rate rr=%d vendor=%d: %w", rrID, vendorID, err)
+	}
+	return "matched", nil
+}
+
 // HandleAPIIngest parses an inbound email JSON payload and stores or orphans the result.
 // POST /api/rates/parse
 func (s *Service) HandleAPIIngest() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req apiIngestRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "invalid JSON", http.StatusBadRequest)
+			http.Error(w, "invalid JSON body", http.StatusBadRequest)
 			return
 		}
 
-		result, err := s.Parse(req.Body)
+		status, err := s.IngestEmail(req.Subject, req.Body, req.Sender)
 		if err != nil {
-			http.Error(w, "parse error", http.StatusInternalServerError)
+			http.Error(w, fmt.Sprintf("ingest error: %v", err), http.StatusInternalServerError)
 			return
 		}
-
-		refMatch := reReferenceID.FindString(req.Subject)
-		if refMatch == "" {
-			s.insertOrphan(req.Body, req.Subject, req.Sender, 0)
-			writeJSON(w, map[string]any{"status": "orphaned", "reason": "no reference ID in subject"})
-			return
-		}
-
-		var rrID int
-		err = s.DB.QueryRow(
-			`SELECT id FROM rate_requests WHERE reference_id = ?`, refMatch,
-		).Scan(&rrID)
-		if err == sql.ErrNoRows {
-			s.insertOrphan(req.Body, req.Subject, req.Sender, 0)
-			writeJSON(w, map[string]any{"status": "orphaned", "reason": "reference ID not found"})
-			return
-		}
-		if err != nil {
-			http.Error(w, "db error", http.StatusInternalServerError)
-			return
-		}
-
-		var vendorID int
-		err = s.DB.QueryRow(`
-			SELECT vp.vendor_id
-			FROM vendor_contacts vc
-			JOIN vendor_ports vp ON vc.vendor_ports_id = vp.id
-			JOIN rate_request_vendors rrv ON rrv.vendor_id = vp.vendor_id
-			WHERE vc.email = ? AND rrv.rate_request_id = ?
-			LIMIT 1
-		`, req.Sender, rrID).Scan(&vendorID)
-		if err == sql.ErrNoRows {
-			s.insertOrphan(req.Body, req.Subject, req.Sender, rrID)
-			writeJSON(w, map[string]any{"status": "orphaned", "reason": "sender not matched to vendor on this rate request"})
-			return
-		}
-		if err != nil {
-			http.Error(w, "db error", http.StatusInternalServerError)
-			return
-		}
-
-		if err := s.saveVendorRate(rrID, vendorID, req.Body, "regex", result.Items); err != nil {
-			http.Error(w, "db error", http.StatusInternalServerError)
-			return
-		}
-
-		writeJSON(w, map[string]any{
-			"status":          "matched",
-			"rate_request_id": rrID,
-			"vendor_id":       vendorID,
-			"items_count":     len(result.Items),
-		})
+		writeJSON(w, map[string]any{"status": status})
 	}
 }
 
@@ -332,6 +332,7 @@ func (s *Service) HandleIngestConfirm() http.HandlerFunc {
 				s.Broker.Publish(fmt.Sprintf("lane:%d", laneID), "rates_received")
 			}
 		}
+		s.checkAndNotify(rrID)
 
 		http.Redirect(w, r, fmt.Sprintf("/rate-requests/%d", rrID), http.StatusSeeOther)
 	}
@@ -407,7 +408,61 @@ func (s *Service) saveVendorRate(rrID, vendorID int, rawEmail, parsedBy string, 
 			s.Broker.Publish(fmt.Sprintf("lane:%d", laneID), "rates_received")
 		}
 	}
+	s.checkAndNotify(rrID)
 	return nil
+}
+
+// checkAndNotify fires a threshold notification email if the rate request has hit
+// its response threshold and has not yet been notified. No-op if Notify is nil.
+func (s *Service) checkAndNotify(rrID int) {
+	if s.Notify == nil {
+		return
+	}
+
+	var threshold sql.NullInt64
+	var responsesReceived, notified int
+	var refID, originPort, destination, direction, ownerEmail string
+	var laneID int
+
+	err := s.DB.QueryRow(`
+		SELECT rr.response_threshold, rr.responses_received, rr.notified,
+		       rr.reference_id, rr.lane_id,
+		       p.name, l.destination, l.direction,
+		       u.email
+		FROM rate_requests rr
+		JOIN lanes l ON l.id = rr.lane_id
+		JOIN ports p ON p.id = l.origin_port_id
+		JOIN users u ON u.id = l.owner_id
+		WHERE rr.id = ?
+	`, rrID).Scan(
+		&threshold, &responsesReceived, &notified,
+		&refID, &laneID,
+		&originPort, &destination, &direction,
+		&ownerEmail,
+	)
+	if err != nil || notified != 0 {
+		return
+	}
+	if !threshold.Valid || responsesReceived < int(threshold.Int64) {
+		return
+	}
+
+	// Mark notified before sending to prevent duplicate sends on concurrent ingests.
+	if _, err := s.DB.Exec(`UPDATE rate_requests SET notified = 1 WHERE id = ? AND notified = 0`, rrID); err != nil {
+		return
+	}
+
+	compURL := fmt.Sprintf("%s/rate-requests/%d/comparison", s.BaseURL, rrID)
+	dir := "Import"
+	if direction == "export" {
+		dir = "Export"
+	}
+	subject := fmt.Sprintf("[Drayage Quoter] Rates ready — %s → %s — %s", originPort, destination, refID)
+	body := fmt.Sprintf(
+		"You've received %d rate response(s) for %s → %s (%s).\n\nView the comparison:\n%s",
+		responsesReceived, originPort, destination, dir, compURL,
+	)
+	_ = s.Notify(ownerEmail, subject, body)
 }
 
 // insertOrphan stores an unmatched email for later manual assignment.
