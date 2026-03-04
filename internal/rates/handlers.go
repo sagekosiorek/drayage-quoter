@@ -70,6 +70,12 @@ func (s *Service) Parse(rawBody string) (ParseResult, error) {
 // reReferenceID matches a rate request reference ID embedded in an email subject.
 var reReferenceID = regexp.MustCompile(`RR-\d{4}-\d{5}`)
 
+// reMailto extracts email addresses from mailto: links (HTML and plain-text occurrences).
+var reMailto = regexp.MustCompile(`mailto:([^\s"&?<>\r\n]+)`)
+
+// reFromTo extracts email addresses from plain-text From: and To: header lines.
+var reFromTo = regexp.MustCompile(`(?i)(?:^|\n)(?:from|to):\s*[^\n]*?([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})`)
+
 // apiIngestRequest is the JSON body for POST /api/rates/parse.
 type apiIngestRequest struct {
 	Subject string `json:"subject"`
@@ -78,7 +84,8 @@ type apiIngestRequest struct {
 }
 
 // IngestEmail is the shared core for processing an inbound rate response email.
-// It parses, matches the reference ID, identifies the vendor, and saves or orphans the result.
+// Flow: parse body → match reference ID → verify sender is a known user →
+// match vendor via mailto/From/To addresses in body → save or orphan.
 // Returns a status string ("matched" or "orphaned") and any hard error.
 func (s *Service) IngestEmail(subject, body, sender string) (string, error) {
 	result, err := s.Parse(body)
@@ -102,27 +109,65 @@ func (s *Service) IngestEmail(subject, body, sender string) (string, error) {
 		return "", fmt.Errorf("lookup rate request %s: %w", refMatch, err)
 	}
 
-	var vendorID int
-	err = s.DB.QueryRow(`
-		SELECT vp.vendor_id
-		FROM vendor_contacts vc
-		JOIN vendor_ports vp ON vc.vendor_ports_id = vp.id
-		JOIN rate_request_vendors rrv ON rrv.vendor_id = vp.vendor_id
-		WHERE vc.email = ? AND rrv.rate_request_id = ?
-		LIMIT 1
-	`, sender, rrID).Scan(&vendorID)
+	var userExists int
+	err = s.DB.QueryRow(`SELECT COUNT(*) FROM users WHERE email = ?`, sender).Scan(&userExists)
+	if err != nil || userExists == 0 {
+		s.insertOrphan(body, subject, sender, rrID)
+		return "orphaned", nil
+	}
+
+	vendorID, err := s.matchVendorByBody(body, rrID)
 	if err == sql.ErrNoRows {
 		s.insertOrphan(body, subject, sender, rrID)
 		return "orphaned", nil
 	}
 	if err != nil {
-		return "", fmt.Errorf("match vendor for sender %s on rr %d: %w", sender, rrID, err)
+		return "", fmt.Errorf("match vendor by mailto for rr %d: %w", rrID, err)
 	}
 
 	if err := s.saveVendorRate(rrID, vendorID, body, "regex", result.Items); err != nil {
 		return "", fmt.Errorf("save vendor rate rr=%d vendor=%d: %w", rrID, vendorID, err)
 	}
 	return "matched", nil
+}
+
+// matchVendorByBody scans body for mailto:, from:, and to: addresses and returns the first
+// vendor_id whose contacts appear in that set, scoped to the given rate request.
+// HTML bodies are scanned for mailto: links; plain-text bodies for From:/To: header lines.
+// Returns (vendorID, nil) on first match, (0, sql.ErrNoRows) if none found.
+func (s *Service) matchVendorByBody(body string, rrID int) (int, error) {
+	lower := strings.ToLower(body)
+	isHTML := strings.Contains(lower, "<html") || strings.Contains(lower, "<!doctype") || strings.Contains(lower, "mailto:")
+
+	var addrs []string
+	if isHTML {
+		for _, m := range reMailto.FindAllStringSubmatch(body, -1) {
+			addrs = append(addrs, strings.ToLower(m[1]))
+		}
+	} else {
+		for _, m := range reFromTo.FindAllStringSubmatch(body, -1) {
+			addrs = append(addrs, strings.ToLower(m[1]))
+		}
+	}
+
+	for _, addr := range addrs {
+		var vendorID int
+		err := s.DB.QueryRow(`
+			SELECT vp.vendor_id
+			FROM vendor_contacts vc
+			JOIN vendor_ports vp ON vc.vendor_ports_id = vp.id
+			JOIN rate_request_vendors rrv ON rrv.vendor_id = vp.vendor_id
+			WHERE vc.email = ? AND rrv.rate_request_id = ?
+			LIMIT 1
+		`, addr, rrID).Scan(&vendorID)
+		if err == nil {
+			return vendorID, nil
+		}
+		if err != sql.ErrNoRows {
+			return 0, err
+		}
+	}
+	return 0, sql.ErrNoRows
 }
 
 // HandleAPIIngest parses an inbound email JSON payload and stores or orphans the result.
