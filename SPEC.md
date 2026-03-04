@@ -523,8 +523,8 @@ Side-by-side comparison table and carrier ranking.
 - [x] Test end-to-end UX to smooth out.
 - [x] Implement notification triggers: threshold met OR deadline passed
 - [x] Send in-app notification (status update on lane, via HTMX SSE)
-- [ ] Send email notification from app's outbound address
-- [ ] Update lane status to "rates_received" when first rate arrives, "quoting" when lineup is set
+- [x] Send email notification from app's outbound address
+- [ ] Test email forwarding inbound flow
 
 ### Milestone 6: Markup + Quote Generation
 Apply markups, preview, and export customer-facing CSV.
@@ -556,4 +556,5 @@ Styling, last-min changes, stress-testing.
 - [ ] User should not be able to edit the company name on lane_edit.html (it's unchangeable at this point).
 - [ ] Stress-test the performance, pagination, and UI using a lot of dummy data (github.com/brianvoe/gofakeit/v7).
 - [ ] Need some UI feedback when clicking buttons that don't redirect: 'Copy Body' @internal/templates/rate_request_detail.html
+- [ ] Live filtering on the dashboard soon as a new filter selection is clicked - remove the 'Filter' button.
 

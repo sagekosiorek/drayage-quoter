@@ -5,10 +5,15 @@ services:
     entrypoint: ["/drayage-quoter"]
     ports:
       - "8080:8080"
+    # .env variables are set in fly secrets
     environment:
       DB_PATH: /data/drayage.db
       BASE_URL: http://localhost:8080
-      ADMIN_EMAIL: admin@example.com  # override as needed
+      ADMIN_EMAIL: ${ADMIN_EMAIL}
+      MAILGUN_API_KEY: ${MAILGUN_API_KEY}
+      MAILGUN_DOMAIN: ${MAILGUN_DOMAIN}
+      MAILGUN_FROM: ${MAILGUN_FROM}
+      MAILGUN_WEBHOOK_SIGNING_KEY: ${MAILGUN_WEBHOOK_SIGNING_KEY}
     volumes:
       - ./data:/data
     depends_on:

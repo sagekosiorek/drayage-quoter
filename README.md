@@ -75,5 +75,9 @@ Or to reset:
 fly ssh console -C "/seed --db /data/drayage.db" --reset
 ```
 
+### Mailgun email setup
+1. Add your sending domain in the Mailgun dashboard → verify MX + SPF/DKIM DNS records
+2. Create an Inbound Route: match recipient = rates@<domain> → forward to https://<app>.fly.dev/webhooks/email/inbound
+3. Set Fly.io secrets: fly secrets set MAILGUN_API_KEY=... MAILGUN_DOMAIN=... MAILGUN_WEBHOOK_SIGNING_KEY=...
 
-
+\*If email is not set up, the app will default to logging the magic login link to terminal output. However, outbound notifications nor rate ingests will work without email configured.
