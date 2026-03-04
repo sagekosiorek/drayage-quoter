@@ -524,7 +524,8 @@ Side-by-side comparison table and carrier ranking.
 - [x] Implement notification triggers: threshold met OR deadline passed
 - [x] Send in-app notification (status update on lane, via HTMX SSE)
 - [x] Send email notification from app's outbound address
-- [ ] Test email forwarding inbound flow
+- [x] Test email forwarding inbound flow
+- [x] Modify IngestEmail() to a) only accept emails received from ourselves (our login email) and b) match the vendor based on one of the vendor emails listed in the `body`. Checking against all `mailto:` fields from the `body` to verify. As long as there's one match from the list of contacts under a vendor's profile.
 
 ### Milestone 6: Markup + Quote Generation
 Apply markups, preview, and export customer-facing CSV.
@@ -557,4 +558,6 @@ Styling, last-min changes, stress-testing.
 - [ ] Stress-test the performance, pagination, and UI using a lot of dummy data (github.com/brianvoe/gofakeit/v7).
 - [ ] Need some UI feedback when clicking buttons that don't redirect: 'Copy Body' @internal/templates/rate_request_detail.html
 - [ ] Live filtering on the dashboard soon as a new filter selection is clicked - remove the 'Filter' button.
+- [ ] Add a carrier to a rate request after-the-fact
+- [ ] Wire broker channel to rate_request_detail.html page; lane status and vendor status should refresh automatically. Also, wire it up to the vendor responses field in lane_detail.html.
 
