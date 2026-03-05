@@ -255,7 +255,6 @@ A quote can bundle multiple lanes for a single customer.
 | id | TEXT (UUID) | Primary key |
 | markup_id | TEXT (FK) | References markups.id |
 | charge_type | TEXT | specific bucket for per-item |
-| method | TEXT | "exact" (add fixed $), "incremental" (add fixed $ to existing), "percentage" (add % of existing) |
 | value | DECIMAL(10,2) | The markup value |
 
 ---
@@ -380,17 +379,12 @@ Email Content (raw text/HTML)
 5. Lane status updates to "quoting"
 
 ### Flow 6: Markup and Quote Generation
-1. Rep opens the markup interface for a lane (or multiple lanes for a multi-lane quote)
-2. Each charge type can be optionally marked up
-3. Selects markup method per line (show the percentage and $ amount difference per item):
-   - **Exact**: Set the customer-facing amount directly
-   - **Incremental**: Add a fixed dollar amount to the vendor rate
-   - **Percentage**: Add a percentage on top of the vendor rate
-4. Preview shows vendor cost vs. customer price side-by-side
-5. "Generate CSV" produces a file with full accessorial breakdown per lane
-6. Rep downloads CSV, sends to customer manually
-7. Lane status updates to "quoted"
-8. Lane and all associated data persist in history for future reference
+1. Rep opens the markup interface for a lane
+2. Each charge type can be optionally marked up. All types are simply flat number entires except for `linehaul + fuel` which can be toggled to either mark up via a flat number entry or percentage off the base rate (which is also toggleable: starts with average, but can be switched to first, second, third etc. in lineup).
+3. "Generate CSV" produces a file with full accessorial breakdown for the lane
+4. Rep downloads CSV, sends to customer manually
+5. Lane status updates to "quoted"
+6. Lane and all associated data persist in history for future reference
 
 ---
 
@@ -525,25 +519,27 @@ Side-by-side comparison table and carrier ranking.
 - [x] Send in-app notification (status update on lane, via HTMX SSE)
 - [x] Send email notification from app's outbound address
 - [x] Test email forwarding inbound flow
-- [x] Modify IngestEmail() to a) only accept emails received from ourselves (our login email) and b) match the vendor based on one of the vendor emails listed in the `body`. Checking against all `mailto:` fields from the `body` to verify. As long as there's one match from the list of contacts under a vendor's profile.
 
 ### Milestone 6: Markup + Quote Generation
 Apply markups, preview, and export customer-facing CSV.
 
-- [ ] Create quotes table (can reference multiple lanes via quote_lanes)
-- [ ] Create quote_lanes junction table
-- [ ] Create markups and markup_items tables
-- [ ] Build markup method inputs: customer-facing amount, incremental (additive $), percentage
-- [ ] Live preview: vendor cost vs. marked-up customer price, side-by-side per charge type
+- [x] Create quotes table (can reference multiple lanes via quote_lanes)
+- [x] Create quote_lanes junction table
+- [x] Create markups and markup_items tables
+- [x] Rename rate_comparison.html to rate_comparison_edit.html and redirect upon saving the lineup to a rate_comparison_saved.html page which is a reflection of the same edit page, except these changes: Average column appears on the saved page (not on edit anyomre), the markup entry UI is a column next to 'Charge Type' with an additional row titled 'Total Markup' at the top, only the selected lineup is showing (their ranks "hardened" as plain text - i.e. not editable in this interface - and sorted by lineup order; not lowest linehaul + fuel anymore), and emails can still be viewed as structued in the edit page. Lastly, the 'Save Lineup' button has changed to 'Edit Lineup' which redirects to rate_comparison_edit.html.
+- [x] Markup column: this column, inbetween 'Charge Type' and 'Customer charge', live updates its charge type profit/loss amounts (highlighted green/red) with a 'carosel' or arrow toggle in the column header to switch the 'markup base' which defaults to the Average column. Clicking/dragging to the right 'rebases' the set markup to the first vendor in the lineup. Clicked/dragged again to the right rebases it to the second vendor in the lineup, etc. etc.
+- [x] CSV download endpoint
+- [x] Update lane status to "quoted" on export
+- [x] Update / modify UX/UI
+- [ ] Smooth out the page navigation flow for quoting: currently very clunky and unintuitive.
 - [ ] Multi-lane quote builder: select multiple lanes for the same customer, apply markups per lane
 - [ ] CSV generation: lanes sectioned by colorful tables (same color) for visual distinction, with only populated rates added
-- [ ] CSV download endpoint
-- [ ] Update lane status to "quoted" on export
 - [ ] Quote history: persist all generated quotes, viewable from lane detail and customer views
 
 ### Milestone 7: Loose ends
 Styling, last-min changes, stress-testing.
 
+- [x] Modify IngestEmail() to a) only accept emails received from ourselves (our login email) and b) match the vendor based on one of the vendor emails listed in the `body`. Checking against all `mailto:` fields from the `body` to verify. As long as there's one match from the list of contacts under a vendor's profile.
 - [ ] Granularize the opaque "Internal server error" messages across the codebase.
 - [ ] Refactor main.go - modularizing the route library into a separate file.
 - [ ] User can modify the default rate request email body template
@@ -560,4 +556,8 @@ Styling, last-min changes, stress-testing.
 - [ ] Live filtering on the dashboard soon as a new filter selection is clicked - remove the 'Filter' button.
 - [ ] Add a carrier to a rate request after-the-fact
 - [ ] Wire broker channel to rate_request_detail.html page; lane status and vendor status should refresh automatically. Also, wire it up to the vendor responses field in lane_detail.html.
-
+- [ ] Remove all inline styling; all of it should be consolidated in style.css
+- [ ] Save Lineup button should only show once at least one vendor rank is entered.
+- [ ] User should be able to manually enter a carrier rate for any cell.
+- [ ] A button to display lane details (in the email renderer) should be included on the rate_comparision_saved.html page so user knows which accessorial will incur.
+- [ ] Set default accessorial rates by user.

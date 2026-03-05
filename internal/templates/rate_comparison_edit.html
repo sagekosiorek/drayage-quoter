@@ -33,7 +33,6 @@
                     <thead>
                         <tr>
                             <th style="min-width:160px;">Charge Type</th>
-                            <th style="min-width:110px;text-align:center;background:#f9fafb;font-style:italic;color:#666;">Average</th>
                             {{ range .Data.Vendors }}
                             {{ $rank := index $.Data.Lineups .VendorRateID }}
                             <th style="min-width:140px;text-align:center;{{ if $rank }}background:#F85F14;{{ end }}">
@@ -64,7 +63,6 @@
                         <!-- TOTAL row -->
                         <tr class="row-total">
                             <td>Linehaul + Fuel</td>
-                            <td id="avg-total" style="text-align:center;background:#f9fafb;font-style:italic;">{{ .Data.AvgTotal }}</td>
                             {{ range .Data.Vendors }}
                             <td id="total-{{ .VendorRateID }}" style="text-align:center;font-weight:700;">{{ .TotalDisplay }}</td>
                             {{ end }}
@@ -74,13 +72,6 @@
                         {{ $ct := .Key }}
                         <tr>
                             <td>{{ .Label }}</td>
-                            {{ if and (ne .Label "Linehaul") (ne .Label "Fuel (%)") }}
-<td id="avg-{{ $ct }}" style="text-align:center;background:#f9fafb;font-style:italic;color:#555;">
-                                {{ index $.Data.Averages $ct }}
-                            </td>
-                            {{ else }}
-                            <td></td>
-                            {{ end }}
                             {{ range $.Data.Vendors }}
                             {{ $cell := index .Items $ct }}
                             {{ if $cell.ID }}

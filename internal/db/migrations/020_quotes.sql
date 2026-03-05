@@ -1,0 +1,11 @@
+CREATE TABLE quotes (
+  id INTEGER PRIMARY KEY,
+  owner_id INTEGER NOT NULL REFERENCES users(id),
+  customer_id INTEGER NOT NULL REFERENCES customers(id),
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE quote_lanes (
+  quote_id INTEGER NOT NULL REFERENCES quotes(id) ON DELETE CASCADE,
+  lane_id INTEGER NOT NULL REFERENCES lanes(id) ON DELETE CASCADE,
+  PRIMARY KEY (quote_id, lane_id)
+);
