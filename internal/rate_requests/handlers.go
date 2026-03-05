@@ -2,6 +2,8 @@ package rate_requests
 
 import (
 	"database/sql"
+	"encoding/csv"
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"log"
@@ -914,6 +916,560 @@ func (s *Service) HandleSaveLineup() http.HandlerFunc {
 			return
 		}
 
-		http.Redirect(w, r, fmt.Sprintf("/rate-requests/%d/comparison", rrID), http.StatusSeeOther)
+		http.Redirect(w, r, fmt.Sprintf("/rate-requests/%d/comparison/saved", rrID), http.StatusSeeOther)
+	}
+}
+
+// --- Saved comparison + CSV generation types ---
+
+// SavedVendorColumn holds one lineup vendor for the saved comparison view (rank is plain text).
+type SavedVendorColumn struct {
+	VendorRateID int
+	VendorName   string
+	Rank         int
+	Items        map[string]RateItemCell
+	Total        float64
+	TotalDisplay string
+}
+
+// MarkupItemRow holds an existing markup value for a charge type, used to pre-fill form inputs.
+type MarkupItemRow struct {
+	ChargeType string
+	Value      float64
+	MarkupType string // "flat" | "percent"
+}
+
+// SavedComparisonData is the template data for rate_comparison_saved.html.
+type SavedComparisonData struct {
+	RateRequest RateRequestSnippet
+	Lane        LaneSnippet
+	ChargeRows  []ChargeTypeRow
+	Vendors     []SavedVendorColumn     // sorted by rank asc
+	Averages    map[string]string
+	AvgTotal    string
+	Markups     map[string]MarkupItemRow // keyed by charge_type; pre-fills inputs if exists
+	LineupBases template.JS              // JSON for JS carousel: [{linehaul:X, fuel:Y, ...}, ...]
+}
+
+// HandleSavedComparison renders the markup entry + CSV generation page for a lineup.
+// GET /rate-requests/{id}/comparison/saved
+func (s *Service) HandleSavedComparison(tmpl *template.Template) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		user := auth.UserFromContext(r.Context())
+
+		rrID, err := strconv.Atoi(r.PathValue("id"))
+		if err != nil || rrID <= 0 {
+			http.Error(w, "Not found", http.StatusNotFound)
+			return
+		}
+
+		var rr RateRequestSnippet
+		if err := s.DB.QueryRow(`SELECT id, reference_id, lane_id FROM rate_requests WHERE id = ?`, rrID).Scan(
+			&rr.ID, &rr.ReferenceID, &rr.LaneID,
+		); err == sql.ErrNoRows {
+			http.Error(w, "Not found", http.StatusNotFound)
+			return
+		} else if err != nil {
+			log.Printf("HandleSavedComparison: fetch rr %d: %v", rrID, err)
+			http.Error(w, "Failed to load rate request", http.StatusInternalServerError)
+			return
+		}
+
+		lane, err := s.fetchLane(rr.LaneID)
+		if err != nil {
+			log.Printf("HandleSavedComparison: fetch lane %d: %v", rr.LaneID, err)
+			http.Error(w, "Failed to load lane", http.StatusInternalServerError)
+			return
+		}
+
+		// Load lineup: rank-ordered vendor_rate_ids with vendor names.
+		type lineupRow struct {
+			rank   int
+			vrID   int
+			vName  string
+		}
+		lRows, err := s.DB.Query(`
+			SELECT vl.rank, vr.id, v.name
+			FROM vendor_lineups vl
+			JOIN vendor_rates vr ON vr.id = vl.vendor_rate_id
+			JOIN vendors v ON v.id = vr.vendor_id
+			WHERE vl.lane_id = ?
+			ORDER BY vl.rank
+		`, rr.LaneID)
+		if err != nil {
+			log.Printf("HandleSavedComparison: query lineup lane=%d: %v", rr.LaneID, err)
+			http.Error(w, "Failed to load lineup", http.StatusInternalServerError)
+			return
+		}
+		var lineupRows []lineupRow
+		for lRows.Next() {
+			var lr lineupRow
+			if err := lRows.Scan(&lr.rank, &lr.vrID, &lr.vName); err != nil {
+				lRows.Close()
+				log.Printf("HandleSavedComparison: scan lineup row: %v", err)
+				http.Error(w, "Failed to load lineup", http.StatusInternalServerError)
+				return
+			}
+			lineupRows = append(lineupRows, lr)
+		}
+		lRows.Close()
+
+		if len(lineupRows) == 0 {
+			http.Redirect(w, r, fmt.Sprintf("/rate-requests/%d/comparison", rrID), http.StatusSeeOther)
+			return
+		}
+
+		// Collect lineup vendor_rate_ids for the item query.
+		vrIDs := make([]int, len(lineupRows))
+		for i, lr := range lineupRows {
+			vrIDs[i] = lr.vrID
+		}
+
+		// Build placeholder list for IN clause.
+		placeholders := strings.Repeat("?,", len(vrIDs))
+		placeholders = placeholders[:len(placeholders)-1]
+
+		args := make([]any, len(vrIDs)+1)
+		args[0] = rrID
+		for i, id := range vrIDs {
+			args[i+1] = id
+		}
+
+		itemRows, err := s.DB.Query(fmt.Sprintf(`
+			SELECT vr.id, vri.id, vri.charge_type, vri.amount, vri.unit, vri.manually_edited, vr.parsed_by
+			FROM vendor_rates vr
+			JOIN vendor_rate_items vri ON vri.vendor_rate_id = vr.id
+			WHERE vr.rate_request_id = ? AND vr.id IN (%s)
+			ORDER BY vr.id, vri.charge_type
+		`, placeholders), args...)
+		if err != nil {
+			log.Printf("HandleSavedComparison: query items rr=%d: %v", rrID, err)
+			http.Error(w, "Failed to load rate items", http.StatusInternalServerError)
+			return
+		}
+
+		vendorItemMap := make(map[int]map[string]RateItemCell)
+		for itemRows.Next() {
+			var vrID, itemID, manuallyEdited int
+			var ct, unit, parsedBy string
+			var amount float64
+			if err := itemRows.Scan(&vrID, &itemID, &ct, &amount, &unit, &manuallyEdited, &parsedBy); err != nil {
+				itemRows.Close()
+				log.Printf("HandleSavedComparison: scan item: %v", err)
+				http.Error(w, "Failed to load rate items", http.StatusInternalServerError)
+				return
+			}
+			if vendorItemMap[vrID] == nil {
+				vendorItemMap[vrID] = make(map[string]RateItemCell)
+			}
+			vendorItemMap[vrID][ct] = RateItemCell{
+				ID:             itemID,
+				Amount:         amount,
+				Unit:           unit,
+				ManuallyEdited: manuallyEdited != 0,
+				ParsedBy:       parsedBy,
+				Display:        rates.FmtCellAmount(amount, unit),
+			}
+		}
+		itemRows.Close()
+
+		// Build SavedVendorColumn slice in rank order.
+		vendors := make([]SavedVendorColumn, len(lineupRows))
+		for i, lr := range lineupRows {
+			items := vendorItemMap[lr.vrID]
+			if items == nil {
+				items = make(map[string]RateItemCell)
+			}
+			lh := items["linehaul"].Amount
+			fuel := items["fuel"].Amount
+			total := lh + lh*fuel/100
+			vendors[i] = SavedVendorColumn{
+				VendorRateID: lr.vrID,
+				VendorName:   lr.vName,
+				Rank:         lr.rank,
+				Items:        items,
+				Total:        total,
+				TotalDisplay: rates.FmtCellAmount(total, "$"),
+			}
+		}
+
+		// Collect charge types present in lineup vendors, in canonical order.
+		presentTypes := make(map[string]bool)
+		for _, vc := range vendors {
+			for ct := range vc.Items {
+				presentTypes[ct] = true
+			}
+		}
+		var chargeRows []ChargeTypeRow
+		for _, ct := range rates.FieldOrder {
+			if presentTypes[ct] {
+				chargeRows = append(chargeRows, ChargeTypeRow{Key: ct, Label: ctLabel(ct)})
+			}
+		}
+
+		// Compute per-charge-type averages and average total.
+		rawSums := make(map[string]float64)
+		rawUnits := make(map[string]string)
+		counts := make(map[string]int)
+		for _, vc := range vendors {
+			for ct, cell := range vc.Items {
+				rawSums[ct] += cell.Amount
+				rawUnits[ct] = cell.Unit
+				counts[ct]++
+			}
+		}
+		averages := make(map[string]string, len(rawSums))
+		rawAvgFloats := make(map[string]float64, len(rawSums))
+		for ct, total := range rawSums {
+			if counts[ct] > 0 {
+				avg := total / float64(counts[ct])
+				rawAvgFloats[ct] = avg
+				averages[ct] = rates.FmtCellAmount(avg, rawUnits[ct])
+			}
+		}
+		var totalSum float64
+		for _, vc := range vendors {
+			totalSum += vc.Total
+		}
+		var avgTotal string
+		if len(vendors) > 0 {
+			avgTotal = rates.FmtCellAmount(totalSum/float64(len(vendors)), "$")
+		}
+
+		// Build lineupBases JSON: index 0 = averages (raw floats), 1..N = vendor amounts.
+		// linehaul_fuel is pre-computed as the actual total (not re-derived from avgLH × avgFuel%).
+		basesList := make([]map[string]float64, 1+len(vendors))
+		basesList[0] = rawAvgFloats
+		if len(vendors) > 0 {
+			basesList[0]["linehaul_fuel"] = totalSum / float64(len(vendors))
+		}
+		for i, vc := range vendors {
+			m := make(map[string]float64, len(vc.Items))
+			for ct, cell := range vc.Items {
+				m[ct] = cell.Amount
+			}
+			m["linehaul_fuel"] = vc.Total
+			basesList[i+1] = m
+		}
+		basesJSON, err := json.Marshal(basesList)
+		if err != nil {
+			log.Printf("HandleSavedComparison: marshal lineupBases: %v", err)
+			http.Error(w, "Failed to build carousel data", http.StatusInternalServerError)
+			return
+		}
+
+		// Load existing markups for pre-fill.
+		markupsMap := make(map[string]MarkupItemRow)
+		miRows, err := s.DB.Query(`
+			SELECT mi.charge_type, mi.value, mi.markup_type
+			FROM markups m
+			JOIN markup_items mi ON mi.markup_id = m.id
+			WHERE m.lane_id = ?
+		`, rr.LaneID)
+		if err != nil {
+			log.Printf("HandleSavedComparison: query markups lane=%d: %v", rr.LaneID, err)
+			http.Error(w, "Failed to load markups", http.StatusInternalServerError)
+			return
+		}
+		for miRows.Next() {
+			var mi MarkupItemRow
+			if err := miRows.Scan(&mi.ChargeType, &mi.Value, &mi.MarkupType); err != nil {
+				miRows.Close()
+				log.Printf("HandleSavedComparison: scan markup item: %v", err)
+				http.Error(w, "Failed to load markups", http.StatusInternalServerError)
+				return
+			}
+			markupsMap[mi.ChargeType] = mi
+		}
+		miRows.Close()
+
+		if err := tmpl.ExecuteTemplate(w, "layout.html", map[string]any{
+			"User": user,
+			"Data": SavedComparisonData{
+				RateRequest: rr,
+				Lane:        *lane,
+				ChargeRows:  chargeRows,
+				Vendors:     vendors,
+				Averages:    averages,
+				AvgTotal:    avgTotal,
+				Markups:     markupsMap,
+				LineupBases: template.JS(basesJSON),
+			},
+		}); err != nil {
+			log.Printf("HandleSavedComparison: template execution rr=%d: %v", rrID, err)
+		}
+	}
+}
+
+// HandleGenerateCSV persists markup values, writes the customer quote CSV, and advances lane to "quoted".
+// POST /rate-requests/{id}/csv
+func (s *Service) HandleGenerateCSV() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		user := auth.UserFromContext(r.Context())
+
+		rrID, err := strconv.Atoi(r.PathValue("id"))
+		if err != nil || rrID <= 0 {
+			http.Error(w, "Not found", http.StatusNotFound)
+			return
+		}
+
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "Bad request: could not parse form", http.StatusBadRequest)
+			return
+		}
+
+		var laneID int
+		var refID string
+		if err := s.DB.QueryRow(`SELECT lane_id, reference_id FROM rate_requests WHERE id = ?`, rrID).Scan(&laneID, &refID); err == sql.ErrNoRows {
+			http.Error(w, "Not found", http.StatusNotFound)
+			return
+		} else if err != nil {
+			log.Printf("HandleGenerateCSV: fetch rr %d: %v", rrID, err)
+			http.Error(w, "Failed to load rate request", http.StatusInternalServerError)
+			return
+		}
+
+		lane, err := s.fetchLane(laneID)
+		if err != nil {
+			log.Printf("HandleGenerateCSV: fetch lane %d: %v", laneID, err)
+			http.Error(w, "Failed to load lane", http.StatusInternalServerError)
+			return
+		}
+
+		// Parse markup form values: each charge_type field, plus markup_type_linehaul_fuel.
+		type markupEntry struct {
+			chargeType string
+			value      float64
+			markupType string
+		}
+		var entries []markupEntry
+		for _, ct := range rates.FieldOrder {
+			if ct == "linehaul" || ct == "fuel" {
+				continue // these are rolled into linehaul_fuel
+			}
+			valStr := r.FormValue(ct)
+			if valStr == "" {
+				continue
+			}
+			val, err := strconv.ParseFloat(valStr, 64)
+			if err != nil || val == 0 {
+				continue
+			}
+			entries = append(entries, markupEntry{chargeType: ct, value: val, markupType: "flat"})
+		}
+		// linehaul_fuel is a special combined entry.
+		if lfStr := r.FormValue("linehaul_fuel"); lfStr != "" {
+			if lfVal, err := strconv.ParseFloat(lfStr, 64); err == nil && lfVal != 0 {
+				mtype := r.FormValue("markup_type_linehaul_fuel")
+				if mtype != "percent" {
+					mtype = "flat"
+				}
+				entries = append(entries, markupEntry{chargeType: "linehaul_fuel", value: lfVal, markupType: mtype})
+			}
+		}
+
+		// Resolve or create the quote for this lane atomically.
+		// If a quote already exists for this lane, reuse it; otherwise create one.
+		// Customer association: use lane owner as customer proxy for now (no customer picker yet).
+		tx, err := s.DB.Begin()
+		if err != nil {
+			http.Error(w, "Failed to begin transaction", http.StatusInternalServerError)
+			return
+		}
+		defer tx.Rollback()
+
+		var quoteID int64
+		err = tx.QueryRow(`SELECT q.id FROM quotes q JOIN quote_lanes ql ON ql.quote_id = q.id WHERE ql.lane_id = ?`, laneID).Scan(&quoteID)
+		if err == sql.ErrNoRows {
+			// Create a new quote; use owner_id as customer_id placeholder (customer table may be empty).
+			// We insert a stub customer row if needed, keyed by owner email, to satisfy the FK.
+			var ownerID int
+			if err2 := tx.QueryRow(`SELECT owner_id FROM lanes WHERE id = ?`, laneID).Scan(&ownerID); err2 != nil {
+				log.Printf("HandleGenerateCSV: fetch owner lane=%d: %v", laneID, err2)
+				http.Error(w, "Failed to identify lane owner", http.StatusInternalServerError)
+				return
+			}
+			// Ensure a customer row exists for the owner (upsert by owner id stored as external_id).
+			var customerID int64
+			err2 := tx.QueryRow(`SELECT id FROM customers WHERE name = (SELECT email FROM users WHERE id = ?)`, ownerID).Scan(&customerID)
+			if err2 == sql.ErrNoRows {
+				ownerEmail := ""
+				tx.QueryRow(`SELECT email FROM users WHERE id = ?`, ownerID).Scan(&ownerEmail)
+				res2, err3 := tx.Exec(`INSERT INTO customers (name) VALUES (?)`, ownerEmail)
+				if err3 != nil {
+					log.Printf("HandleGenerateCSV: insert customer: %v", err3)
+					http.Error(w, "Failed to create customer record", http.StatusInternalServerError)
+					return
+				}
+				customerID, _ = res2.LastInsertId()
+			} else if err2 != nil {
+				log.Printf("HandleGenerateCSV: lookup customer: %v", err2)
+				http.Error(w, "Failed to look up customer", http.StatusInternalServerError)
+				return
+			}
+
+			res, err3 := tx.Exec(`INSERT INTO quotes (owner_id, customer_id) VALUES (?, ?)`, ownerID, customerID)
+			if err3 != nil {
+				log.Printf("HandleGenerateCSV: insert quote: %v", err3)
+				http.Error(w, "Failed to create quote", http.StatusInternalServerError)
+				return
+			}
+			quoteID, _ = res.LastInsertId()
+			if _, err3 := tx.Exec(`INSERT INTO quote_lanes (quote_id, lane_id) VALUES (?, ?)`, quoteID, laneID); err3 != nil {
+				log.Printf("HandleGenerateCSV: insert quote_lane: %v", err3)
+				http.Error(w, "Failed to link quote to lane", http.StatusInternalServerError)
+				return
+			}
+		} else if err != nil {
+			log.Printf("HandleGenerateCSV: lookup quote lane=%d: %v", laneID, err)
+			http.Error(w, "Failed to look up quote", http.StatusInternalServerError)
+			return
+		}
+
+		// Delete existing markup for this lane and recreate with new values.
+		if _, err := tx.Exec(`DELETE FROM markups WHERE lane_id = ?`, laneID); err != nil {
+			log.Printf("HandleGenerateCSV: delete markups lane=%d: %v", laneID, err)
+			http.Error(w, "Failed to clear existing markup", http.StatusInternalServerError)
+			return
+		}
+
+		var markupID int64
+		if len(entries) > 0 {
+			res, err := tx.Exec(`INSERT INTO markups (quote_id, lane_id) VALUES (?, ?)`, quoteID, laneID)
+			if err != nil {
+				log.Printf("HandleGenerateCSV: insert markup: %v", err)
+				http.Error(w, "Failed to create markup record", http.StatusInternalServerError)
+				return
+			}
+			markupID, _ = res.LastInsertId()
+			for _, e := range entries {
+				if _, err := tx.Exec(
+					`INSERT INTO markup_items (markup_id, charge_type, value, markup_type) VALUES (?, ?, ?, ?)`,
+					markupID, e.chargeType, e.value, e.markupType,
+				); err != nil {
+					log.Printf("HandleGenerateCSV: insert markup_item ct=%s: %v", e.chargeType, err)
+					http.Error(w, "Failed to save markup item", http.StatusInternalServerError)
+					return
+				}
+			}
+		}
+
+		// Advance lane to "quoted".
+		tx.Exec(
+			`UPDATE lanes SET status = 'quoted', updated_at = ? WHERE id = ? AND status IN ('quoting', 'quoted')`,
+			time.Now().UTC().Format("2006-01-02 15:04:05"), laneID,
+		)
+
+		if err := tx.Commit(); err != nil {
+			log.Printf("HandleGenerateCSV: commit: %v", err)
+			http.Error(w, "Failed to save quote", http.StatusInternalServerError)
+			return
+		}
+
+		// Build markup lookup for CSV generation.
+		markupLookup := make(map[string]markupEntry, len(entries))
+		for _, e := range entries {
+			markupLookup[e.chargeType] = e
+		}
+
+		// Load rank-1 vendor rate items for the CSV (primary carrier's rates as the basis).
+		// We use the full lineup to compute values; CSV shows customer charges derived from markup.
+		type vendorAmounts struct {
+			linehaul float64
+			fuel     float64
+			items    map[string]float64
+		}
+		var primaryVendor vendorAmounts
+		primaryVendor.items = make(map[string]float64)
+
+		priRows, err := s.DB.Query(`
+			SELECT vri.charge_type, vri.amount
+			FROM vendor_lineups vl
+			JOIN vendor_rates vr ON vr.id = vl.vendor_rate_id
+			JOIN vendor_rate_items vri ON vri.vendor_rate_id = vr.id
+			WHERE vl.lane_id = ? AND vl.rank = 1
+		`, laneID)
+		if err != nil {
+			log.Printf("HandleGenerateCSV: query primary vendor items lane=%d: %v", laneID, err)
+			http.Error(w, "Failed to load primary vendor rates", http.StatusInternalServerError)
+			return
+		}
+		for priRows.Next() {
+			var ct string
+			var amount float64
+			priRows.Scan(&ct, &amount)
+			primaryVendor.items[ct] = amount
+		}
+		priRows.Close()
+		primaryVendor.linehaul = primaryVendor.items["linehaul"]
+		primaryVendor.fuel = primaryVendor.items["fuel"]
+
+		// Stream CSV response.
+		origin := strings.ReplaceAll(lane.OriginPort, " ", "_")
+		dest := strings.ReplaceAll(lane.Destination, " ", "_")
+		filename := fmt.Sprintf("quote-%s-%s-%s.csv", origin, dest, refID)
+
+		w.Header().Set("Content-Type", "text/csv")
+		w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
+
+		// Determine customer label for direction.
+		direction := "Import"
+		if lane.Direction == "export" {
+			direction = "Export"
+		}
+
+		cw := csv.NewWriter(w)
+
+		// Header row: Customer, Origin, Destination, Direction, Container Size,
+		//             Total (LH+Fuel), then any explicitly-entered customer charge types.
+		header := []string{
+			"Customer", "Origin", "Destination", "Direction", "Container Size",
+			"Total (LH+Fuel)",
+		}
+		var csvChargeTypes []string
+		for _, ct := range rates.FieldOrder {
+			if ct == "linehaul" || ct == "fuel" {
+				continue
+			}
+			// Include only charge types where a customer charge was explicitly entered.
+			if markupLookup[ct].value != 0 {
+				header = append(header, ctLabel(ct))
+				csvChargeTypes = append(csvChargeTypes, ct)
+			}
+		}
+		cw.Write(header)
+
+		// Data row: use vendor rates unchanged for linehaul + fuel; apply markup to total.
+		lhFuelBase := primaryVendor.linehaul + primaryVendor.linehaul*primaryVendor.fuel/100
+		var lhFuelCustomer float64
+		if lfEntry, ok := markupLookup["linehaul_fuel"]; ok {
+			if lfEntry.markupType == "percent" {
+				lhFuelCustomer = lhFuelBase * (1 + lfEntry.value/100)
+			} else {
+				lhFuelCustomer = lfEntry.value // flat: user entered customer total directly
+			}
+		} else {
+			lhFuelCustomer = lhFuelBase
+		}
+
+		customerName := ""
+		if user != nil {
+			customerName = user.Name
+		}
+
+		row := []string{
+			customerName,
+			lane.OriginPort,
+			lane.Destination,
+			direction,
+			containerSizeDisplay(lane.ContainerSize),
+			fmt.Sprintf("%.2f", lhFuelCustomer),
+		}
+		for _, ct := range csvChargeTypes {
+			value := markupLookup[ct].value // value IS the customer charge
+			row = append(row, fmt.Sprintf("%.2f", value))
+		}
+		cw.Write(row)
+		cw.Flush()
 	}
 }

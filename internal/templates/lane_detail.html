@@ -18,18 +18,25 @@
         {{ if and .Lane.IsOwner (eq .Lane.Status "draft") }}
         <a href="/lanes/{{ .Lane.ID }}/edit"><button>Edit</button></a>
         {{ end }}
-        {{ if and .Lane.IsOwner .Lane.NextStatus }}
+        {{ if .Lane.IsOwner }}
         {{ if eq .Lane.Status "draft" }}
         <a href="/lanes/{{ .Lane.ID }}/rate-request/new"><button class="primary">Request Rates →</button></a>
         {{ else if eq .Lane.Status "rates_received" }}
         {{ if .RateRequest }}<a href="/rate-requests/{{ .RateRequest.ID }}/comparison"><button class="primary">Build Lineup →</button></a>{{ end }}
         {{ else if eq .Lane.Status "quoting" }}
         {{ if .RateRequest }}<a href="/rate-requests/{{ .RateRequest.ID }}/comparison"><button>Edit Lineup</button></a>{{ end }}
+        {{ if .Lane.NextStatus }}
         <form method="POST" action="/lanes/{{ .Lane.ID }}/status" style="margin:0;">
             <input type="hidden" name="next" value="{{ .Lane.NextStatus }}">
             <button type="submit" class="primary">{{ .Lane.NextStatusLabel }}</button>
         </form>
-        {{ else }}
+        {{ end }}
+        {{ else if eq .Lane.Status "quoted" }}
+        {{ if .RateRequest }}
+        <a href="/rate-requests/{{ .RateRequest.ID }}/comparison"><button>Edit Lineup</button></a>
+        <a href="/rate-requests/{{ .RateRequest.ID }}/comparison/saved"><button>View Quote</button></a>
+        {{ end }}
+        {{ else if .Lane.NextStatus }}
         <form method="POST" action="/lanes/{{ .Lane.ID }}/status" style="margin:0;">
             <input type="hidden" name="next" value="{{ .Lane.NextStatus }}">
             <button type="submit">{{ .Lane.NextStatusLabel }}</button>

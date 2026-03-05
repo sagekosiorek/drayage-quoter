@@ -1,0 +1,272 @@
+{{ define "content" }}
+
+<p class="back-link"><a href="/lanes/{{ .Data.Lane.ID }}">← Back to lane</a></p>
+
+<div class="page-header">
+    <div style="display:flex;align-items:center;gap:.75rem;">
+        <h1 class="page-title" style="margin:0;">
+            {{- if eq .Data.Lane.Direction "import" -}}
+            {{ .Data.Lane.OriginPort }} {{ .Data.Lane.OriginPortType }} → {{ .Data.Lane.Destination }}
+            {{- else -}}
+            {{ .Data.Lane.Destination }} → {{ .Data.Lane.OriginPort }} {{ .Data.Lane.OriginPortType }}
+            {{- end -}}
+        </h1>
+        <span class="status-badge status-{{ .Data.Lane.Status }}">{{ .Data.Lane.StatusLabel }}</span>
+    </div>
+    <div style="font-size:.82rem;color:#666;margin-top:.25rem;">
+        Ref: <strong>{{ .Data.RateRequest.ReferenceID }}</strong>
+        &nbsp;·&nbsp; {{ len .Data.Vendors }} vendor{{ if ne (len .Data.Vendors) 1 }}s{{ end }} in lineup
+    </div>
+</div>
+
+{{ if not .Data.Vendors }}
+<p class="empty-state">No lineup saved yet. <a href="/rate-requests/{{ .Data.RateRequest.ID }}/comparison">Build a lineup</a> first.</p>
+{{ else }}
+
+<!-- Embed lineup base data for JS carousel -->
+<script>
+window.lineupBases = {{ .Data.LineupBases }};
+</script>
+
+<div class="comparison-layout">
+
+    <!-- Left: markup table + CSV generation -->
+    <div>
+        <form method="POST" action="/rate-requests/{{ .Data.RateRequest.ID }}/csv" id="csv-form">
+
+            <div class="comparison-table-wrap">
+                <table class="comparison-table">
+                    <thead>
+                        <tr>
+                            <th style="min-width:160px;">Charge Type</th>
+                            <th style="min-width:140px;text-align:center;">
+                                <div style="display:flex;align-items:center;justify-content:center;gap:.4rem;">
+                                    <button type="button" id="carousel-prev" style="padding:1px 6px;font-size:.8rem;flex-shrink:0;">&larr;</button>
+                                    <span id="carousel-label" style="font-size:.72rem;font-weight:600;display:inline-block;width:90px;text-align:center;word-break:break-word;line-height:1.2;">base rate: average</span>
+                                    <button type="button" id="carousel-next" style="padding:1px 6px;font-size:.8rem;flex-shrink:0;">&rarr;</button>
+                                </div>
+                                <div style="font-size:.7rem;color:#888;margin-top:.2rem;">Markup (P&amp;L)</div>
+                            </th>
+                            <th style="min-width:130px;text-align:center;">Customer Rate</th>
+                            <th style="min-width:110px;text-align:center;background:#f9fafb;font-style:italic;color:#666;">Average</th>
+                            {{ range .Data.Vendors }}
+                            <th style="min-width:130px;text-align:center;">
+                                <div style="font-weight:600;">{{ .VendorName }}</div>
+                                <div style="font-size:.7rem;color:#888;">Rank {{ .Rank }}</div>
+                                <div style="margin-top:.3rem;">
+                                    <button type="button"
+                                            hx-get="/vendor-rates/{{ .VendorRateID }}/email"
+                                            hx-target="#email-panel"
+                                            hx-swap="innerHTML"
+                                            style="font-size:.72rem;padding:2px 7px;">
+                                        View Email
+                                    </button>
+                                </div>
+                            </th>
+                            {{ end }}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- Total Markup summary row -->
+                        <tr class="row-total" style="background:#f0fdf4;">
+                            <td style="font-weight:600;">Total Markup</td>
+                            <td id="total-markup-preview" style="text-align:center;font-weight:700;"></td>
+                            <td></td>
+                            <td style="background:#f9fafb;"></td>
+                            {{ range .Data.Vendors }}
+                            <td></td>
+                            {{ end }}
+                        </tr>
+                        <!-- Linehaul + Fuel combined row -->
+                        <tr class="row-total" style="background:#fafafa;">
+                            <td style="font-weight:600;font-style:italic;">Linehaul + Fuel</td>
+                            <!-- Markup (P&L) cell — text only, computed by JS -->
+                            <td style="text-align:center;">
+                                <span id="markup-linehaul_fuel"></span>
+                            </td>
+                            <!-- Customer Rate cell — input + flat/% toggle + computed total display -->
+                            <td style="text-align:center;">
+                                <input type="text" inputmode="decimal" name="linehaul_fuel" id="input-linehaul_fuel"
+                                       style="width:80px;text-align:right;"
+                                       {{ with index $.Data.Markups "linehaul_fuel" }}value="{{ .Value }}"{{ end }}>
+                                <div style="font-size:.72rem;margin-top:.25rem;">
+                                    <label><input type="radio" name="markup_type_linehaul_fuel" value="flat"
+                                        {{ with index $.Data.Markups "linehaul_fuel" }}{{ if eq .MarkupType "flat" }}checked{{ end }}{{ else }}checked{{ end }}> flat</label>
+                                    <label style="margin-left:.3rem;"><input type="radio" name="markup_type_linehaul_fuel" value="percent"
+                                        {{ with index $.Data.Markups "linehaul_fuel" }}{{ if eq .MarkupType "percent" }}checked{{ end }}{{ end }}> %</label>
+                                </div>
+                                <div id="lhfuel-computed-total" style="font-size:.75rem;color:#555;margin-top:.2rem;"></div>
+                            </td>
+                            <td id="avg-linehaul_fuel" style="text-align:center;background:#f9fafb;font-style:italic;">{{ .Data.AvgTotal }}</td>
+                            {{ range .Data.Vendors }}
+                            <td style="text-align:center;font-weight:700;">{{ .TotalDisplay }}</td>
+                            {{ end }}
+                        </tr>
+                        <!-- Per-charge-type rows (excluding linehaul and fuel — shown above) -->
+                        {{ range .Data.ChargeRows }}
+                        {{ $ct := .Key }}
+                        {{ if and (ne $ct "linehaul") (ne $ct "fuel") }}
+                        <tr>
+                            <td>{{ .Label }}</td>
+                            <!-- Markup (P&L) cell — text only, computed by JS -->
+                            <td style="text-align:center;">
+                                <span id="markup-{{ $ct }}"></span>
+                            </td>
+                            <!-- Customer Rate cell — input -->
+                            <td style="text-align:center;">
+                                <input type="text" inputmode="decimal" name="{{ $ct }}" id="input-{{ $ct }}"
+                                       style="width:80px;text-align:right;"
+                                       {{ with index $.Data.Markups $ct }}value="{{ .Value }}"{{ end }}>
+                            </td>
+                            <td id="avg-{{ $ct }}" style="text-align:center;background:#f9fafb;font-style:italic;color:#555;">{{ index $.Data.Averages $ct }}</td>
+                            {{ range $.Data.Vendors }}
+                            {{ $cell := index .Items $ct }}
+                            {{ if $cell.ID }}
+                            <td style="text-align:center;">{{ $cell.Display }}</td>
+                            {{ else }}
+                            <td style="text-align:center;color:#ccc;">—</td>
+                            {{ end }}
+                            {{ end }}
+                        </tr>
+                        {{ end }}
+                        {{ end }}
+                    </tbody>
+                </table>
+            </div>
+
+            <div style="margin-top:1rem;display:flex;align-items:center;gap:1rem;">
+                <button type="submit" class="primary">Generate CSV</button>
+                <a href="/rate-requests/{{ .Data.RateRequest.ID }}/comparison" style="font-size:.85rem;">Edit Lineup</a>
+                <span style="font-size:.78rem;color:#888;">Enter customer-facing charges, then generate the quote CSV.</span>
+            </div>
+
+        </form>
+    </div>
+
+    <!-- Right: original email side panel -->
+    <div>
+        <p class="detail-section">Original Email</p>
+        <p style="font-size:.78rem;color:#888;margin:.25rem 0 .75rem;">Click "View Email" on a vendor column to display their rate response here.</p>
+        <div id="email-panel" class="email-panel">
+            <p style="color:#ccc;font-size:.82rem;text-align:center;padding:2rem 0;">No email selected</p>
+        </div>
+    </div>
+
+</div>
+
+<script>
+(function() {
+    var bases = window.lineupBases; // [{linehaul:X, fuel:Y, ...}, {}, ...]
+    // bases[0] = averages (raw floats), bases[1..] = rank-1..N vendor amounts
+    var vendorNames = [
+        "Average"
+        {{ range .Data.Vendors }}, "{{ .VendorName }} (Rank {{ .Rank }})"{{ end }}
+    ];
+
+    var currentIdx = 0;
+
+    function getBase(ct) {
+        if (!bases || !bases[currentIdx]) return 0;
+        return bases[currentIdx][ct] || 0;
+    }
+
+    // Linehaul + fuel combined base: pre-computed total stored in bases as "linehaul_fuel".
+    function lhFuelBase() {
+        return getBase("linehaul_fuel");
+    }
+
+    // P&L = Customer Rate − base rate. Returns null if no charge entered (input blank).
+    // For linehaul_fuel percent mode: P&L = base × pct/100 (the percent IS the margin rate).
+    function computePL(ct) {
+        var inputEl = document.getElementById("input-" + ct);
+        if (!inputEl) return null;
+        var customerCharge = parseFloat(inputEl.value);
+        if (!(customerCharge > 0)) return null;
+        if (ct === "linehaul_fuel") {
+            var base = lhFuelBase();
+            var mode = document.querySelector('input[name="markup_type_linehaul_fuel"]:checked')?.value;
+            return mode === "percent"
+                ? base * customerCharge / 100
+                : customerCharge - base;
+        }
+        return customerCharge - getBase(ct);
+    }
+
+    function fmtDollar(v) {
+        if (v === 0) return "";
+        var s = "$" + Math.abs(v).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+        return v < 0 ? "-" + s : "+" + s;
+    }
+
+    // Sets the Markup (P&L) cell text; clears it when pl is null (no charge entered).
+    function setMarkupCell(ct, pl) {
+        var el = document.getElementById("markup-" + ct);
+        if (!el) return;
+        if (pl === null) { el.textContent = ""; el.style.color = ""; return; }
+        el.textContent = fmtDollar(pl);
+        el.style.color = pl > 0 ? "#16a34a" : pl < 0 ? "#dc2626" : "#999";
+    }
+
+    function updatePreviews() {
+        var totalMarkup = 0;
+
+        // Linehaul + Fuel P&L
+        var lfPL = computePL("linehaul_fuel");
+        if (lfPL !== null) totalMarkup += lfPL;
+        setMarkupCell("linehaul_fuel", lfPL);
+
+        // Computed total display for LH+Fuel percent mode
+        var lfInputEl = document.getElementById("input-linehaul_fuel");
+        var lfInput = lfInputEl && lfInputEl.value.trim() !== "" ? parseFloat(lfInputEl.value) : NaN;
+        var mode = document.querySelector('input[name="markup_type_linehaul_fuel"]:checked')?.value;
+        var computedEl = document.getElementById("lhfuel-computed-total");
+        if (computedEl) {
+            computedEl.textContent = (mode === "percent" && !isNaN(lfInput) && lfInput !== 0)
+                ? "= $" + (lhFuelBase() * (1 + lfInput / 100)).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",")
+                : "";
+        }
+
+        // Other charge types
+        var allInputs = document.querySelectorAll("#csv-form input[type=text]");
+        allInputs.forEach(function(input) {
+            var ct = input.name;
+            if (ct === "linehaul_fuel") return;
+            var pl = computePL(ct);
+            if (pl !== null) totalMarkup += pl;
+            setMarkupCell(ct, pl);
+        });
+
+        var totalEl = document.getElementById("total-markup-preview");
+        if (totalEl) {
+            totalEl.textContent = fmtDollar(totalMarkup);
+            totalEl.style.color = totalMarkup > 0 ? "#16a34a" : totalMarkup < 0 ? "#dc2626" : "#999";
+        }
+    }
+
+    function updateCarouselLabel() {
+        var label = document.getElementById("carousel-label");
+        if (label) {
+            label.textContent = currentIdx === 0 ? "base rate: average" : vendorNames[currentIdx];
+        }
+    }
+
+    document.getElementById("carousel-prev").addEventListener("click", function() {
+        currentIdx = (currentIdx - 1 + bases.length) % bases.length;
+        updateCarouselLabel();
+        updatePreviews();
+    });
+    document.getElementById("carousel-next").addEventListener("click", function() {
+        currentIdx = (currentIdx + 1) % bases.length;
+        updateCarouselLabel();
+        updatePreviews();
+    });
+
+    // Live update on any input change
+    document.getElementById("csv-form").addEventListener("input", updatePreviews);
+
+    // Initial render
+    updatePreviews();
+})();
+</script>
+{{ end }}
+{{ end }}
