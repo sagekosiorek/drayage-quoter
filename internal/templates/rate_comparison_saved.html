@@ -135,12 +135,14 @@ window.lineupBases = {{ .Data.LineupBases }};
             </div>
 
             <div style="margin-top:1rem;display:flex;align-items:center;gap:1rem;">
-                <button type="submit" class="primary">Generate CSV</button>
-                <a href="/rate-requests/{{ .Data.RateRequest.ID }}/comparison" style="font-size:.85rem;">Edit Lineup</a>
-                <span style="font-size:.78rem;color:#888;">Enter customer-facing charges, then generate the quote CSV.</span>
+                <button type="submit" class="primary">Save Quote and Generate CSV →</button>
+                <span style="font-size:.78rem;color:#888;">Enter customer-facing charges, then save and generate the quote CSV.</span>
             </div>
-
         </form>
+
+        <div style="margin-top:1rem;display:flex;align-items:center;gap:1rem;">
+            <a href="/rate-requests/{{ .Data.RateRequest.ID }}/comparison"><button>← Edit Carrier Lineup</button></a>
+        </div>
     </div>
 
     <!-- Right: original email side panel -->

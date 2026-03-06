@@ -1,5 +1,32 @@
 {{ define "content" }}
-<p class="back-link"><a href="/">← Back to lanes</a></p>
+<div class="page-header">
+    <p class="back-link"><a href="/">← Back to lanes</a></p>
+    <div style="display:flex; gap:.5rem;">
+        {{ if and .Lane.IsOwner (eq .Lane.Status "draft") }}
+        <a href="/lanes/{{ .Lane.ID }}/edit"><button>Edit Draft</button></a>
+        {{ end }}
+        {{ if .Lane.IsOwner }}
+        {{ if eq .Lane.Status "draft" }}
+        <a href="/lanes/{{ .Lane.ID }}/rate-request/new"><button class="primary">Request Rates →</button></a>
+        {{ else if eq .Lane.Status "rates_requested" }}
+        <a href="/rate-requests/{{ .RateRequest.ID }}"><button>View Email Blast</button></a>
+        {{ else if eq .Lane.Status "rates_received" }}
+        <a href="/rate-requests/{{ .RateRequest.ID }}"><button>View Email Blast</button></a>
+        {{ if .RateRequest }}<a href="/rate-requests/{{ .RateRequest.ID }}/comparison"><button class="primary">Build Carrier Lineup →</button></a>{{ end }}
+        {{ else if eq .Lane.Status "quoting" }}
+        <a href="/rate-requests/{{ .RateRequest.ID }}"><button>View Email Blast</button></a>
+        {{ if .RateRequest }}<a href="/rate-requests/{{ .RateRequest.ID }}/comparison"><button>Edit Carrier Lineup</button></a>{{ end }}
+        <a href="/rate-requests/{{ .RateRequest.ID }}/comparison/saved"><button class="primary">Edit Quote →</button></a>
+        {{ else if eq .Lane.Status "quoted" }}
+        {{ if .RateRequest }}
+        <a href="/rate-requests/{{ .RateRequest.ID }}"><button>View Email Blast</button></a>
+        <a href="/rate-requests/{{ .RateRequest.ID }}/comparison"><button>Edit Carrier Lineup</button></a>
+        <a href="/rate-requests/{{ .RateRequest.ID }}/comparison/saved"><button>View Quote</button></a>
+        {{ end }}
+        {{ end }}
+        {{ end }}
+    </div>
+</div>
 
 <div class="page-header">
     <div style="display:flex; align-items:center; gap:.75rem;">
@@ -13,36 +40,6 @@
         <span hx-ext="sse" sse-connect="/lanes/{{ .Lane.ID }}/events"
               class="status-badge status-{{ .Lane.Status }}"
               sse-swap="status" hx-swap="outerHTML">{{ .Lane.StatusLabel }}</span>
-    </div>
-    <div style="display:flex; gap:.5rem;">
-        {{ if and .Lane.IsOwner (eq .Lane.Status "draft") }}
-        <a href="/lanes/{{ .Lane.ID }}/edit"><button>Edit</button></a>
-        {{ end }}
-        {{ if .Lane.IsOwner }}
-        {{ if eq .Lane.Status "draft" }}
-        <a href="/lanes/{{ .Lane.ID }}/rate-request/new"><button class="primary">Request Rates →</button></a>
-        {{ else if eq .Lane.Status "rates_received" }}
-        {{ if .RateRequest }}<a href="/rate-requests/{{ .RateRequest.ID }}/comparison"><button class="primary">Build Lineup →</button></a>{{ end }}
-        {{ else if eq .Lane.Status "quoting" }}
-        {{ if .RateRequest }}<a href="/rate-requests/{{ .RateRequest.ID }}/comparison"><button>Edit Lineup</button></a>{{ end }}
-        {{ if .Lane.NextStatus }}
-        <form method="POST" action="/lanes/{{ .Lane.ID }}/status" style="margin:0;">
-            <input type="hidden" name="next" value="{{ .Lane.NextStatus }}">
-            <button type="submit" class="primary">{{ .Lane.NextStatusLabel }}</button>
-        </form>
-        {{ end }}
-        {{ else if eq .Lane.Status "quoted" }}
-        {{ if .RateRequest }}
-        <a href="/rate-requests/{{ .RateRequest.ID }}/comparison"><button>Edit Lineup</button></a>
-        <a href="/rate-requests/{{ .RateRequest.ID }}/comparison/saved"><button>View Quote</button></a>
-        {{ end }}
-        {{ else if .Lane.NextStatus }}
-        <form method="POST" action="/lanes/{{ .Lane.ID }}/status" style="margin:0;">
-            <input type="hidden" name="next" value="{{ .Lane.NextStatus }}">
-            <button type="submit">{{ .Lane.NextStatusLabel }}</button>
-        </form>
-        {{ end }}
-        {{ end }}
     </div>
 </div>
 

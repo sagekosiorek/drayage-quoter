@@ -1,6 +1,9 @@
+.air.toml
 .env
 .gitlab-sync.json
 *.db
 /data/
+/tmp/
+/cmd/build-errors.log
 /server
 /seed
