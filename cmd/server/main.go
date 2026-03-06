@@ -18,6 +18,7 @@ import (
 	"gitlab.com/perenne/clients/schneider/drayage-quoter/internal/lanes"
 	rate_requests "gitlab.com/perenne/clients/schneider/drayage-quoter/internal/rate_requests"
 	rates "gitlab.com/perenne/clients/schneider/drayage-quoter/internal/rates"
+	"gitlab.com/perenne/clients/schneider/drayage-quoter/internal/settings"
 	"gitlab.com/perenne/clients/schneider/drayage-quoter/internal/static"
 	"gitlab.com/perenne/clients/schneider/drayage-quoter/internal/templates"
 	"gitlab.com/perenne/clients/schneider/drayage-quoter/internal/vendors"
@@ -94,6 +95,7 @@ func main() {
 	broker := &events.Broker{}
 
 	adminSvc := &admin.Service{DB: database}
+	settingsSvc := &settings.Service{DB: database, Broker: broker}
 	lanesSvc := &lanes.Service{DB: database, Broker: broker}
 	vendorsSvc := &vendors.Service{DB: database}
 	rrSvc := &rate_requests.Service{DB: database}
@@ -133,6 +135,7 @@ func main() {
 	rrComparisonSavedTmpl := templates.MustParse("layout.html", "rate_comparison_saved.html")
 	rateIngestTmpl := templates.MustParse("layout.html", "rate_ingest.html")
 	rateResultTmpl := templates.MustParse("layout.html", "rate_ingest_result.html")
+	settingsTmpl := templates.MustParse("layout.html", "settings.html")
 
 	customerSuggTmpl := template.Must(template.New("suggestions").Parse(
 		`{{range .}}<button type="button" class="suggestion-item" ` +
@@ -193,6 +196,11 @@ func main() {
 		}
 		customerSuggTmpl.Execute(w, matches)
 	}))
+
+	// Settings routes (all authenticated users)
+	mux.HandleFunc("GET /settings",        authService.RequireAuth(settingsSvc.HandleSettings(settingsTmpl)))
+	mux.HandleFunc("POST /settings",       authService.RequireAuth(settingsSvc.HandleSaveTemplate()))
+	mux.HandleFunc("GET /settings/events", authService.RequireAuth(settingsSvc.HandleSettingsEvents()))
 
 	// Dashboard
 	mux.HandleFunc("GET /{$}", authService.RequireAuth(lanesSvc.HandleDashboard(dashboardTmpl)))
