@@ -154,6 +154,15 @@ parse_spec() {
   local milestone_title=""
   local got_description=false
   local task_index=0
+  local pending_key="" pending_title="" pending_state="" pending_desc=""
+
+  # Emit any buffered task then reset the buffer.
+  _flush_task() {
+    [[ -z "$pending_key" ]] && return
+    printf 'TASK\t%s\t%s\t%s\t%s\n' \
+      "$pending_key" "$pending_title" "$pending_state" "$pending_desc"
+    pending_key="" pending_title="" pending_state="" pending_desc=""
+  }
 
   while IFS= read -r line; do
     # Enter the milestones section
@@ -164,6 +173,7 @@ parse_spec() {
 
     # Exit on next h2
     if $in_milestones && [[ "$line" =~ ^##\  ]] && [[ "$line" != "## Milestones" ]]; then
+      _flush_task
       break
     fi
 
@@ -171,6 +181,7 @@ parse_spec() {
 
     # --- Milestone heading: ### Milestone N: Title ---
     if [[ "$line" =~ ^###\ Milestone\ ([0-9]+):\ (.+)$ ]]; then
+      _flush_task
       current_milestone="${BASH_REMATCH[1]}"
       milestone_title="${BASH_REMATCH[2]}"
       got_description=false
@@ -188,14 +199,30 @@ parse_spec() {
 
     # --- Task: - [ ] or - [x] ---
     if [[ -n "$current_milestone" ]] && [[ "$line" =~ ^-\ \[(.)\]\ (.+)$ ]]; then
+      _flush_task
       task_index=$((task_index + 1))
       local check="${BASH_REMATCH[1]}"
-      local title="${BASH_REMATCH[2]}"
-      local state="open"
-      [[ "$check" == "x" ]] && state="closed"
-      printf 'TASK\t%s:%s\t%s\t%s\n' "$current_milestone" "$task_index" "$title" "$state"
+      pending_title="${BASH_REMATCH[2]}"
+      pending_state="open"
+      [[ "$check" == "x" ]] && pending_state="closed"
+      pending_key="$current_milestone:$task_index"
+      pending_desc=""
+      continue
+    fi
+
+    # --- Sub-bullet: indented "- " lines beneath a task ---
+    if [[ -n "$pending_key" ]] && [[ "$line" =~ ^[[:space:]]+-[[:space:]](.+)$ ]]; then
+      local item="${BASH_REMATCH[1]}"
+      if [[ -z "$pending_desc" ]]; then
+        pending_desc="$item"
+      else
+        pending_desc="$pending_desc\n$item"
+      fi
+      continue
     fi
   done < "$SPEC_FILE"
+
+  _flush_task
 }
 
 # ---------------------------------------------------------------------------
@@ -248,27 +275,32 @@ sync_milestone() {
 # ---------------------------------------------------------------------------
 
 sync_issue() {
-  local key="$1" title="$2" desired_state="$3" milestone_num="$4"
+  local key="$1" title="$2" desired_state="$3" milestone_num="$4" desc_raw="${5:-}"
+  # Convert literal \n separators (from parse_spec) to actual newlines.
+  local description="${desc_raw//\\n/$'\n'}"
   local key_iid="issue:$key"
   local key_title="issue:$key:title"
   local key_state="issue:$key:state"
+  local key_desc="issue:$key:desc"
 
   local milestone_id
   milestone_id=$(get_state "milestone:$milestone_num")
 
-  local existing_iid prev_title prev_state
+  local existing_iid prev_title prev_state prev_desc
   existing_iid=$(get_state "$key_iid")
   prev_title=$(get_state "$key_title")
   prev_state=$(get_state "$key_state")
+  prev_desc=$(get_state "$key_desc")
 
   if [[ -z "$existing_iid" ]]; then
     # Create
     local payload
     payload=$(jq -n \
-      --arg t  "$title" \
-      --arg l  "$LABEL" \
+      --arg t   "$title" \
+      --arg l   "$LABEL" \
+      --arg d   "$description" \
       --argjson mid "${milestone_id:-null}" \
-      '{title: $t, labels: $l, milestone_id: $mid}')
+      '{title: $t, labels: $l, description: $d, milestone_id: $mid}')
 
     local resp
     resp=$(gitlab_api POST "/projects/$PROJECT_ID/issues" "$payload") || {
@@ -279,6 +311,7 @@ sync_issue() {
     set_state "$key_iid"   "$new_iid"
     set_state "$key_title" "$title"
     set_state "$key_state" "$desired_state"
+    set_state "$key_desc"  "$desc_raw"
     info "Created issue #$new_iid: $title"
 
     # Close immediately if the task is already checked off
@@ -290,7 +323,7 @@ sync_issue() {
 
   else
     # Skip if nothing changed
-    if [[ "$prev_title" == "$title" && "$prev_state" == "$desired_state" ]]; then
+    if [[ "$prev_title" == "$title" && "$prev_state" == "$desired_state" && "$prev_desc" == "$desc_raw" ]]; then
       return 0
     fi
 
@@ -301,17 +334,19 @@ sync_issue() {
 
     local payload
     payload=$(jq -n \
-      --arg t  "$title" \
-      --arg se "$state_event" \
+      --arg t   "$title" \
+      --arg se  "$state_event" \
+      --arg d   "$description" \
       --argjson mid "${milestone_id:-null}" \
-      'if $se == "" then {title: $t, milestone_id: $mid}
-       else {title: $t, state_event: $se, milestone_id: $mid} end')
+      'if $se == "" then {title: $t, description: $d, milestone_id: $mid}
+       else {title: $t, description: $d, state_event: $se, milestone_id: $mid} end')
 
     gitlab_api PUT "/projects/$PROJECT_ID/issues/$existing_iid" "$payload" >/dev/null || {
       warn "Failed to update issue #$existing_iid"; return 1
     }
     set_state "$key_title" "$title"
     set_state "$key_state" "$desired_state"
+    set_state "$key_desc"  "$desc_raw"
     info "Updated issue #$existing_iid: $title [$desired_state]"
   fi
 }
@@ -373,10 +408,10 @@ main() {
   # Pass 2: issues
   echo "Syncing issues..."
   local -a seen_task_keys=()
-  while IFS=$'\t' read -r type key title extra; do
+  while IFS=$'\t' read -r type key title state desc; do
     if [[ "$type" == "TASK" ]]; then
       local milestone_num="${key%%:*}"
-      sync_issue "$key" "$title" "$extra" "$milestone_num"
+      sync_issue "$key" "$title" "$state" "$milestone_num" "$desc"
       seen_task_keys+=("$key")
     fi
   done <<< "$parsed"

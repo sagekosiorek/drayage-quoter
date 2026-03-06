@@ -1,5 +1,11 @@
 {{ define "content" }}
-<p class="back-link"><a href="/lanes/{{ .RateRequest.Lane.ID }}">← Back to lane</a></p>
+
+<div class="page-header">
+    <p class="back-link"><a href="/lanes/{{ .RateRequest.Lane.ID }}">← Back to lane</a></p>
+    {{ if eq .RateRequest.Lane.Status "rates_received" }}
+    <a href="/rate-requests/{{ .RateRequest.ID }}/comparison"><button class="primary">Build Carrier Lineup →</button></a>
+    {{ end }}
+</div>
 
 <div class="page-header">
     <div style="display:flex;align-items:center;gap:.75rem;">
