@@ -16,6 +16,7 @@ import (
 
 	"gitlab.com/perenne/clients/schneider/drayage-quoter/internal/auth"
 	"gitlab.com/perenne/clients/schneider/drayage-quoter/internal/rates"
+	"gitlab.com/perenne/clients/schneider/drayage-quoter/internal/settings"
 )
 
 // Service handles rate request operations.
@@ -150,9 +151,9 @@ func buildSubjectBase(lane *LaneSnippet) string {
 		lane.OriginPort, typ, lane.Destination, dir)
 }
 
-// buildBody generates the standard rate request email body with a [First Name] placeholder.
-// The refID is included as the Reference line in the body (separate from the subject).
-func buildBody(lane *LaneSnippet, refID string) string {
+// buildBody generates the rate request email body using the user's saved template.
+// The [First Name] placeholder is replaced per-vendor at mailto generation time.
+func buildBody(lane *LaneSnippet, refID string, tmpl settings.EmailTemplate) string {
 	var sb strings.Builder
 
 	dir := "Import"
@@ -164,8 +165,8 @@ func buildBody(lane *LaneSnippet, refID string) string {
 		load = "Drop / Pick"
 	}
 
-	fmt.Fprintf(&sb, "Hi [First Name],\n\n")
-	fmt.Fprintf(&sb, "We are reaching out to request drayage rates for the following lane:\n\n")
+	fmt.Fprintf(&sb, "%s [First Name],\n\n", tmpl.Greeting)
+	fmt.Fprintf(&sb, "%s\n\n", tmpl.Body)
 	fmt.Fprintf(&sb, "Reference:       %s\n", refID)
 	fmt.Fprintf(&sb, "Origin Port:     %s (%s)\n", lane.OriginPort, lane.OriginPortType)
 	fmt.Fprintf(&sb, "Destination:     %s\n", lane.Destination)
@@ -196,6 +197,10 @@ func buildBody(lane *LaneSnippet, refID string) string {
 
 	if lane.Notes != nil && *lane.Notes != "" {
 		fmt.Fprintf(&sb, "\nNotes:\n%s\n", *lane.Notes)
+	}
+
+	if tmpl.Closing != "" || tmpl.Signature != "" {
+		fmt.Fprintf(&sb, "\n%s\n%s\n", tmpl.Closing, tmpl.Signature)
 	}
 
 	return sb.String()
@@ -501,16 +506,18 @@ func (s *Service) HandleNewForm(tmpl *template.Template) http.HandlerFunc {
 
 		vendors, err := s.fetchVendorsForPort(lane.OriginPortID, user.ID)
 		if err != nil {
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			http.Error(w, fmt.Sprintf("Failed to load vendors: %v", err), http.StatusInternalServerError)
 			return
 		}
+
+		emailTmpl := settings.FetchTemplate(s.DB, user.ID)
 
 		tmpl.ExecuteTemplate(w, "layout.html", map[string]any{
 			"User":    user,
 			"Lane":    lane,
 			"RefID":   refID,
 			"Subject": buildSubjectBase(lane),
-			"Body":    buildBody(lane, refID),
+			"Body":    buildBody(lane, refID, emailTmpl),
 			"Vendors": vendors,
 		})
 	}

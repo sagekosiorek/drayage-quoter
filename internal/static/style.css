@@ -124,6 +124,57 @@ tr:last-child td { border-bottom: none; }
  }
 
 /* -------------------------------------------------------
+   Settings subnav (mirrors admin-subnav)
+------------------------------------------------------- */
+.settings-subnav {
+    display: flex;
+    gap: .25rem;
+    margin-bottom: 1.5rem;
+    border-bottom: 1px solid #ddd;
+}
+.settings-subnav a {
+    text-decoration: none;
+    color: #444;
+    padding: .4rem .75rem;
+    border-radius: 3px 3px 0 0;
+    border: 1px solid transparent;
+    border-bottom: none;
+    font-size: .875rem;
+    margin-bottom: -1px;
+}
+.settings-subnav a:hover { color: #111; background: #f5f5f5; }
+.settings-subnav a.active {
+    color: #111;
+    background: #fff;
+    border-color: #ddd;
+    font-weight: 600;
+}
+
+/* -------------------------------------------------------
+   Email template editor
+------------------------------------------------------- */
+.email-template-greeting {
+    display: flex;
+    align-items: flex-end;
+    gap: .75rem;
+    margin-bottom: .75rem;
+}
+.email-template-greeting > div { flex-shrink: 0; }
+.email-template-greeting input { width: 120px; }
+.template-static { color: #555; font-size: .9rem; padding-bottom: .35rem; }
+.template-preview {
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 4px;
+    padding: .75rem 1rem;
+    font-size: .825rem;
+    color: #555;
+    margin: .75rem 0;
+    white-space: pre;
+}
+.form-timestamp { font-size: .8rem; color: #888; margin-left: .75rem; }
+
+/* -------------------------------------------------------
    Lane detail view
 ------------------------------------------------------- */
 .detail-section {
