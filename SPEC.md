@@ -433,7 +433,7 @@ Multi-lane quotes produce multiple rows, distinctly organized by a coloful table
 
 ## Milestones
 
-### Milestone 1: Project Setup + Lane Management
+### Milestone 1: Project Setup + Lane Management (Sprint 1)
 Foundation: auth, data model, and core lane CRUD with opportunity list.
 
 - [x] Initialize Go project with module structure, Dockerfile, and Fly.io config
@@ -452,7 +452,7 @@ Foundation: auth, data model, and core lane CRUD with opportunity list.
 - [x] Implement lane status state machine (draft -> rates_requested -> rates_received -> quoting -> quoted)
 - [x] Deploy on Docker and Fly.io and gather feedback
 
-### Milestone 2: Vendor Network
+### Milestone 2: Vendor Network (Sprint 1)
 Shared vendor database with personal preference lists.
 
 - [x] Create vendors table with CRUD
@@ -466,7 +466,7 @@ Shared vendor database with personal preference lists.
 - [x] Vendor creation form (autocomplete existing vendors, port select, n contacts)
 - [x] Vendor notes should be vendor_port specific; not vendor specific.
 
-### Milestone 3: Rate Request Generation
+### Milestone 3: Rate Request Generation (Sprint 1)
 Template-based rate request creation with manual email workflow.
 
 - [x] Create rate_requests table with reference ID generation (e.g., RR-YYYY-NNNNN)
@@ -483,7 +483,7 @@ Template-based rate request creation with manual email workflow.
 - [x] Rate request detail view showing blast status (which vendors, responded/pending)
 - [x] Deploy and gather feedback
 
-### Milestone 4: Rate Parsing + Ingestion
+### Milestone 4: Rate Parsing + Ingestion (Sprint 2)
 Parse forwarded vendor rate emails into standardized buckets.
 
 - [x] Design and implement `POST /api/rates/parse` endpoint (accepts raw email content: subject, body, sender)
@@ -503,7 +503,7 @@ Parse forwarded vendor rate emails into standardized buckets.
 - [x] Remove LP # (not required and gets in the way)
 - [x] Deploy and gather feedback
 
-### Milestone 5: Rate Comparison + Vendor Lineup
+### Milestone 5: Rate Comparison + Vendor Lineup (Sprint 2)
 Side-by-side comparison table and carrier ranking.
 
 - [x] Build comparison table view: rows = charge types, columns = vendors sorted by total (LH + fuel)
@@ -520,26 +520,32 @@ Side-by-side comparison table and carrier ranking.
 - [x] Send email notification from app's outbound address
 - [x] Test email forwarding inbound flow
 
-### Milestone 6: Markup + Quote Generation
+### Milestone 6: Markup + Quote Generation (Sprint 2)
 Apply markups, preview, and export customer-facing CSV.
 
 - [x] Create quotes table (can reference multiple lanes via quote_lanes)
 - [x] Create quote_lanes junction table
 - [x] Create markups and markup_items tables
-- [x] Rename rate_comparison.html to rate_comparison_edit.html and redirect upon saving the lineup to a rate_comparison_saved.html page which is a reflection of the same edit page, except these changes: Average column appears on the saved page (not on edit anyomre), the markup entry UI is a column next to 'Charge Type' with an additional row titled 'Total Markup' at the top, only the selected lineup is showing (their ranks "hardened" as plain text - i.e. not editable in this interface - and sorted by lineup order; not lowest linehaul + fuel anymore), and emails can still be viewed as structued in the edit page. Lastly, the 'Save Lineup' button has changed to 'Edit Lineup' which redirects to rate_comparison_edit.html.
-- [x] Markup column: this column, inbetween 'Charge Type' and 'Customer charge', live updates its charge type profit/loss amounts (highlighted green/red) with a 'carosel' or arrow toggle in the column header to switch the 'markup base' which defaults to the Average column. Clicking/dragging to the right 'rebases' the set markup to the first vendor in the lineup. Clicked/dragged again to the right rebases it to the second vendor in the lineup, etc. etc.
+- [x] rate_comparison.html modification
 - [x] CSV download endpoint
 - [x] Update lane status to "quoted" on export
 - [x] Update / modify UX/UI
-- [ ] Smooth out the page navigation flow for quoting: currently very clunky and unintuitive.
-- [ ] Multi-lane quote builder: select multiple lanes for the same customer, apply markups per lane
+- [x] Smooth out the page navigation flow for quoting: currently very clunky and unintuitive.
+- [x] Save a default email draft
+- [x] On rate_request_detail.html, remove Copy Body function. Change Open Draft to Open Email Draft.
+- [x] On rate_request_detail.html, add Build Lineup button at the top, that appears once 1+ response s are received.
+- [ ] Must be able to add rates on comparison view (if blank or not showing).
+    - This means clicking on an empty cell and being able to add one, and adding a charge type that is not currently showing in the rate table.
+- [ ] User should be able to lock the Customer Rate.
 - [ ] CSV generation: lanes sectioned by colorful tables (same color) for visual distinction, with only populated rates added
-- [ ] Quote history: persist all generated quotes, viewable from lane detail and customer views
+- [ ] Fix other user bugs
+- [ ] Ready for testing: clear the db of test data and upload all of your contacts all at once
 
-### Milestone 7: Loose ends
+### Milestone 7: Loose ends (Sprint 3)
 Styling, last-min changes, stress-testing.
 
-- [x] Modify IngestEmail() to a) only accept emails received from ourselves (our login email) and b) match the vendor based on one of the vendor emails listed in the `body`. Checking against all `mailto:` fields from the `body` to verify. As long as there's one match from the list of contacts under a vendor's profile.
+- [x] Modify IngestEmail()
+- [ ] Change auth method from login link to login code
 - [ ] Granularize the opaque "Internal server error" messages across the codebase.
 - [ ] Refactor main.go - modularizing the route library into a separate file.
 - [ ] User can modify the default rate request email body template
@@ -549,6 +555,7 @@ Styling, last-min changes, stress-testing.
 - [ ] Map FreightPower Shipper styling
 - [ ] File-parsing support for rate ingestion
 - [ ] Wire up LLM for rate parsing
+- [ ] mv rate_comparison_saved.html rate_comparison_markup.hmtl && rate_comparison_edit.html rate_comparison_lineup.html (and modify all internal references - route, function names, etc. to reflect)
 - [ ] Wire up email forwarding for auto-ingestion
 - [ ] User should not be able to edit the company name on lane_edit.html (it's unchangeable at this point).
 - [ ] Stress-test the performance, pagination, and UI using a lot of dummy data (github.com/brianvoe/gofakeit/v7).
@@ -561,3 +568,4 @@ Styling, last-min changes, stress-testing.
 - [ ] User should be able to manually enter a carrier rate for any cell.
 - [ ] A button to display lane details (in the email renderer) should be included on the rate_comparision_saved.html page so user knows which accessorial will incur.
 - [ ] Set default accessorial rates by user.
+- [ ] Delete a lane function
