@@ -87,7 +87,7 @@ func advanceLabel(to string) string {
 	case "rates_requested":
 		return "Request Rates →"
 	case "rates_received":
-		return "Mark Rates Received →"
+		return "View Email Blast →"
 	case "quoting":
 		return "Build Lineup →"
 	case "quoted":
@@ -650,7 +650,7 @@ func (s *Service) HandleUpdate() http.HandlerFunc {
 			if err == sql.ErrNoRows {
 				res, err := s.DB.Exec(
 					"INSERT INTO customers (name) VALUES (?)",
-					customerName, 
+					customerName,
 				)
 				if err != nil {
 					http.Error(w, "Internal server error", http.StatusInternalServerError)

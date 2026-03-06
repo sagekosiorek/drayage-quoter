@@ -34,7 +34,6 @@
         </div>
 
         <p style="font-size:.78rem;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.04em;margin:.75rem 0 .25rem;">Body</p>
-        <p style="font-size:.78rem;color:#888;margin-top:.35rem;">Use each vendor's "Copy Body" button in the Blast Status table (to the right) to fill in their first name.</p>
         <div style="display:flex;gap:.5rem;align-items:flex-start;">
             <pre id="body-display" style="flex:1;padding:8px;border:1px solid #e5e7eb;border-radius:3px;font-size:.85rem;background:#f9fafb;white-space:pre-wrap;margin:0;font-family:inherit;word-break:break-word;">{{ .RateRequest.Body }}</pre>
         </div>
@@ -77,10 +76,9 @@
                     <td>
                         <div style="display:flex;gap:.35rem;flex-wrap:wrap;">
                             {{ if .MailtoHref }}
-                            <a href="{{ .MailtoHref }}"><button type="button">Open Draft</button></a>
+                            <a href="{{ .MailtoHref }}"><button type="button">Open Email Draft</button></a>
                             {{ end }}
-                            <button type="button" onclick="copyBodyFor('{{ .GreetingName }}')">Copy Body</button>
-                            <a href="/rate-requests/{{ $.RateRequest.ID }}/ingest?vendor_id={{ .VendorID }}"><button type="button">Ingest Response</button></a>
+                            <a href="/rate-requests/{{ $.RateRequest.ID }}/ingest?vendor_id={{ .VendorID }}"><button type="button">Paste Response</button></a>
                         </div>
                     </td>
                 </tr>
