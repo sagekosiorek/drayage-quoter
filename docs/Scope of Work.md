@@ -9,34 +9,35 @@ To put this into perspective, by quoting on average 4 lanes per day, we're talki
 
 Buy incorporating an end-to-end internal quoting system for Drayage, we forsee a 30% - 50% reduction in time spent quoting per lane, allowing sales reps to focus on pure analysis.
 
-Not only will this save significant time, but also directly impact revenue given sales rep's increased mental capacity during the analysis process. Given the time pressure prospects assert on sales reps, and by reducing the number of rote tasks required per quote, we expect a night and day difference in not only the rep's psychological satisfaction, but qualitatively sharper quotes.
+Not only will this save significant time, but also directly impact revenue given sales rep's increased mental capacity during the analysis process. Given the time pressure prospects assert on sales reps, and by reducing the number of rote tasks required per quote, we expect a night and day difference in not only the rep's psychological satisfaction, but quote quality.
 
 **Proposed Solution**
 
-A web application that facilitates the end-to-end Drayage quoting process, automating rote tasks at each step. It includes a vendor database, shared among reps, with persisted notes to quickly reference carrier qualifications by lane. Rate requests are sent out via email - coming from the reps email address - by port and/or rail head and only carriers who service the area receive it. They respond over email which routes directly back to the rep's inbox, which is then forwarded to this application for automatic formatting for easy comparison.
+A web application that facilitates the end-to-end Drayage quoting process, automating rote tasks at each step. It includes a vendor database, shared among reps, with persisted notes to quickly reference carrier qualifications by lane. Rate requests are sent out via email - coming from the reps email address - by port and/or rail head and only carriers who service the area receive it. Vendor responses arrive via the same original email thread, which routes directly back to the rep's inbox, which is then forwarded to the Drayage Quoter application for automatic parsing and formatting.
 
-Once a satisfactory number of responses arrive, the rep will receive an email notification that the rates are ready for comparison. They then see the rates aggregated into a simple table for analysis (including accessorial rates). Within the name interface, they have reference to the original email in case parts of the vendor quote is not clear. They can then easily select a primary, secondary, n-ary carrier to base their prospect's quote off of it.
+Once a satisfactory number of responses arrive, the rep will receive an email notification that the rates are ready for comparison. In Drayage Quoter, a rep can view rates aggregated into a simple table for comprehensive cost analysis and markup. Within this interface they have reference to the original email in case parts of the vendor quote is not clear. They can build a vendor lineup (selecting a primary, secondary, n-ary carrier) to base their quote off of.
 
-Markups are done in a clean, easy-to-use interface. Then once ready, they can download a pre-formatted CSV file to send to the customer directly.
+Markups are done in a clean, easy-to-use interface with clear P&L distinction. Once ready, they can download a pre-formatted CSV file to send to the customer directly.
 
 **Approach**
-Drayage sales reps use the following tech stack currently. The Drayage Quoter web app will exist separately, and integrated with the existing tool set where possible.
+Drayage sales reps use the following tech stack currently. The Drayage Quoter web app will exist separately, and integrate with the existing tool set where possible.
 
 Current tools:
 - Email for vendor rate request blasts, vendor responses, and ongoing communications
 - Manual reading of rates, sifting through each vendor-specific grammar and formatting to determine otherwise standard charge types
-- Excel sheets for quote tracking, markup analysis, customer-facing quote formatting, customer rate tracking, and vendor network state and blasts
+- Varied Excel sheets for quote tracking, markup analysis, customer-facing quote formatting, customer rate tracking, and vendor network state and blasts
 
 New stack to support this will include:
 - Go backend for application and web core, including APIs and trigger points for email integration.
 - HTMX for simple server-side rendered frontends (no complex rendering needed).
+- Inline JavaScript for some complex rendering needs.
 - SQLite for database service to support lane, rate, and vendor data.
-- CSV and PDF file generator to support file-first principle
+- CSV file generator to support file-first principle
 - Lua for scripting integrations with email (likely)
 - HTTP for communication between systems
 - Fly.io + Docker for containerized deployment
 
-You'll note that Excel has been removed from the picture entirely, while email remains central. Excel was the existing solution, but given fairly standard sales rep's workflows a standard system should step in to fill the gap. The goal of a standardized system like this is to boost everyone's productivity, not just those who are technical enough to automate their own workflows.
+You'll note that Excel has been removed from the picture entirely, while email remains central. Excel was the existing solution, but given fairly standard quoting workflows a formalized system should step in to fill the gap.
 
 ---
 
@@ -63,13 +64,14 @@ Reps can select `n` number of vendors in sequence to create a "lineup" of servic
 Finally, the rep can easily mark up any number of rates associated with a lane. They have the option to enter an exact amount, incremental, or percentage based. Once sufficient, they can generate a pre-formatted CSV file they can use to send to the customer.
 
 ---
+
 # Timeline and investment
 Executed under a Tier 3 engagement level
 
 | **Estimated Development Time** | 47 - 93 hours                                                                                                                                              |
 | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Estimated Investment**       | $7,050 - $13,950                                                                                                                                           |
-| **Expected ROI**               | 3.6 - 12 hours per month per rep saved during quoting process; qualitatively sharper quotes for every prospective client, directly impacting closure-rate. |
+| **Expected ROI**               | 3.6 - 12 hours per month per rep saved during quoting process; faster quote turnaround; higher quote quality, reducing the risk of mispricing for direct impact on underlying revenue. |
 
 ---
 
