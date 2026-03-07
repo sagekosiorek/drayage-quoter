@@ -27,6 +27,7 @@ type Service struct {
 // LaneSnippet holds lean lane info for display in rate request views.
 type LaneSnippet struct {
 	ID             int
+	CustomerName   string
 	OriginPortID   int
 	OriginPort     string
 	OriginPortType string
@@ -304,15 +305,16 @@ func (s *Service) fetchLane(laneID int) (*LaneSnippet, error) {
 	err := s.DB.QueryRow(`
 		SELECT l.id, p.id, p.name, p.type, l.destination, l.direction,
 		       l.container_size, l.load_type, l.commodity, l.weight,
-		       l.notes, l.hazmat, l.overweight, l.out_of_gauge, l.status
+		       l.notes, l.hazmat, l.overweight, l.out_of_gauge, l.status, c.name
 		FROM lanes l
 		JOIN ports p ON p.id = l.origin_port_id
+		JOIN customers c ON c.id = l.customer_id
 		WHERE l.id = ?
 	`, laneID).Scan(
 		&lane.ID, &lane.OriginPortID, &lane.OriginPort, &lane.OriginPortType,
 		&lane.Destination, &lane.Direction,
 		&lane.ContainerSize, &lane.LoadType, &lane.Commodity, &lane.Weight,
-		&lane.Notes, &hazmat, &overweight, &outOfGauge, &lane.Status,
+		&lane.Notes, &hazmat, &overweight, &outOfGauge, &lane.Status, &lane.CustomerName,
 	)
 	if err != nil {
 		return nil, err
@@ -636,13 +638,14 @@ type VendorColumn struct {
 
 // ComparisonData is template data for rate_comparison.html.
 type ComparisonData struct {
-	RateRequest  RateRequestSnippet
-	Lane         LaneSnippet
-	ChargeRows   []ChargeTypeRow    // ordered; only types present in ≥1 vendor
-	Vendors      []VendorColumn     // sorted ascending by Total
-	Averages     map[string]string  // pre-formatted average per charge_type
-	AvgTotal     string             // pre-formatted average of vendor totals
-	Lineups      map[int]int        // vendor_rate_id → current rank (0 = unranked)
+	RateRequest          RateRequestSnippet
+	Lane                 LaneSnippet
+	ChargeRows           []ChargeTypeRow   // ordered; only types present in ≥1 vendor
+	Vendors              []VendorColumn    // sorted ascending by Total
+	Averages             map[string]string // pre-formatted average per charge_type
+	AvgTotal             string            // pre-formatted average of vendor totals
+	Lineups              map[int]int       // vendor_rate_id → current rank (0 = unranked)
+	AvailableChargeTypes []ChargeTypeRow   // FieldOrder types not yet in ChargeRows
 }
 
 // HandleDetail renders the rate request detail view with blast status and mailto links.
@@ -780,12 +783,12 @@ func (s *Service) HandleComparison(tmpl *template.Template) http.HandlerFunc {
 			}
 		}
 		var chargeRows []ChargeTypeRow
+		var availableTypes []ChargeTypeRow
 		for _, ct := range rates.FieldOrder {
 			if presentTypes[ct] {
-				chargeRows = append(chargeRows, ChargeTypeRow{
-					Key:   ct,
-					Label: ctLabel(ct),
-				})
+				chargeRows = append(chargeRows, ChargeTypeRow{Key: ct, Label: ctLabel(ct)})
+			} else {
+				availableTypes = append(availableTypes, ChargeTypeRow{Key: ct, Label: ctLabel(ct)})
 			}
 		}
 
@@ -836,13 +839,14 @@ func (s *Service) HandleComparison(tmpl *template.Template) http.HandlerFunc {
 		if err := tmpl.ExecuteTemplate(w, "layout.html", map[string]any{
 			"User": user,
 			"Data": ComparisonData{
-				RateRequest: rr,
-				Lane:        *lane,
-				ChargeRows:  chargeRows,
-				Vendors:     vendors,
-				Averages:    averages,
-				AvgTotal:    avgTotal,
-				Lineups:     lineups,
+				RateRequest:          rr,
+				Lane:                 *lane,
+				ChargeRows:           chargeRows,
+				Vendors:              vendors,
+				Averages:             averages,
+				AvgTotal:             avgTotal,
+				Lineups:              lineups,
+				AvailableChargeTypes: availableTypes,
 			},
 		}); err != nil {
 			log.Printf("HandleComparison: template execution rr=%d: %v", rrID, err)
@@ -948,14 +952,14 @@ type MarkupItemRow struct {
 
 // SavedComparisonData is the template data for rate_comparison_saved.html.
 type SavedComparisonData struct {
-	RateRequest RateRequestSnippet
-	Lane        LaneSnippet
-	ChargeRows  []ChargeTypeRow
-	Vendors     []SavedVendorColumn     // sorted by rank asc
-	Averages    map[string]string
-	AvgTotal    string
-	Markups     map[string]MarkupItemRow // keyed by charge_type; pre-fills inputs if exists
-	LineupBases template.JS              // JSON for JS carousel: [{linehaul:X, fuel:Y, ...}, ...]
+	RateRequest          RateRequestSnippet
+	Lane                 LaneSnippet
+	ChargeRows           []ChargeTypeRow
+	Vendors              []SavedVendorColumn // sorted by rank asc
+	Averages             map[string]string
+	AvgTotal             string
+	Markups              map[string]MarkupItemRow // keyed by charge_type; pre-fills inputs if exists
+	LineupBases          template.JS              // JSON for JS carousel: [{linehaul:X, fuel:Y, ...}, ...]
 }
 
 // HandleSavedComparison renders the markup entry + CSV generation page for a lineup.
@@ -1108,9 +1112,12 @@ func (s *Service) HandleSavedComparison(tmpl *template.Template) http.HandlerFun
 			}
 		}
 		var chargeRows []ChargeTypeRow
+		var availableTypes []ChargeTypeRow
 		for _, ct := range rates.FieldOrder {
 			if presentTypes[ct] {
 				chargeRows = append(chargeRows, ChargeTypeRow{Key: ct, Label: ctLabel(ct)})
+			} else {
+				availableTypes = append(availableTypes, ChargeTypeRow{Key: ct, Label: ctLabel(ct)})
 			}
 		}
 
@@ -1193,18 +1200,154 @@ func (s *Service) HandleSavedComparison(tmpl *template.Template) http.HandlerFun
 		if err := tmpl.ExecuteTemplate(w, "layout.html", map[string]any{
 			"User": user,
 			"Data": SavedComparisonData{
-				RateRequest: rr,
-				Lane:        *lane,
-				ChargeRows:  chargeRows,
-				Vendors:     vendors,
-				Averages:    averages,
-				AvgTotal:    avgTotal,
-				Markups:     markupsMap,
-				LineupBases: template.JS(basesJSON),
+				RateRequest:          rr,
+				Lane:                 *lane,
+				ChargeRows:           chargeRows,
+				Vendors:              vendors,
+				Averages:             averages,
+				AvgTotal:             avgTotal,
+				Markups:              markupsMap,
+				LineupBases:          template.JS(basesJSON),
 			},
 		}); err != nil {
 			log.Printf("HandleSavedComparison: template execution rr=%d: %v", rrID, err)
 		}
+	}
+}
+
+// markupEntry holds a single parsed markup row from form input.
+type markupEntry struct {
+	chargeType string
+	value      float64
+	markupType string
+}
+
+// persistMarkups parses markup form values, resolves or creates the lane's quote,
+// and upserts markup + markup_items rows. Returns the resolved quoteID and parsed entries.
+func (s *Service) persistMarkups(tx *sql.Tx, laneID int, r *http.Request) (int64, []markupEntry, error) {
+	// Parse markup form values: each charge_type field, plus markup_type_linehaul_fuel.
+	var entries []markupEntry
+	for _, ct := range rates.FieldOrder {
+		if ct == "linehaul" || ct == "fuel" {
+			continue // rolled into linehaul_fuel
+		}
+		valStr := r.FormValue(ct)
+		if valStr == "" {
+			continue
+		}
+		val, err := strconv.ParseFloat(valStr, 64)
+		if err != nil || val == 0 {
+			continue
+		}
+		entries = append(entries, markupEntry{chargeType: ct, value: val, markupType: "flat"})
+	}
+	// linehaul_fuel is a special combined entry with flat/percent toggle.
+	if lfStr := r.FormValue("linehaul_fuel"); lfStr != "" {
+		if lfVal, err := strconv.ParseFloat(lfStr, 64); err == nil && lfVal != 0 {
+			mtype := r.FormValue("markup_type_linehaul_fuel")
+			if mtype != "percent" {
+				mtype = "flat"
+			}
+			entries = append(entries, markupEntry{chargeType: "linehaul_fuel", value: lfVal, markupType: mtype})
+		}
+	}
+
+	// Resolve or create the quote for this lane (reuse if one already exists).
+	// Customer association: lane owner is the customer proxy until a customer picker is added.
+	var quoteID int64
+	err := tx.QueryRow(`SELECT q.id FROM quotes q JOIN quote_lanes ql ON ql.quote_id = q.id WHERE ql.lane_id = ?`, laneID).Scan(&quoteID)
+	if err == sql.ErrNoRows {
+		var ownerID int
+		if err2 := tx.QueryRow(`SELECT owner_id FROM lanes WHERE id = ?`, laneID).Scan(&ownerID); err2 != nil {
+			return 0, nil, fmt.Errorf("fetch owner lane=%d: %w", laneID, err2)
+		}
+		var customerID int64
+		err2 := tx.QueryRow(`SELECT id FROM customers WHERE name = (SELECT email FROM users WHERE id = ?)`, ownerID).Scan(&customerID)
+		if err2 == sql.ErrNoRows {
+			ownerEmail := ""
+			tx.QueryRow(`SELECT email FROM users WHERE id = ?`, ownerID).Scan(&ownerEmail)
+			res2, err3 := tx.Exec(`INSERT INTO customers (name) VALUES (?)`, ownerEmail)
+			if err3 != nil {
+				return 0, nil, fmt.Errorf("insert customer: %w", err3)
+			}
+			customerID, _ = res2.LastInsertId()
+		} else if err2 != nil {
+			return 0, nil, fmt.Errorf("lookup customer: %w", err2)
+		}
+		res, err3 := tx.Exec(`INSERT INTO quotes (owner_id, customer_id) VALUES (?, ?)`, ownerID, customerID)
+		if err3 != nil {
+			return 0, nil, fmt.Errorf("insert quote: %w", err3)
+		}
+		quoteID, _ = res.LastInsertId()
+		if _, err3 := tx.Exec(`INSERT INTO quote_lanes (quote_id, lane_id) VALUES (?, ?)`, quoteID, laneID); err3 != nil {
+			return 0, nil, fmt.Errorf("insert quote_lane: %w", err3)
+		}
+	} else if err != nil {
+		return 0, nil, fmt.Errorf("lookup quote lane=%d: %w", laneID, err)
+	}
+
+	// Delete existing markup for this lane and recreate.
+	if _, err := tx.Exec(`DELETE FROM markups WHERE lane_id = ?`, laneID); err != nil {
+		return 0, nil, fmt.Errorf("delete markups lane=%d: %w", laneID, err)
+	}
+	if len(entries) > 0 {
+		res, err := tx.Exec(`INSERT INTO markups (quote_id, lane_id) VALUES (?, ?)`, quoteID, laneID)
+		if err != nil {
+			return 0, nil, fmt.Errorf("insert markup: %w", err)
+		}
+		markupID, _ := res.LastInsertId()
+		for _, e := range entries {
+			if _, err := tx.Exec(
+				`INSERT INTO markup_items (markup_id, charge_type, value, markup_type) VALUES (?, ?, ?, ?)`,
+				markupID, e.chargeType, e.value, e.markupType,
+			); err != nil {
+				return 0, nil, fmt.Errorf("insert markup_item ct=%s: %w", e.chargeType, err)
+			}
+		}
+	}
+	return quoteID, entries, nil
+}
+
+// HandleSaveMarkups persists markup values without generating a CSV.
+// Returns a small HTML fragment for the auto-save status indicator.
+// POST /rate-requests/{id}/markups
+func (s *Service) HandleSaveMarkups() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		rrID, err := strconv.Atoi(r.PathValue("id"))
+		if err != nil || rrID <= 0 {
+			http.Error(w, "Rate request not found", http.StatusNotFound)
+			return
+		}
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "Bad request: could not parse form", http.StatusBadRequest)
+			return
+		}
+		var laneID int
+		if err := s.DB.QueryRow(`SELECT lane_id FROM rate_requests WHERE id = ?`, rrID).Scan(&laneID); err == sql.ErrNoRows {
+			http.Error(w, "Rate request not found", http.StatusNotFound)
+			return
+		} else if err != nil {
+			log.Printf("HandleSaveMarkups: fetch rr=%d: %v", rrID, err)
+			http.Error(w, "Failed to load rate request", http.StatusInternalServerError)
+			return
+		}
+		tx, err := s.DB.Begin()
+		if err != nil {
+			http.Error(w, "Failed to begin transaction", http.StatusInternalServerError)
+			return
+		}
+		defer tx.Rollback()
+		if _, _, err := s.persistMarkups(tx, laneID, r); err != nil {
+			log.Printf("HandleSaveMarkups: rr=%d: %v", rrID, err)
+			http.Error(w, "Failed to save markups", http.StatusInternalServerError)
+			return
+		}
+		if err := tx.Commit(); err != nil {
+			log.Printf("HandleSaveMarkups: commit rr=%d: %v", rrID, err)
+			http.Error(w, "Failed to commit markup save", http.StatusInternalServerError)
+			return
+		}
+		fmt.Fprint(w, `<span style="color:#888;">Saved ✓</span>`)
 	}
 }
 
@@ -1243,38 +1386,6 @@ func (s *Service) HandleGenerateCSV() http.HandlerFunc {
 			return
 		}
 
-		// Parse markup form values: each charge_type field, plus markup_type_linehaul_fuel.
-		type markupEntry struct {
-			chargeType string
-			value      float64
-			markupType string
-		}
-		var entries []markupEntry
-		for _, ct := range rates.FieldOrder {
-			if ct == "linehaul" || ct == "fuel" {
-				continue // these are rolled into linehaul_fuel
-			}
-			valStr := r.FormValue(ct)
-			if valStr == "" {
-				continue
-			}
-			val, err := strconv.ParseFloat(valStr, 64)
-			if err != nil || val == 0 {
-				continue
-			}
-			entries = append(entries, markupEntry{chargeType: ct, value: val, markupType: "flat"})
-		}
-		// linehaul_fuel is a special combined entry.
-		if lfStr := r.FormValue("linehaul_fuel"); lfStr != "" {
-			if lfVal, err := strconv.ParseFloat(lfStr, 64); err == nil && lfVal != 0 {
-				mtype := r.FormValue("markup_type_linehaul_fuel")
-				if mtype != "percent" {
-					mtype = "flat"
-				}
-				entries = append(entries, markupEntry{chargeType: "linehaul_fuel", value: lfVal, markupType: mtype})
-			}
-		}
-
 		// Resolve or create the quote for this lane atomically.
 		// If a quote already exists for this lane, reuse it; otherwise create one.
 		// Customer association: use lane owner as customer proxy for now (no customer picker yet).
@@ -1285,80 +1396,11 @@ func (s *Service) HandleGenerateCSV() http.HandlerFunc {
 		}
 		defer tx.Rollback()
 
-		var quoteID int64
-		err = tx.QueryRow(`SELECT q.id FROM quotes q JOIN quote_lanes ql ON ql.quote_id = q.id WHERE ql.lane_id = ?`, laneID).Scan(&quoteID)
-		if err == sql.ErrNoRows {
-			// Create a new quote; use owner_id as customer_id placeholder (customer table may be empty).
-			// We insert a stub customer row if needed, keyed by owner email, to satisfy the FK.
-			var ownerID int
-			if err2 := tx.QueryRow(`SELECT owner_id FROM lanes WHERE id = ?`, laneID).Scan(&ownerID); err2 != nil {
-				log.Printf("HandleGenerateCSV: fetch owner lane=%d: %v", laneID, err2)
-				http.Error(w, "Failed to identify lane owner", http.StatusInternalServerError)
-				return
-			}
-			// Ensure a customer row exists for the owner (upsert by owner id stored as external_id).
-			var customerID int64
-			err2 := tx.QueryRow(`SELECT id FROM customers WHERE name = (SELECT email FROM users WHERE id = ?)`, ownerID).Scan(&customerID)
-			if err2 == sql.ErrNoRows {
-				ownerEmail := ""
-				tx.QueryRow(`SELECT email FROM users WHERE id = ?`, ownerID).Scan(&ownerEmail)
-				res2, err3 := tx.Exec(`INSERT INTO customers (name) VALUES (?)`, ownerEmail)
-				if err3 != nil {
-					log.Printf("HandleGenerateCSV: insert customer: %v", err3)
-					http.Error(w, "Failed to create customer record", http.StatusInternalServerError)
-					return
-				}
-				customerID, _ = res2.LastInsertId()
-			} else if err2 != nil {
-				log.Printf("HandleGenerateCSV: lookup customer: %v", err2)
-				http.Error(w, "Failed to look up customer", http.StatusInternalServerError)
-				return
-			}
-
-			res, err3 := tx.Exec(`INSERT INTO quotes (owner_id, customer_id) VALUES (?, ?)`, ownerID, customerID)
-			if err3 != nil {
-				log.Printf("HandleGenerateCSV: insert quote: %v", err3)
-				http.Error(w, "Failed to create quote", http.StatusInternalServerError)
-				return
-			}
-			quoteID, _ = res.LastInsertId()
-			if _, err3 := tx.Exec(`INSERT INTO quote_lanes (quote_id, lane_id) VALUES (?, ?)`, quoteID, laneID); err3 != nil {
-				log.Printf("HandleGenerateCSV: insert quote_lane: %v", err3)
-				http.Error(w, "Failed to link quote to lane", http.StatusInternalServerError)
-				return
-			}
-		} else if err != nil {
-			log.Printf("HandleGenerateCSV: lookup quote lane=%d: %v", laneID, err)
-			http.Error(w, "Failed to look up quote", http.StatusInternalServerError)
+		_, entries, err := s.persistMarkups(tx, laneID, r)
+		if err != nil {
+			log.Printf("HandleGenerateCSV: persistMarkups rr=%d: %v", rrID, err)
+			http.Error(w, "Failed to save markup: "+err.Error(), http.StatusInternalServerError)
 			return
-		}
-
-		// Delete existing markup for this lane and recreate with new values.
-		if _, err := tx.Exec(`DELETE FROM markups WHERE lane_id = ?`, laneID); err != nil {
-			log.Printf("HandleGenerateCSV: delete markups lane=%d: %v", laneID, err)
-			http.Error(w, "Failed to clear existing markup", http.StatusInternalServerError)
-			return
-		}
-
-		var markupID int64
-		if len(entries) > 0 {
-			res, err := tx.Exec(`INSERT INTO markups (quote_id, lane_id) VALUES (?, ?)`, quoteID, laneID)
-			if err != nil {
-				log.Printf("HandleGenerateCSV: insert markup: %v", err)
-				http.Error(w, "Failed to create markup record", http.StatusInternalServerError)
-				return
-			}
-			markupID, _ = res.LastInsertId()
-			for _, e := range entries {
-				if _, err := tx.Exec(
-					`INSERT INTO markup_items (markup_id, charge_type, value, markup_type) VALUES (?, ?, ?, ?)`,
-					markupID, e.chargeType, e.value, e.markupType,
-				); err != nil {
-					log.Printf("HandleGenerateCSV: insert markup_item ct=%s: %v", e.chargeType, err)
-					http.Error(w, "Failed to save markup item", http.StatusInternalServerError)
-					return
-				}
-			}
 		}
 
 		// Advance lane to "quoted".
@@ -1478,5 +1520,160 @@ func (s *Service) HandleGenerateCSV() http.HandlerFunc {
 		}
 		cw.Write(row)
 		cw.Flush()
+	}
+}
+
+// availableChargeTypesAfterAdd returns the FieldOrder types not yet in the DB for a rate request,
+// treating newCT as already present (it was just added to the table via HTMX).
+func (s *Service) availableChargeTypesAfterAdd(rrID int, newCT string) []ChargeTypeRow {
+	rows, err := s.DB.Query(`
+		SELECT DISTINCT vri.charge_type
+		FROM vendor_rate_items vri
+		JOIN vendor_rates vr ON vr.id = vri.vendor_rate_id
+		WHERE vr.rate_request_id = ?
+	`, rrID)
+	present := map[string]bool{newCT: true}
+	if err == nil {
+		for rows.Next() {
+			var ct string
+			rows.Scan(&ct)
+			present[ct] = true
+		}
+		rows.Close()
+	}
+	var available []ChargeTypeRow
+	for _, ct := range rates.FieldOrder {
+		if !present[ct] {
+			available = append(available, ChargeTypeRow{Key: ct, Label: ctLabel(ct)})
+		}
+	}
+	return available
+}
+
+// HandleAddComparisonRow returns a <tr> fragment for a new charge type on the lineup builder page,
+// plus an OOB swap to remove the added type from the add-charge-type dropdown.
+// GET /rate-requests/{id}/comparison/add-row?charge_type=
+func (s *Service) HandleAddComparisonRow() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		rrID, err := strconv.Atoi(r.PathValue("id"))
+		if err != nil || rrID <= 0 {
+			http.Error(w, "Not found", http.StatusNotFound)
+			return
+		}
+		ct := strings.TrimSpace(r.URL.Query().Get("charge_type"))
+		valid := false
+		for _, f := range rates.FieldOrder {
+			if f == ct {
+				valid = true
+				break
+			}
+		}
+		if !valid {
+			http.Error(w, "Unknown or missing charge_type", http.StatusBadRequest)
+			return
+		}
+
+		// Load all vendor_rates for this rate request.
+		vRows, err := s.DB.Query(`
+			SELECT vr.id, v.name
+			FROM vendor_rates vr
+			JOIN vendors v ON v.id = vr.vendor_id
+			WHERE vr.rate_request_id = ?
+			ORDER BY v.name
+		`, rrID)
+		if err != nil {
+			log.Printf("HandleAddComparisonRow: query vendors rr=%d: %v", rrID, err)
+			http.Error(w, "Failed to load vendors", http.StatusInternalServerError)
+			return
+		}
+		type vendorRow struct {
+			vrID int
+			name string
+		}
+		var vendors []vendorRow
+		for vRows.Next() {
+			var vr vendorRow
+			vRows.Scan(&vr.vrID, &vr.name)
+			vendors = append(vendors, vr)
+		}
+		vRows.Close()
+
+		// Check which vendors already have this charge type.
+		existingCells := make(map[int]RateItemCell)
+		for _, vr := range vendors {
+			var itemID, manuallyEdited int
+			var amount float64
+			var unit, parsedBy string
+			err := s.DB.QueryRow(`
+				SELECT vri.id, vri.amount, vri.unit, vri.manually_edited, vr.parsed_by
+				FROM vendor_rate_items vri
+				JOIN vendor_rates vr ON vr.id = vri.vendor_rate_id
+				WHERE vri.vendor_rate_id = ? AND vri.charge_type = ?
+			`, vr.vrID, ct).Scan(&itemID, &amount, &unit, &manuallyEdited, &parsedBy)
+			if err == nil {
+				existingCells[vr.vrID] = RateItemCell{
+					ID: itemID, Amount: amount, Unit: unit,
+					ManuallyEdited: manuallyEdited != 0, ParsedBy: parsedBy,
+					Display: rates.FmtCellAmount(amount, unit),
+				}
+			}
+		}
+
+		var sb strings.Builder
+		fmt.Fprintf(&sb, "<tr>\n<td>%s</td>\n", ctLabel(ct))
+		for _, vr := range vendors {
+			if cell, ok := existingCells[vr.vrID]; ok {
+				cssClass := ""
+				if cell.ManuallyEdited {
+					cssClass = "cell-edited"
+				} else if cell.ParsedBy == "llm" {
+					cssClass = "cell-llm"
+				}
+				fmt.Fprintf(&sb,
+					`<td class="%s" hx-get="/vendor-rate-items/%d/edit" hx-trigger="click" hx-target="this" hx-swap="outerHTML" style="text-align:center;cursor:pointer" title="Click to edit">%s</td>`,
+					cssClass, cell.ID, cell.Display)
+			} else {
+				fmt.Fprintf(&sb,
+					`<td style="text-align:center;color:#ccc;cursor:pointer;" hx-get="/vendor-rates/%d/items/new?charge_type=%s" hx-trigger="click" hx-target="this" hx-swap="outerHTML" title="Click to add">—</td>`,
+					vr.vrID, ct)
+			}
+		}
+		sb.WriteString("</tr>\n")
+
+		// OOB: update dropdown to remove the just-added charge type.
+		available := s.availableChargeTypesAfterAdd(rrID, ct)
+		sb.WriteString(`<select id="add-charge-type-select" hx-swap-oob="true" name="charge_type" style="width:auto;"><option value="">Add charge type...</option>`)
+		for _, row := range available {
+			fmt.Fprintf(&sb, `<option value="%s">%s</option>`, row.Key, row.Label)
+		}
+		sb.WriteString(`</select>`)
+
+		w.Write([]byte(sb.String()))
+	}
+}
+
+// HandleLanePanel returns the lane-detail-panel partial as an HTMX fragment.
+// GET /rate-requests/{id}/lane-panel
+func (s *Service) HandleLanePanel(tmpl *template.Template) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		rrID, err := strconv.Atoi(r.PathValue("id"))
+		if err != nil || rrID <= 0 {
+			http.Error(w, "Not found", http.StatusNotFound)
+			return
+		}
+		var laneID int
+		if err := s.DB.QueryRow(`SELECT lane_id FROM rate_requests WHERE id = ?`, rrID).Scan(&laneID); err != nil {
+			http.Error(w, "Not found", http.StatusNotFound)
+			return
+		}
+		lane, err := s.fetchLane(laneID)
+		if err != nil {
+			log.Printf("HandleLanePanel: fetch lane %d: %v", laneID, err)
+			http.Error(w, "Failed to load lane", http.StatusInternalServerError)
+			return
+		}
+		if err := tmpl.ExecuteTemplate(w, "lane-detail-panel", lane); err != nil {
+			log.Printf("HandleLanePanel: template execution: %v", err)
+		}
 	}
 }

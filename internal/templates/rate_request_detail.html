@@ -82,7 +82,7 @@
                     <td>
                         <div style="display:flex;gap:.35rem;flex-wrap:wrap;">
                             {{ if .MailtoHref }}
-                            <a href="{{ .MailtoHref }}"><button type="button">Open Email Draft</button></a>
+                            <a href="{{ .MailtoHref }}"><button class="primary">Open Email Draft</button></a>
                             {{ end }}
                             <a href="/rate-requests/{{ $.RateRequest.ID }}/ingest?vendor_id={{ .VendorID }}"><button type="button">Paste Response</button></a>
                         </div>

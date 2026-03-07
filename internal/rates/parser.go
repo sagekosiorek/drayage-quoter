@@ -387,3 +387,11 @@ func ExtractRates(text string) ParseResult {
 
 	return result
 }
+
+// DefaultUnit returns the expected unit for a given charge type key, defaulting to "$".
+func DefaultUnit(ct string) string {
+	if u, ok := chargeTypeMeta[ct]; ok {
+		return u
+	}
+	return "$"
+}

@@ -15,12 +15,12 @@
         {{ if .RateRequest }}<a href="/rate-requests/{{ .RateRequest.ID }}/comparison"><button class="primary">Build Carrier Lineup →</button></a>{{ end }}
         {{ else if eq .Lane.Status "quoting" }}
         <a href="/rate-requests/{{ .RateRequest.ID }}"><button>View Email Blast</button></a>
-        {{ if .RateRequest }}<a href="/rate-requests/{{ .RateRequest.ID }}/comparison"><button>Edit Carrier Lineup</button></a>{{ end }}
+        {{ if .RateRequest }}<a href="/rate-requests/{{ .RateRequest.ID }}/comparison"><button>Edit Carrier Lineup and Rates</button></a>{{ end }}
         <a href="/rate-requests/{{ .RateRequest.ID }}/comparison/saved"><button class="primary">Edit Quote →</button></a>
         {{ else if eq .Lane.Status "quoted" }}
         {{ if .RateRequest }}
         <a href="/rate-requests/{{ .RateRequest.ID }}"><button>View Email Blast</button></a>
-        <a href="/rate-requests/{{ .RateRequest.ID }}/comparison"><button>Edit Carrier Lineup</button></a>
+        <a href="/rate-requests/{{ .RateRequest.ID }}/comparison"><button>Edit Carrier Lineup and Rates</button></a>
         <a href="/rate-requests/{{ .RateRequest.ID }}/comparison/saved"><button>View Quote</button></a>
         {{ end }}
         {{ end }}
