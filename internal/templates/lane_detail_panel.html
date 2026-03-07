@@ -1,0 +1,52 @@
+{{ define "lane-detail-panel" }}
+<p class="detail-section">Customer</p>
+<div class="detail-grid">
+    <span class="detail-label">Name</span>
+    <span class="detail-value">{{ .CustomerName }}</span>
+</div>
+
+<p class="detail-section">Lane Details</p>
+<div class="detail-grid">
+    <span class="detail-label">Origin Port</span>
+    <span class="detail-value">{{ .OriginPort }} {{ .OriginPortType }}</span>
+    <span class="detail-label">Destination</span>
+    <span class="detail-value">{{ .Destination }}</span>
+    <span class="detail-label">Direction</span>
+    <span class="detail-value">{{ if eq .Direction "import" }}Import{{ else }}Export{{ end }}</span>
+    <span class="detail-label">Load Type</span>
+    <span class="detail-value">{{ if eq .LoadType "live" }}Live{{ else }}Drop / Pick{{ end }}</span>
+    <span class="detail-label">Container</span>
+    <span class="detail-value">
+        {{- if eq .ContainerSize "20_40" }}20' / 40'
+        {{- else if eq .ContainerSize "20" }}20'
+        {{- else if eq .ContainerSize "40" }}40'
+        {{- else if eq .ContainerSize "40HC" }}40' High Cube
+        {{- else }}{{ .ContainerSize }}
+        {{- end -}}
+    </span>
+    {{ if .Weight }}
+    <span class="detail-label">Weight</span>
+    <span class="detail-value">{{ .Weight }} lbs</span>
+    {{ end }}
+    {{ if .Commodity }}
+    <span class="detail-label">Commodity</span>
+    <span class="detail-value">{{ .Commodity }}</span>
+    {{ end }}
+</div>
+
+{{ if or .Hazmat .Overweight .OutOfGauge }}
+<p class="detail-section">Special Requirements</p>
+<div style="margin:.75rem 0 1.25rem;">
+    <div class="req-tags">
+        {{ if .Hazmat }}<span class="req-tag">Hazmat</span>{{ end }}
+        {{ if .Overweight }}<span class="req-tag">Overweight</span>{{ end }}
+        {{ if .OutOfGauge }}<span class="req-tag">Out of Gauge</span>{{ end }}
+    </div>
+</div>
+{{ end }}
+
+{{ if .Notes }}
+<p class="detail-section">Notes</p>
+<p style="margin:.5rem 0 1.25rem; font-size:.9rem; white-space:pre-wrap;">{{ .Notes }}</p>
+{{ end }}
+{{ end }}

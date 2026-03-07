@@ -59,7 +59,7 @@
                             {{ end }}
                         </tr>
                     </thead>
-                    <tbody>
+                    <tbody id="comparison-tbody">
                         <!-- TOTAL row -->
                         <tr class="row-total">
                             <td>Linehaul + Fuel</td>
@@ -83,7 +83,12 @@
                                 style="text-align:center;cursor:pointer;"
                                 title="Click to edit">{{ $cell.Display }}</td>
                             {{ else }}
-                            <td style="text-align:center;color:#ccc;">—</td>
+                            <td style="text-align:center;color:#ccc;cursor:pointer;"
+                                hx-get="/vendor-rates/{{ .VendorRateID }}/items/new?charge_type={{ $ct }}"
+                                hx-trigger="click"
+                                hx-target="this"
+                                hx-swap="outerHTML"
+                                title="Click to add">—</td>
                             {{ end }}
                             {{ end }}
                         </tr>
@@ -101,6 +106,22 @@
 
         </form>
 
+        {{ if .Data.AvailableChargeTypes }}
+        <div style="margin-top:.75rem;display:flex;gap:.5rem;align-items:center;">
+            <select id="add-charge-type-select" name="charge_type" style="width:auto;">
+                <option value="">Add charge type...</option>
+                {{ range .Data.AvailableChargeTypes }}
+                <option value="{{ .Key }}">{{ .Label }}</option>
+                {{ end }}
+            </select>
+            <button type="button"
+                    hx-get="/rate-requests/{{ .Data.RateRequest.ID }}/comparison/add-row"
+                    hx-include="#add-charge-type-select"
+                    hx-target="#comparison-tbody"
+                    hx-swap="beforeend">Add Row</button>
+        </div>
+        {{ end }}
+
         <p style="margin-top:1.5rem;font-size:.75rem;color:#aaa;">
             <span style="display:inline-block;width:12px;height:12px;background:#fef9c3;border:1px solid #e5e7eb;vertical-align:middle;margin-right:4px;"></span> LLM-corrected &nbsp;
             <span style="display:inline-block;width:12px;height:12px;background:#dbeafe;border:1px solid #e5e7eb;vertical-align:middle;margin-right:4px;"></span> Manually edited &nbsp;
@@ -108,12 +129,17 @@
         </p>
     </div>
 
-    <!-- Right: original email side panel -->
+    <!-- Right: lane details / email side panel -->
     <div>
-        <p class="detail-section">Original Email</p>
+        <button type="button"
+                hx-get="/rate-requests/{{ .Data.RateRequest.ID }}/lane-panel"
+                hx-target="#email-panel"
+                hx-swap="innerHTML"
+                style="font-size:.72rem;padding:2px 7px;margin-bottom:.5rem;">Lane Details</button>
+        <p class="detail-section">Lane Details</p>
         <p style="font-size:.78rem;color:#888;margin:.25rem 0 .75rem;">Click "View Email" on a vendor column to display their rate response here.</p>
         <div id="email-panel" class="email-panel">
-            <p style="color:#ccc;font-size:.82rem;text-align:center;padding:2rem 0;">No email selected</p>
+            {{ template "lane-detail-panel" .Data.Lane }}
         </div>
     </div>
 

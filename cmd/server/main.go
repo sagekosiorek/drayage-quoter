@@ -131,8 +131,9 @@ func main() {
 	vendorEditTmpl := templates.MustParse("layout.html", "vendor_edit.html")
 	rrNewTmpl := templates.MustParse("layout.html", "rate_request_new.html")
 	rrDetailTmpl := templates.MustParse("layout.html", "rate_request_detail.html")
-	rrComparisonEditTmpl := templates.MustParse("layout.html", "rate_comparison_edit.html")
-	rrComparisonSavedTmpl := templates.MustParse("layout.html", "rate_comparison_saved.html")
+	rrComparisonEditTmpl  := templates.MustParse("layout.html", "rate_comparison_edit.html", "lane_detail_panel.html")
+	rrComparisonSavedTmpl := templates.MustParse("layout.html", "rate_comparison_saved.html", "lane_detail_panel.html")
+	lanePanelTmpl         := templates.MustParse("lane_detail_panel.html")
 	rateIngestTmpl := templates.MustParse("layout.html", "rate_ingest.html")
 	rateResultTmpl := templates.MustParse("layout.html", "rate_ingest_result.html")
 	settingsTmpl := templates.MustParse("layout.html", "settings.html")
@@ -219,8 +220,11 @@ func main() {
 	mux.HandleFunc("POST /lanes/{id}/rate-request", authService.RequireAuth(rrSvc.HandleCreate()))
 	mux.HandleFunc("GET /rate-requests/{id}", authService.RequireAuth(rrSvc.HandleDetail(rrDetailTmpl)))
 	mux.HandleFunc("GET /rate-requests/{id}/comparison", authService.RequireAuth(rrSvc.HandleComparison(rrComparisonEditTmpl)))
+	mux.HandleFunc("GET /rate-requests/{id}/comparison/add-row", authService.RequireAuth(rrSvc.HandleAddComparisonRow()))
+	mux.HandleFunc("GET /rate-requests/{id}/lane-panel", authService.RequireAuth(rrSvc.HandleLanePanel(lanePanelTmpl)))
 	mux.HandleFunc("GET /rate-requests/{id}/comparison/saved", authService.RequireAuth(rrSvc.HandleSavedComparison(rrComparisonSavedTmpl)))
 	mux.HandleFunc("POST /rate-requests/{id}/lineup", authService.RequireAuth(rrSvc.HandleSaveLineup()))
+	mux.HandleFunc("POST /rate-requests/{id}/markups", authService.RequireAuth(rrSvc.HandleSaveMarkups()))
 	mux.HandleFunc("POST /rate-requests/{id}/csv", authService.RequireAuth(rrSvc.HandleGenerateCSV()))
 
 	// Rate ingestion + inline editing routes
@@ -232,6 +236,9 @@ func main() {
 	mux.HandleFunc("GET /vendor-rate-items/{id}/edit", authService.RequireAuth(ratesSvc.HandleEditRateItem()))
 	mux.HandleFunc("POST /vendor-rate-items/{id}", authService.RequireAuth(ratesSvc.HandleUpdateRateItem()))
 	mux.HandleFunc("GET /vendor-rates/{id}/email", authService.RequireAuth(ratesSvc.HandleViewOriginalEmail()))
+	mux.HandleFunc("GET /vendor-rates/{id}/items/new", authService.RequireAuth(ratesSvc.HandleNewRateItem()))
+	mux.HandleFunc("POST /vendor-rates/{id}/items", authService.RequireAuth(ratesSvc.HandleCreateRateItem()))
+	mux.HandleFunc("GET /vendor-rates/{id}/items/empty", authService.RequireAuth(ratesSvc.HandleEmptyRateItem()))
 
 	// Vendor routes
 	mux.HandleFunc("GET /vendors", authService.RequireAuth(vendorsSvc.HandleList(vendorListTmpl)))

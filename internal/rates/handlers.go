@@ -728,7 +728,7 @@ func (s *Service) HandleViewRateItem() http.HandlerFunc {
 // GET /vendor-rate-items/{id}/edit
 func (s *Service) HandleEditRateItem() http.HandlerFunc {
 	tmpl := template.Must(template.New("celledit").Parse(`<td class="cell-edit-form">
-  <form hx-post="/vendor-rate-items/{{.ID}}" hx-target="closest td" hx-swap="outerHTML" style="display:flex;align-items:center;gap:4px">
+<form hx-post="/vendor-rate-items/{{.ID}}" hx-target="closest td" hx-swap="outerHTML" style="display:flex;align-items:center;justify-content:center;gap:4px">
     <input type="text" name="amount" value="{{.Amount}}" style="width:80px">
     <button type="submit">✓</button>
     <button type="button" hx-get="/vendor-rate-items/{{.ID}}" hx-target="closest td" hx-swap="outerHTML">✗</button>
@@ -817,5 +817,130 @@ func (s *Service) HandleViewOriginalEmail() http.HandlerFunc {
 		} else {
 			plainTmpl.Execute(w, rawEmail)
 		}
+	}
+}
+
+// HandleNewRateItem returns an inline create form for an empty cell (no existing item).
+// GET /vendor-rates/{id}/items/new?charge_type=
+func (s *Service) HandleNewRateItem() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		vrID, err := strconv.Atoi(r.PathValue("id"))
+		if err != nil || vrID <= 0 {
+			http.Error(w, "Not found", http.StatusNotFound)
+			return
+		}
+		ct := strings.TrimSpace(r.URL.Query().Get("charge_type"))
+		if ct == "" {
+			http.Error(w, "charge_type required", http.StatusBadRequest)
+			return
+		}
+		// Confirm vendor_rate exists.
+		var exists int
+		if err := s.DB.QueryRow(`SELECT COUNT(*) FROM vendor_rates WHERE id = ?`, vrID).Scan(&exists); err != nil || exists == 0 {
+			http.Error(w, "Not found", http.StatusNotFound)
+			return
+		}
+		unit := DefaultUnit(ct)
+		fmt.Fprintf(w, `<td class="cell-edit-form">`+
+		`<form hx-post="/vendor-rates/%d/items" hx-target="closest td" hx-swap="outerHTML" style="display:flex;align-items:center;justify-content:center;gap:4px">`+
+			`<input type="hidden" name="charge_type" value="%s">`+
+			`<input type="hidden" name="unit" value="%s">`+
+			`<input type="text" name="amount" placeholder="0" style="width:80px">`+
+			`<button type="submit">✓</button>`+
+			`<button type="button" hx-get="/vendor-rates/%d/items/empty?charge_type=%s" hx-target="closest td" hx-swap="outerHTML">✗</button>`+
+			`</form></td>`,
+			vrID, ct, unit, vrID, ct)
+	}
+}
+
+// HandleCreateRateItem inserts a new vendor_rate_item and returns the display TD.
+// POST /vendor-rates/{id}/items
+func (s *Service) HandleCreateRateItem() http.HandlerFunc {
+	cellTmpl := template.Must(template.New("newcell").Parse(
+		`<td class="{{.CSSClass}}" hx-get="/vendor-rate-items/{{.ID}}/edit" hx-trigger="click" hx-target="this" hx-swap="outerHTML" style="text-align:center;justify-content:center;cursor:pointer" title="Click to edit">{{.Display}}</td>`,
+	))
+	return func(w http.ResponseWriter, r *http.Request) {
+		vrID, err := strconv.Atoi(r.PathValue("id"))
+		if err != nil || vrID <= 0 {
+			http.Error(w, "Not found", http.StatusNotFound)
+			return
+		}
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "Bad request", http.StatusBadRequest)
+			return
+		}
+		ct := strings.TrimSpace(r.FormValue("charge_type"))
+		unit := strings.TrimSpace(r.FormValue("unit"))
+		if ct == "" {
+			http.Error(w, "charge_type required", http.StatusBadRequest)
+			return
+		}
+		if unit == "" {
+			unit = DefaultUnit(ct)
+		}
+		amount, err := strconv.ParseFloat(strings.TrimSpace(r.FormValue("amount")), 64)
+		if err != nil {
+			http.Error(w, "Invalid amount", http.StatusBadRequest)
+			return
+		}
+
+		var rrID int
+		if err := s.DB.QueryRow(`SELECT rate_request_id FROM vendor_rates WHERE id = ?`, vrID).Scan(&rrID); err != nil {
+			http.Error(w, "Not found", http.StatusNotFound)
+			return
+		}
+
+		res, err := s.DB.Exec(
+			`INSERT INTO vendor_rate_items (vendor_rate_id, charge_type, amount, unit, manually_edited) VALUES (?, ?, ?, ?, 1)`,
+			vrID, ct, amount, unit,
+		)
+		if err != nil {
+			http.Error(w, "Failed to save rate item", http.StatusInternalServerError)
+			return
+		}
+		newID, _ := res.LastInsertId()
+
+		v, err := s.fetchRateItemView(int(newID))
+		if err != nil {
+			http.Error(w, "Failed to load rate item", http.StatusInternalServerError)
+			return
+		}
+		cellTmpl.Execute(w, v)
+
+		// OOB: refresh average for this charge type.
+		avg := s.computeChargeTypeAvg(rrID, ct)
+		fmt.Fprintf(w,
+			`<td id="avg-%s" hx-swap-oob="true" style="text-align:center;background:#f9fafb;font-style:italic;color:#555;">%s</td>`,
+			ct, avg)
+
+		// OOB: refresh vendor total and overall average total if linehaul or fuel was added.
+		if ct == "linehaul" || ct == "fuel" {
+			fmt.Fprintf(w,
+				`<td id="total-%d" hx-swap-oob="true" style="text-align:center;font-weight:700;">%s</td>`,
+				vrID, s.computeVendorTotal(vrID))
+			fmt.Fprintf(w,
+				`<td id="avg-total" hx-swap-oob="true" style="text-align:center;background:#f9fafb;font-style:italic;">%s</td>`,
+				s.computeTotalAvg(rrID))
+		}
+	}
+}
+
+// HandleEmptyRateItem returns a clickable empty TD for cancel on a new-item form.
+// GET /vendor-rates/{id}/items/empty?charge_type=
+func (s *Service) HandleEmptyRateItem() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		vrID, err := strconv.Atoi(r.PathValue("id"))
+		if err != nil || vrID <= 0 {
+			http.Error(w, "Not found", http.StatusNotFound)
+			return
+		}
+		ct := strings.TrimSpace(r.URL.Query().Get("charge_type"))
+		if ct == "" {
+			http.Error(w, "charge_type required", http.StatusBadRequest)
+			return
+		}
+		fmt.Fprintf(w,
+		`<td style="text-align:center;justify-content:center;color:#ccc;cursor:pointer;" hx-get="/vendor-rates/%d/items/new?charge_type=%s" hx-trigger="click" hx-target="this" hx-swap="outerHTML" title="Click to add">—</td>`,
+			vrID, ct)
 	}
 }

@@ -53,15 +53,6 @@ window.lineupBases = {{ .Data.LineupBases }};
                             <th style="min-width:130px;text-align:center;">
                                 <div style="font-weight:600;">{{ .VendorName }}</div>
                                 <div style="font-size:.7rem;color:#888;">Rank {{ .Rank }}</div>
-                                <div style="margin-top:.3rem;">
-                                    <button type="button"
-                                            hx-get="/vendor-rates/{{ .VendorRateID }}/email"
-                                            hx-target="#email-panel"
-                                            hx-swap="innerHTML"
-                                            style="font-size:.72rem;padding:2px 7px;">
-                                        View Email
-                                    </button>
-                                </div>
                             </th>
                             {{ end }}
                         </tr>
@@ -136,21 +127,28 @@ window.lineupBases = {{ .Data.LineupBases }};
 
             <div style="margin-top:1rem;display:flex;align-items:center;gap:1rem;">
                 <button type="submit" class="primary">Save Quote and Generate CSV →</button>
+                <span id="autosave-indicator" style="font-size:.78rem;color:#888;"></span>
                 <span style="font-size:.78rem;color:#888;">Enter customer-facing charges, then save and generate the quote CSV.</span>
             </div>
+
+            <!-- Auto-save trigger: fires on any form field change, debounced 300ms -->
+            <div hx-post="/rate-requests/{{ .Data.RateRequest.ID }}/markups"
+                 hx-trigger="change delay:300ms from:#csv-form"
+                 hx-include="#csv-form"
+                 hx-target="#autosave-indicator"
+                 hx-swap="innerHTML"></div>
         </form>
 
         <div style="margin-top:1rem;display:flex;align-items:center;gap:1rem;">
-            <a href="/rate-requests/{{ .Data.RateRequest.ID }}/comparison"><button>← Edit Carrier Lineup</button></a>
+            <a href="/rate-requests/{{ .Data.RateRequest.ID }}/comparison"><button>← Edit Carrier Lineup and Rates</button></a>
         </div>
     </div>
 
-    <!-- Right: original email side panel -->
+    <!-- Right: lane details panel -->
     <div>
-        <p class="detail-section">Original Email</p>
-        <p style="font-size:.78rem;color:#888;margin:.25rem 0 .75rem;">Click "View Email" on a vendor column to display their rate response here.</p>
+        <p class="detail-section">Lane Details</p>
         <div id="email-panel" class="email-panel">
-            <p style="color:#ccc;font-size:.82rem;text-align:center;padding:2rem 0;">No email selected</p>
+            {{ template "lane-detail-panel" .Data.Lane }}
         </div>
     </div>
 

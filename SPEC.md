@@ -534,8 +534,12 @@ Apply markups, preview, and export customer-facing CSV.
 - [x] Save a default email draft
 - [x] On rate_request_detail.html, remove Copy Body function. Change Open Draft to Open Email Draft.
 - [x] On rate_request_detail.html, add Build Lineup button at the top, that appears once 1+ response s are received.
-- [ ] Must be able to add rates on comparison view (if blank or not showing).
+- [x] Must be able to add rates on comparison view (if blank or not showing).
     - This means clicking on an empty cell and being able to add one, and adding a charge type that is not currently showing in the rate table.
+- [x] Remove email view on rates_comparison_saved.html
+- [x] Add lane details as default in email panel
+- [x] Rates should auto-save on comparison saved sheet
+- [x] 'Open Email Draft' should be primary class
 - [ ] User should be able to lock the Customer Rate.
 - [ ] CSV generation: lanes sectioned by colorful tables (same color) for visual distinction, with only populated rates added
 - [ ] Fix other user bugs
@@ -569,3 +573,4 @@ Styling, last-min changes, stress-testing.
 - [ ] A button to display lane details (in the email renderer) should be included on the rate_comparision_saved.html page so user knows which accessorial will incur.
 - [ ] Set default accessorial rates by user.
 - [ ] Delete a lane function
+- [ ] Add tooltips where necessary
