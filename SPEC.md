@@ -540,10 +540,10 @@ Apply markups, preview, and export customer-facing CSV.
 - [x] Add lane details as default in email panel
 - [x] Rates should auto-save on comparison saved sheet
 - [x] 'Open Email Draft' should be primary class
-- [ ] User should be able to lock the Customer Rate.
-- [ ] CSV generation: lanes sectioned by colorful tables (same color) for visual distinction, with only populated rates added
+- [x] User should be able to lock the Customer Rate in percentage mode.
+- [x] CSV generation: lanes sectioned by colorful tables (same color) for visual distinction, with only populated rates added
 - [ ] Fix other user bugs
-- [ ] Ready for testing: clear the db of test data and upload all of your contacts all at once
+- [ ] Ready for testing: deploy and clear the db of test data and upload all of your contacts all at once
 
 ### Milestone 7: Loose ends (Sprint 3)
 Styling, last-min changes, stress-testing.

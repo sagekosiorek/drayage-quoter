@@ -13,9 +13,9 @@ import (
 
 const (
 	defaultGreeting  = "Hi"
-	defaultBody      = "I have a new opportunity. Looking for a partner carrier to handle. Please let me know what your rate would be. Thank you."
+	defaultBody      = "I'm looking for a partner carrier for this lane. Details are below. If interested, please let me know what your rate would be. Thank you."
 	defaultClosing   = "Kind regards,"
-	defaultSignature = ""
+	defaultSignature = "Schneider Transportation Management"
 )
 
 // Service handles user-scoped settings operations.

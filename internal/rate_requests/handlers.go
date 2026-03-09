@@ -2,7 +2,6 @@ package rate_requests
 
 import (
 	"database/sql"
-	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"html/template"
@@ -14,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/xuri/excelize/v2"
 	"gitlab.com/perenne/clients/schneider/drayage-quoter/internal/auth"
 	"gitlab.com/perenne/clients/schneider/drayage-quoter/internal/rates"
 	"gitlab.com/perenne/clients/schneider/drayage-quoter/internal/settings"
@@ -121,6 +121,83 @@ func ctLabel(ct string) string {
 		return l
 	}
 	return strings.ReplaceAll(ct, "_", " ")
+}
+
+// applicableChargeTypes lists the standard expected charges shown in the top XLSX section.
+// All other entered charges fall under "Accessorials (only if needed)".
+var applicableChargeTypes = map[string]bool{
+	"linehaul_fuel": true,
+	"chassis":       true,
+	"chassis_min":   true,
+}
+
+// csvLabel returns a clean charge-type label for the XLSX quote (no unit hints in parens).
+func csvLabel(ct string) string {
+	labels := map[string]string{
+		"linehaul_fuel":      "Linehaul",
+		"chassis":            "Chassis",
+		"chassis_min":        "Chassis Minimum",
+		"detention":          "Detention",
+		"detention_free":     "Detention Free Time",
+		"storage":            "Storage",
+		"yard_pull":          "Prepull",
+		"chassis_split":      "Chassis Split",
+		"mount":              "Mount",
+		"lift":               "Lift",
+		"redelivery":         "Redelivery",
+		"dry_run":            "Dry Run",
+		"toll":               "Toll",
+		"triaxle":            "Triaxle",
+		"extreme_overweight": "Extreme Overweight",
+		"regular_overweight": "Regular Overweight",
+		"reefer":             "Reefer",
+		"genset":             "Genset",
+		"hazmat":             "Hazmat",
+		"stop_off":           "Stop Off",
+		"layover":            "Layover",
+		"drop":               "Drop",
+		"scale":              "Scale",
+		"congestion":         "Congestion",
+		"congestion_free":    "Congestion Free Time",
+		"gate":               "Gate",
+	}
+	if l, ok := labels[ct]; ok {
+		return l
+	}
+	return strings.ReplaceAll(ct, "_", " ")
+}
+
+// csvValue formats a charge amount for the XLSX value column.
+// Time/count-based charges render as a plain integer; all others as "$X.XX".
+func csvValue(ct string, val float64) string {
+	switch ct {
+	case "detention_free", "congestion_free", "chassis_min":
+		return fmt.Sprintf("%.0f", val)
+	}
+	return fmt.Sprintf("$%.2f", val)
+}
+
+// csvNotes returns the per-unit context string for the XLSX Notes column.
+func csvNotes(ct string) string {
+	notes := map[string]string{
+		"linehaul_fuel":   "fuel included",
+		"chassis":         "per day",
+		"chassis_min":     "days minimum",
+		"detention":       "per hour",
+		"detention_free":  "hours",
+		"storage":         "per day",
+		"triaxle":         "per day",
+		"genset":          "per day",
+		"congestion":      "per hour",
+		"congestion_free": "hours",
+	}
+	return notes[ct]
+}
+
+// xlCell converts 1-based (col, row) coordinates to an Excel cell address (e.g. "B3").
+func xlCell(col, row int) string {
+	name, _ := excelize.CoordinatesToCellName(col, row)
+	return name
 }
 
 // generateReferenceID produces the next sequential reference ID for the current year.
@@ -1351,12 +1428,10 @@ func (s *Service) HandleSaveMarkups() http.HandlerFunc {
 	}
 }
 
-// HandleGenerateCSV persists markup values, writes the customer quote CSV, and advances lane to "quoted".
+// HandleGenerateCSV persists markup values, writes the customer quote XLSX, and advances lane to "quoted".
 // POST /rate-requests/{id}/csv
 func (s *Service) HandleGenerateCSV() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		user := auth.UserFromContext(r.Context())
-
 		rrID, err := strconv.Atoi(r.PathValue("id"))
 		if err != nil || rrID <= 0 {
 			http.Error(w, "Not found", http.StatusNotFound)
@@ -1453,42 +1528,7 @@ func (s *Service) HandleGenerateCSV() http.HandlerFunc {
 		primaryVendor.linehaul = primaryVendor.items["linehaul"]
 		primaryVendor.fuel = primaryVendor.items["fuel"]
 
-		// Stream CSV response.
-		origin := strings.ReplaceAll(lane.OriginPort, " ", "_")
-		dest := strings.ReplaceAll(lane.Destination, " ", "_")
-		filename := fmt.Sprintf("quote-%s-%s-%s.csv", origin, dest, refID)
-
-		w.Header().Set("Content-Type", "text/csv")
-		w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
-
-		// Determine customer label for direction.
-		direction := "Import"
-		if lane.Direction == "export" {
-			direction = "Export"
-		}
-
-		cw := csv.NewWriter(w)
-
-		// Header row: Customer, Origin, Destination, Direction, Container Size,
-		//             Total (LH+Fuel), then any explicitly-entered customer charge types.
-		header := []string{
-			"Customer", "Origin", "Destination", "Direction", "Container Size",
-			"Total (LH+Fuel)",
-		}
-		var csvChargeTypes []string
-		for _, ct := range rates.FieldOrder {
-			if ct == "linehaul" || ct == "fuel" {
-				continue
-			}
-			// Include only charge types where a customer charge was explicitly entered.
-			if markupLookup[ct].value != 0 {
-				header = append(header, ctLabel(ct))
-				csvChargeTypes = append(csvChargeTypes, ct)
-			}
-		}
-		cw.Write(header)
-
-		// Data row: use vendor rates unchanged for linehaul + fuel; apply markup to total.
+		// Compute linehaul+fuel customer rate (percent mode uses rank-1 vendor base).
 		lhFuelBase := primaryVendor.linehaul + primaryVendor.linehaul*primaryVendor.fuel/100
 		var lhFuelCustomer float64
 		if lfEntry, ok := markupLookup["linehaul_fuel"]; ok {
@@ -1500,26 +1540,89 @@ func (s *Service) HandleGenerateCSV() http.HandlerFunc {
 		} else {
 			lhFuelCustomer = lhFuelBase
 		}
+		// Replace linehaul_fuel entry so the output loop uses the computed dollar amount.
+		markupLookup["linehaul_fuel"] = markupEntry{chargeType: "linehaul_fuel", value: lhFuelCustomer, markupType: "flat"}
 
-		customerName := ""
-		if user != nil {
-			customerName = user.Name
+		// Build XLSX workbook.
+		f := excelize.NewFile()
+		const sheet = "Quote"
+		f.SetSheetName("Sheet1", sheet)
+
+		orangeStyle, _ := f.NewStyle(&excelize.Style{
+			Fill: excelize.Fill{Type: "pattern", Color: []string{"F85F14"}, Pattern: 1},
+			Font: &excelize.Font{Bold: true, Color: "FFFFFF"},
+		})
+
+		row := 1
+
+		// Origin / Destination metadata rows (column A label = orange).
+		f.SetCellValue(sheet, xlCell(1, row), "Origin:")
+		f.SetCellValue(sheet, xlCell(2, row), lane.OriginPort)
+		f.SetCellStyle(sheet, xlCell(1, row), xlCell(1, row), orangeStyle)
+		row++
+
+		f.SetCellValue(sheet, xlCell(1, row), "Destination:")
+		f.SetCellValue(sheet, xlCell(2, row), lane.Destination)
+		f.SetCellStyle(sheet, xlCell(1, row), xlCell(1, row), orangeStyle)
+		row++
+
+		// Section header: "Applicable charges" | (empty) | "Notes" — both orange.
+		f.SetCellValue(sheet, xlCell(1, row), "Applicable charges")
+		f.SetCellValue(sheet, xlCell(3, row), "Notes")
+		f.SetCellStyle(sheet, xlCell(1, row), xlCell(1, row), orangeStyle)
+		f.SetCellStyle(sheet, xlCell(3, row), xlCell(3, row), orangeStyle)
+		row++
+
+		// Partition entered charges into applicable vs. accessorials (preserving FieldOrder).
+		// linehaul_fuel is a synthetic key not in FieldOrder, so it is handled first.
+		type quoteRow struct{ label, value, notes string }
+		var applicable, accessorials []quoteRow
+		if e := markupLookup["linehaul_fuel"]; e.value != 0 {
+			applicable = append(applicable, quoteRow{csvLabel("linehaul_fuel"), csvValue("linehaul_fuel", e.value), csvNotes("linehaul_fuel")})
+		}
+		for _, ct := range rates.FieldOrder {
+			if ct == "linehaul" || ct == "fuel" {
+				continue
+			}
+			e, ok := markupLookup[ct]
+			if !ok || e.value == 0 {
+				continue
+			}
+			qr := quoteRow{csvLabel(ct), csvValue(ct, e.value), csvNotes(ct)}
+			if applicableChargeTypes[ct] {
+				applicable = append(applicable, qr)
+			} else {
+				accessorials = append(accessorials, qr)
+			}
 		}
 
-		row := []string{
-			customerName,
-			lane.OriginPort,
-			lane.Destination,
-			direction,
-			containerSizeDisplay(lane.ContainerSize),
-			fmt.Sprintf("%.2f", lhFuelCustomer),
+		for _, qr := range applicable {
+			f.SetCellValue(sheet, xlCell(1, row), qr.label)
+			f.SetCellValue(sheet, xlCell(2, row), qr.value)
+			f.SetCellValue(sheet, xlCell(3, row), qr.notes)
+			row++
 		}
-		for _, ct := range csvChargeTypes {
-			value := markupLookup[ct].value // value IS the customer charge
-			row = append(row, fmt.Sprintf("%.2f", value))
+
+		if len(accessorials) > 0 {
+			f.SetCellValue(sheet, xlCell(1, row), "Accessorials (only if needed)")
+			f.SetCellStyle(sheet, xlCell(1, row), xlCell(1, row), orangeStyle)
+			row++
+			for _, qr := range accessorials {
+				f.SetCellValue(sheet, xlCell(1, row), qr.label)
+				f.SetCellValue(sheet, xlCell(2, row), qr.value)
+				f.SetCellValue(sheet, xlCell(3, row), qr.notes)
+				row++
+			}
 		}
-		cw.Write(row)
-		cw.Flush()
+
+		// Stream XLSX response.
+		origin := strings.ReplaceAll(lane.OriginPort, " ", "_")
+		dest := strings.ReplaceAll(lane.Destination, " ", "_")
+		filename := fmt.Sprintf("quote-%s-%s-%s.xlsx", origin, dest, refID)
+
+		w.Header().Set("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+		w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
+		f.Write(w)
 	}
 }
 
