@@ -1570,6 +1570,7 @@ func (s *Service) HandleGenerateCSV() http.HandlerFunc {
 		f.SetCellValue(sheet, xlCell(1, row), "Applicable charges")
 		f.SetCellValue(sheet, xlCell(3, row), "Notes")
 		f.SetCellStyle(sheet, xlCell(1, row), xlCell(1, row), orangeStyle)
+		f.SetCellStyle(sheet, xlCell(2, row), xlCell(2, row), orangeStyle)
 		f.SetCellStyle(sheet, xlCell(3, row), xlCell(3, row), orangeStyle)
 		row++
 
@@ -1606,6 +1607,8 @@ func (s *Service) HandleGenerateCSV() http.HandlerFunc {
 		if len(accessorials) > 0 {
 			f.SetCellValue(sheet, xlCell(1, row), "Accessorials (only if needed)")
 			f.SetCellStyle(sheet, xlCell(1, row), xlCell(1, row), orangeStyle)
+			f.SetCellStyle(sheet, xlCell(2, row), xlCell(2, row), orangeStyle)
+			f.SetCellStyle(sheet, xlCell(3, row), xlCell(3, row), orangeStyle)
 			row++
 			for _, qr := range accessorials {
 				f.SetCellValue(sheet, xlCell(1, row), qr.label)
