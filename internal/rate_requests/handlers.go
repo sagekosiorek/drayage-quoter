@@ -1555,7 +1555,7 @@ func (s *Service) HandleGenerateCSV() http.HandlerFunc {
 
 		row := 1
 
-		// Origin / Destination metadata rows (column A label = orange).
+		// Origin / Destination / Direction metadata rows (column A label = orange).
 		f.SetCellValue(sheet, xlCell(1, row), "Origin:")
 		f.SetCellValue(sheet, xlCell(2, row), lane.OriginPort)
 		f.SetCellStyle(sheet, xlCell(1, row), xlCell(1, row), orangeStyle)
@@ -1565,6 +1565,12 @@ func (s *Service) HandleGenerateCSV() http.HandlerFunc {
 		f.SetCellValue(sheet, xlCell(2, row), lane.Destination)
 		f.SetCellStyle(sheet, xlCell(1, row), xlCell(1, row), orangeStyle)
 		row++
+
+		f.SetCellValue(sheet, xlCell(1, row), "Direction:")
+		f.SetCellValue(sheet, xlCell(2, row), lane.Direction)
+		f.SetCellStyle(sheet, xlCell(1, row), xlCell(1, row), orangeStyle)
+		row++
+
 
 		// Section header: "Applicable charges" | (empty) | "Notes" — both orange.
 		f.SetCellValue(sheet, xlCell(1, row), "Applicable charges")
@@ -1619,9 +1625,10 @@ func (s *Service) HandleGenerateCSV() http.HandlerFunc {
 		}
 
 		// Stream XLSX response.
+		cust := strings.ReplaceAll(lane.CustomerName, " ", "_")
 		origin := strings.ReplaceAll(lane.OriginPort, " ", "_")
 		dest := strings.ReplaceAll(lane.Destination, " ", "_")
-		filename := fmt.Sprintf("quote-%s-%s-%s.xlsx", origin, dest, refID)
+		filename := fmt.Sprintf("quote-%s-%s-%s-%s.xlsx", cust, origin, dest, refID)
 
 		w.Header().Set("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 		w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
