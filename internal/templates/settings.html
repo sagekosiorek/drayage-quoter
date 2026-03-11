@@ -48,11 +48,7 @@ Estimated monthly volume: 40-60 containers</pre>
 
         <div class="form-actions">
             <button type="submit" class="primary">Save Template</button>
-            <span class="form-timestamp"
-                hx-ext="sse"
-                sse-connect="/settings/events"
-                sse-swap="saved"
-                hx-swap="innerHTML">
+            <span class="form-timestamp">
                 {{- if .Template.UpdatedAt }}Last saved: {{ .Template.UpdatedAt }}{{ end -}}
             </span>
         </div>

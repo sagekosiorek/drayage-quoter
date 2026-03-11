@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"gitlab.com/perenne/clients/schneider/drayage-quoter/internal/auth"
-	"gitlab.com/perenne/clients/schneider/drayage-quoter/internal/events"
 )
 
 const (
@@ -20,8 +19,7 @@ const (
 
 // Service handles user-scoped settings operations.
 type Service struct {
-	DB     *sql.DB
-	Broker *events.Broker
+	DB *sql.DB
 }
 
 // EmailTemplate holds a user's email template fields with fallback defaults.
@@ -93,45 +91,7 @@ func (s *Service) HandleSaveTemplate() http.HandlerFunc {
 			return
 		}
 
-		if s.Broker != nil {
-			s.Broker.Publish(
-				fmt.Sprintf("settings:email_template:%d", user.ID),
-				now.Format("Jan 2, 2006 3:04 PM"),
-			)
-		}
-
 		http.Redirect(w, r, "/settings", http.StatusSeeOther)
 	}
 }
 
-// HandleSettingsEvents streams SSE events for the current user's settings page.
-// GET /settings/events
-func (s *Service) HandleSettingsEvents() http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		user := auth.UserFromContext(r.Context())
-		topic := fmt.Sprintf("settings:email_template:%d", user.ID)
-
-		w.Header().Set("Content-Type", "text/event-stream")
-		w.Header().Set("Cache-Control", "no-cache")
-		w.Header().Set("Connection", "keep-alive")
-
-		flusher, ok := w.(http.Flusher)
-		if !ok {
-			http.Error(w, "Streaming not supported by this server", http.StatusInternalServerError)
-			return
-		}
-
-		ch := s.Broker.Subscribe(topic)
-		defer s.Broker.Unsubscribe(topic, ch)
-
-		for {
-			select {
-			case msg := <-ch:
-				fmt.Fprintf(w, "event: saved\ndata: Last saved: %s\n\n", msg)
-				flusher.Flush()
-			case <-r.Context().Done():
-				return
-			}
-		}
-	}
-}

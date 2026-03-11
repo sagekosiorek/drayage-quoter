@@ -9,13 +9,11 @@ import (
 	"time"
 
 	"gitlab.com/perenne/clients/schneider/drayage-quoter/internal/auth"
-	"gitlab.com/perenne/clients/schneider/drayage-quoter/internal/events"
 )
 
 // Service handles lane operations.
 type Service struct {
-	DB     *sql.DB
-	Broker *events.Broker
+	DB *sql.DB
 }
 
 // RateRequestSnippet holds the minimal rate request data shown on the lane detail page.
@@ -708,55 +706,37 @@ func (s *Service) HandleUpdate() http.HandlerFunc {
 	}
 }
 
-// HandleEvents streams lane status changes as Server-Sent Events.
-// Clients receive a named "status" event whose data is a ready-to-swap HTML fragment.
-// GET /lanes/{id}/events
-func (s *Service) HandleEvents() http.HandlerFunc {
+// HandleStatusBadge returns an HTML fragment with the current status badge for a lane.
+// Intended for HTMX polling: GET /lanes/{id}/status
+// For rates_requested lanes, the fragment re-declares the poll trigger so it continues after swap.
+// For all other statuses, the fragment is static — polling stops naturally.
+func (s *Service) HandleStatusBadge() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		_ = auth.UserFromContext(r.Context())
-
 		id, err := strconv.Atoi(r.PathValue("id"))
 		if err != nil || id <= 0 {
 			http.Error(w, "Not found", http.StatusNotFound)
 			return
 		}
-
-		var exists int
-		if err := s.DB.QueryRow("SELECT COUNT(*) FROM lanes WHERE id = ?", id).Scan(&exists); err != nil || exists == 0 {
-			http.Error(w, "Lane not found", http.StatusNotFound)
+		var status string
+		if err := s.DB.QueryRow("SELECT status FROM lanes WHERE id = ?", id).Scan(&status); err == sql.ErrNoRows {
+			http.Error(w, fmt.Sprintf("lane %d not found", id), http.StatusNotFound)
+			return
+		} else if err != nil {
+			http.Error(w, fmt.Sprintf("failed to fetch lane %d status: %v", id, err), http.StatusInternalServerError)
 			return
 		}
-
-		flusher, ok := w.(http.Flusher)
-		if !ok {
-			http.Error(w, "Streaming not supported by server", http.StatusInternalServerError)
-			return
-		}
-
-		w.Header().Set("Content-Type", "text/event-stream")
-		w.Header().Set("Cache-Control", "no-cache")
-		w.Header().Set("Connection", "keep-alive")
-		flusher.Flush()
-
-		topic := fmt.Sprintf("lane:%d", id)
-		ch := s.Broker.Subscribe(topic)
-		defer s.Broker.Unsubscribe(topic, ch)
-
-		for {
-			select {
-			case status, ok := <-ch:
-				if !ok {
-					return
-				}
-				label := statusLabel(status)
-				fmt.Fprintf(w, "event: status\ndata: <span class=\"status-badge status-%s\">%s</span>\n\n", status, label)
-				flusher.Flush()
-			case <-r.Context().Done():
-				return
-			}
+		label := statusLabel(status)
+		w.Header().Set("Content-Type", "text/html")
+		if status == "rates_requested" {
+			fmt.Fprintf(w, `<span class="status-badge status-%s" hx-get="/lanes/%d/status" hx-trigger="every 30s" hx-swap="outerHTML">%s</span>`,
+				status, id, label)
+		} else {
+			fmt.Fprintf(w, `<span class="status-badge status-%s">%s</span>`, status, label)
 		}
 	}
 }
+
+
 
 // nullableStr returns nil if s is empty, otherwise s — so empty form fields become NULL in SQLite.
 func nullableStr(s string) interface{} {

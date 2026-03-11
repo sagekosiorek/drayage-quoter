@@ -10,6 +10,7 @@
     <label for="customer_name">Customer Name</label>
     <input type="text" id="customer_name" name="customer_name"
            value="{{ .Lane.CustomerName }}" required autocomplete="off"
+           oninput="document.getElementById('customer_id').value=''"
            hx-get="/customers/search"
            hx-trigger="input changed delay:300ms"
            hx-target="#customer-suggestions"

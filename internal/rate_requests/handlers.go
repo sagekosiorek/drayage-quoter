@@ -639,6 +639,9 @@ func (s *Service) HandleCreate() http.HandlerFunc {
 
 		var threshold interface{}
 		if t, err := strconv.Atoi(thresholdStr); err == nil && t > 0 {
+			if n := len(vendorIDStrs); t > n {
+				t = n // clamp: threshold cannot exceed vendors blasted
+			}
 			threshold = t
 		}
 
@@ -1555,8 +1558,8 @@ func (s *Service) HandleGenerateCSV() http.HandlerFunc {
 
 		row := 1
 
-		// Origin / Destination / Direction metadata rows (column A label = orange).
-		f.SetCellValue(sheet, xlCell(1, row), "Origin:")
+		// Port / Destination / Direction metadata rows (column A label = orange).
+		f.SetCellValue(sheet, xlCell(1, row), "Port:")
 		f.SetCellValue(sheet, xlCell(2, row), lane.OriginPort)
 		f.SetCellStyle(sheet, xlCell(1, row), xlCell(1, row), orangeStyle)
 		row++
