@@ -573,13 +573,13 @@ func (s *Service) HandleNewForm(tmpl *template.Template) http.HandlerFunc {
 			return
 		}
 		if err != nil {
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			http.Error(w, "Load lane failed", http.StatusInternalServerError)
 			return
 		}
 
 		refID, err := generateReferenceID(s.DB)
 		if err != nil {
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			http.Error(w, "Generate reference ID failed", http.StatusInternalServerError)
 			return
 		}
 
@@ -630,7 +630,7 @@ func (s *Service) HandleCreate() http.HandlerFunc {
 		// Re-generate at save time to handle concurrent requests.
 		refID, err := generateReferenceID(s.DB)
 		if err != nil {
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			http.Error(w, "Generate reference ID failed", http.StatusInternalServerError)
 			return
 		}
 
@@ -656,7 +656,7 @@ func (s *Service) HandleCreate() http.HandlerFunc {
 			VALUES (?, ?, ?, ?, ?, ?)
 		`, laneID, refID, finalSubject, body, threshold, deadline)
 		if err != nil {
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			http.Error(w, "Insert rate request failed", http.StatusInternalServerError)
 			return
 		}
 
@@ -746,7 +746,7 @@ func (s *Service) HandleDetail(tmpl *template.Template) http.HandlerFunc {
 			return
 		}
 		if err != nil {
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			http.Error(w, "Load rate request failed", http.StatusInternalServerError)
 			return
 		}
 
@@ -779,14 +779,14 @@ func (s *Service) HandleComparison(tmpl *template.Template) http.HandlerFunc {
 		}
 		if err != nil {
 			log.Printf("HandleComparison: fetch rate request %d: %v", rrID, err)
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			http.Error(w, "Load rate request failed", http.StatusInternalServerError)
 			return
 		}
 
 		lane, err := s.fetchLane(rr.LaneID)
 		if err != nil {
 			log.Printf("HandleComparison: fetch lane %d: %v", rr.LaneID, err)
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			http.Error(w, "Load lane failed", http.StatusInternalServerError)
 			return
 		}
 
@@ -802,7 +802,7 @@ func (s *Service) HandleComparison(tmpl *template.Template) http.HandlerFunc {
 		`, rrID)
 		if err != nil {
 			log.Printf("HandleComparison: query items rr=%d: %v", rrID, err)
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			http.Error(w, "Load rate items failed", http.StatusInternalServerError)
 			return
 		}
 
@@ -819,7 +819,7 @@ func (s *Service) HandleComparison(tmpl *template.Template) http.HandlerFunc {
 			if err := itemRows.Scan(&vrID, &vName, &itemID, &ct, &amount, &unit, &manuallyEdited, &parsedBy); err != nil {
 				itemRows.Close()
 				log.Printf("HandleComparison: scan item row: %v", err)
-				http.Error(w, "Internal server error", http.StatusInternalServerError)
+				http.Error(w, "Scan rate item failed", http.StatusInternalServerError)
 				return
 			}
 			if _, ok := vendorMap[vrID]; !ok {
@@ -906,7 +906,7 @@ func (s *Service) HandleComparison(tmpl *template.Template) http.HandlerFunc {
 		lRows, err := s.DB.Query(`SELECT vendor_rate_id, rank FROM vendor_lineups WHERE lane_id = ?`, rr.LaneID)
 		if err != nil {
 			log.Printf("HandleComparison: query lineups lane=%d: %v", rr.LaneID, err)
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			http.Error(w, "Load lineups failed", http.StatusInternalServerError)
 			return
 		}
 		for lRows.Next() {
@@ -978,13 +978,13 @@ func (s *Service) HandleSaveLineup() http.HandlerFunc {
 
 		tx, err := s.DB.Begin()
 		if err != nil {
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			http.Error(w, "Begin transaction failed", http.StatusInternalServerError)
 			return
 		}
 		defer tx.Rollback()
 
 		if _, err := tx.Exec(`DELETE FROM vendor_lineups WHERE lane_id = ?`, laneID); err != nil {
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			http.Error(w, "Clear lineup failed", http.StatusInternalServerError)
 			return
 		}
 		for _, l := range selected {
@@ -992,7 +992,7 @@ func (s *Service) HandleSaveLineup() http.HandlerFunc {
 				`INSERT INTO vendor_lineups (lane_id, vendor_rate_id, rank) VALUES (?, ?, ?)`,
 				laneID, l.vrID, l.rank,
 			); err != nil {
-				http.Error(w, "Internal server error", http.StatusInternalServerError)
+				http.Error(w, "Insert lineup failed", http.StatusInternalServerError)
 				return
 			}
 		}
@@ -1003,7 +1003,7 @@ func (s *Service) HandleSaveLineup() http.HandlerFunc {
 			)
 		}
 		if err := tx.Commit(); err != nil {
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			http.Error(w, "Commit lineup failed", http.StatusInternalServerError)
 			return
 		}
 

@@ -231,7 +231,7 @@ func (s *Service) HandleSearch() http.HandlerFunc {
 			"%"+q+"%",
 		)
 		if err != nil {
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			http.Error(w, "Query vendors failed", http.StatusInternalServerError)
 			return
 		}
 		defer rows.Close()
@@ -292,7 +292,7 @@ func (s *Service) HandleList(tmpl *template.Template) http.HandlerFunc {
 
 		rows, err := s.DB.Query(query, args...)
 		if err != nil {
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			http.Error(w, "Query vendors failed", http.StatusInternalServerError)
 			return
 		}
 		defer rows.Close()
@@ -302,7 +302,7 @@ func (s *Service) HandleList(tmpl *template.Template) http.HandlerFunc {
 			var v VendorRow
 			var preferred int
 			if err := rows.Scan(&v.ID, &v.Name, &v.ContactCount, &v.Ports, &preferred); err != nil {
-				http.Error(w, "Internal server error", http.StatusInternalServerError)
+				http.Error(w, "Scan vendor row failed", http.StatusInternalServerError)
 				return
 			}
 			v.IsPreferred = preferred != 0
@@ -311,7 +311,7 @@ func (s *Service) HandleList(tmpl *template.Template) http.HandlerFunc {
 
 		ports, err := s.fetchPorts()
 		if err != nil {
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			http.Error(w, "Query ports failed", http.StatusInternalServerError)
 			return
 		}
 
@@ -331,7 +331,7 @@ func (s *Service) HandleNewForm(tmpl *template.Template) http.HandlerFunc {
 		user := auth.UserFromContext(r.Context())
 		ports, err := s.fetchPorts()
 		if err != nil {
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			http.Error(w, "Query ports failed", http.StatusInternalServerError)
 			return
 		}
 		tmpl.ExecuteTemplate(w, "layout.html", map[string]any{
@@ -362,12 +362,12 @@ func (s *Service) HandleCreate() http.HandlerFunc {
 			if err == sql.ErrNoRows {
 				res, err := s.DB.Exec(`INSERT INTO vendors (name) VALUES (?)`, name)
 				if err != nil {
-					http.Error(w, "Internal server error", http.StatusInternalServerError)
+					http.Error(w, "Insert vendor failed", http.StatusInternalServerError)
 					return
 				}
 				vendorID, _ = res.LastInsertId()
 			} else if err != nil {
-				http.Error(w, "Internal server error", http.StatusInternalServerError)
+				http.Error(w, "Lookup vendor failed", http.StatusInternalServerError)
 				return
 			}
 		}
@@ -391,7 +391,7 @@ func (s *Service) HandleDetail(tmpl *template.Template) http.HandlerFunc {
 			return
 		}
 		if err != nil {
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			http.Error(w, "Load vendor failed", http.StatusInternalServerError)
 			return
 		}
 		tmpl.ExecuteTemplate(w, "layout.html", map[string]any{
@@ -415,7 +415,7 @@ func (s *Service) HandleEditForm(tmpl *template.Template) http.HandlerFunc {
 			http.Error(w, "Not found", http.StatusNotFound)
 			return
 		} else if err != nil {
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			http.Error(w, "Load vendor failed", http.StatusInternalServerError)
 			return
 		}
 		tmpl.ExecuteTemplate(w, "layout.html", map[string]any{
@@ -444,7 +444,7 @@ func (s *Service) HandleUpdate() http.HandlerFunc {
 			name, time.Now().UTC().Format("2006-01-02 15:04:05"), id,
 		)
 		if err != nil {
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			http.Error(w, "Update vendor failed", http.StatusInternalServerError)
 			return
 		}
 		if n, _ := res.RowsAffected(); n == 0 {
@@ -464,7 +464,7 @@ func (s *Service) HandleDelete() http.HandlerFunc {
 			return
 		}
 		if _, err := s.DB.Exec(`DELETE FROM vendors WHERE id = ?`, id); err != nil {
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			http.Error(w, "Delete vendor failed", http.StatusInternalServerError)
 			return
 		}
 		http.Redirect(w, r, "/vendors", http.StatusSeeOther)
