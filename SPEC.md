@@ -542,7 +542,7 @@ Apply markups, preview, and export customer-facing CSV.
 - [x] 'Open Email Draft' should be primary class
 - [x] User should be able to lock the Customer Rate in percentage mode.
 - [x] CSV generation: lanes sectioned by colorful tables (same color) for visual distinction, with only populated rates added
-- [ ] Fix other user bugs
+- [x] Fix other user bugs
 - [ ] Ready for testing: deploy and clear the db of test data and upload all of your contacts all at once
 
 ### Milestone 7: Loose ends (Sprint 3)

@@ -37,9 +37,12 @@
             {{ .Lane.Destination }} → {{ .Lane.OriginPort }} {{ .Lane.OriginPortType }}
             {{- end -}}
         </h1>
-        <span hx-ext="sse" sse-connect="/lanes/{{ .Lane.ID }}/events"
-              class="status-badge status-{{ .Lane.Status }}"
-              sse-swap="status" hx-swap="outerHTML">{{ .Lane.StatusLabel }}</span>
+        {{ if eq .Lane.Status "rates_requested" }}
+        <span class="status-badge status-{{ .Lane.Status }}"
+              hx-get="/lanes/{{ .Lane.ID }}/status" hx-trigger="every 30s" hx-swap="outerHTML">{{ .Lane.StatusLabel }}</span>
+        {{ else }}
+        <span class="status-badge status-{{ .Lane.Status }}">{{ .Lane.StatusLabel }}</span>
+        {{ end }}
     </div>
 </div>
 

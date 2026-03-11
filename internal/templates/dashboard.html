@@ -38,7 +38,6 @@
             <th>Customer</th>
             <th>Port</th>
             <th>Destination</th>
-            <th>Container</th>
             <th>Direction</th>
             <th>Status</th>
             <th>Owner</th>
@@ -52,11 +51,9 @@
             <td><a href="/lanes/{{ .ID }}">{{ .CustomerName }}</a></td>
             <td>{{ .OriginPort }}</td>
             <td>{{ .Destination }}</td>
-            <td>{{ .ContainerSize }}</td>
             <td>{{ .Direction }}</td>
-            <td>{{ if eq .Status "rates_requested" }}<span hx-ext="sse" sse-connect="/lanes/{{ .ID }}/events"
-                      class="status-badge status-{{ .Status }}"
-                      sse-swap="status" hx-swap="outerHTML">{{ .StatusLabel }}</span>{{ else }}<span class="status-badge status-{{ .Status }}">{{ .StatusLabel }}</span>{{ end }}</td>
+            <td>{{ if eq .Status "rates_requested" }}<span class="status-badge status-{{ .Status }}"
+                      hx-get="/lanes/{{ .ID }}/status" hx-trigger="every 30s" hx-swap="outerHTML">{{ .StatusLabel }}</span>{{ else }}<span class="status-badge status-{{ .Status }}">{{ .StatusLabel }}</span>{{ end }}</td>
             <td>{{ .OwnerName }}</td>
             <td>{{ .CreatedAt }}</td>
         </tr>

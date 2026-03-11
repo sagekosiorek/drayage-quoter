@@ -12,14 +12,12 @@ import (
 	"time"
 
 	"gitlab.com/perenne/clients/schneider/drayage-quoter/internal/auth"
-	"gitlab.com/perenne/clients/schneider/drayage-quoter/internal/events"
 )
 
 // Service orchestrates rate ingestion: DB access, optional LLM correction, and notifications.
 type Service struct {
 	DB     *sql.DB
 	LLM    LLMCorrector                         // nil → NoopCorrector used in Parse
-	Broker *events.Broker                       // nil → no SSE publish
 	Notify func(to, subject, body string) error // nil → skip email notifications
 	// BaseURL is used to build comparison page links in notification emails.
 	BaseURL string
@@ -360,7 +358,7 @@ func (s *Service) HandleIngestConfirm() http.HandlerFunc {
 
 		tx.Exec(`UPDATE rate_request_vendors SET responded = 1 WHERE rate_request_id = ? AND vendor_id = ?`, rrID, vendorID)
 		tx.Exec(`UPDATE rate_requests SET responses_received = responses_received + 1 WHERE id = ?`, rrID)
-		statusRes, _ := tx.Exec(`
+		tx.Exec(`
 			UPDATE lanes SET status = 'rates_received', updated_at = ?
 			WHERE id = (SELECT lane_id FROM rate_requests WHERE id = ?)
 			  AND status = 'rates_requested'
@@ -371,12 +369,6 @@ func (s *Service) HandleIngestConfirm() http.HandlerFunc {
 			return
 		}
 
-		if ra, _ := statusRes.RowsAffected(); ra > 0 && s.Broker != nil {
-			var laneID int
-			if s.DB.QueryRow(`SELECT lane_id FROM rate_requests WHERE id = ?`, rrID).Scan(&laneID) == nil {
-				s.Broker.Publish(fmt.Sprintf("lane:%d", laneID), "rates_received")
-			}
-		}
 		s.checkAndNotify(rrID)
 
 		http.Redirect(w, r, fmt.Sprintf("/rate-requests/%d", rrID), http.StatusSeeOther)
@@ -437,7 +429,7 @@ func (s *Service) saveVendorRate(rrID, vendorID int, rawEmail, parsedBy string, 
 
 	tx.Exec(`UPDATE rate_request_vendors SET responded = 1 WHERE rate_request_id = ? AND vendor_id = ?`, rrID, vendorID)
 	tx.Exec(`UPDATE rate_requests SET responses_received = responses_received + 1 WHERE id = ?`, rrID)
-	statusRes, _ := tx.Exec(`
+	tx.Exec(`
 		UPDATE lanes SET status = 'rates_received', updated_at = ?
 		WHERE id = (SELECT lane_id FROM rate_requests WHERE id = ?)
 		  AND status = 'rates_requested'
@@ -447,12 +439,6 @@ func (s *Service) saveVendorRate(rrID, vendorID int, rawEmail, parsedBy string, 
 		return err
 	}
 
-	if ra, _ := statusRes.RowsAffected(); ra > 0 && s.Broker != nil {
-		var laneID int
-		if s.DB.QueryRow(`SELECT lane_id FROM rate_requests WHERE id = ?`, rrID).Scan(&laneID) == nil {
-			s.Broker.Publish(fmt.Sprintf("lane:%d", laneID), "rates_received")
-		}
-	}
 	s.checkAndNotify(rrID)
 	return nil
 }
