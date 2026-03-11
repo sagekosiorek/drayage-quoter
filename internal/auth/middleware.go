@@ -57,7 +57,7 @@ func (s *Service) RequireAuth(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 		if err != nil {
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			http.Error(w, "Session lookup failed", http.StatusInternalServerError)
 			return
 		}
 

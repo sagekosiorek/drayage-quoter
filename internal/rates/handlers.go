@@ -206,13 +206,13 @@ func (s *Service) HandleIngestForm(tmpl *template.Template) http.HandlerFunc {
 			return
 		}
 		if err != nil {
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			http.Error(w, "Load rate request failed", http.StatusInternalServerError)
 			return
 		}
 
 		vendors, err := s.fetchVendorsOnRR(rrID)
 		if err != nil {
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			http.Error(w, "Load vendors failed", http.StatusInternalServerError)
 			return
 		}
 
@@ -242,7 +242,7 @@ func (s *Service) HandleIngestSubmit(tmpl *template.Template) http.HandlerFunc {
 			return
 		}
 		if err := r.ParseForm(); err != nil {
-			http.Error(w, "Bad request", http.StatusBadRequest)
+			http.Error(w, "Form parse failed", http.StatusBadRequest)
 			return
 		}
 
@@ -259,7 +259,7 @@ func (s *Service) HandleIngestSubmit(tmpl *template.Template) http.HandlerFunc {
 
 		result, err := s.Parse(rawEmail)
 		if err != nil {
-			http.Error(w, "Parse error", http.StatusInternalServerError)
+			http.Error(w, "Email parse failed", http.StatusInternalServerError)
 			return
 		}
 
@@ -329,7 +329,7 @@ func (s *Service) HandleIngestConfirm() http.HandlerFunc {
 
 		tx, err := s.DB.Begin()
 		if err != nil {
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			http.Error(w, "Begin transaction failed", http.StatusInternalServerError)
 			return
 		}
 		defer tx.Rollback()
@@ -339,7 +339,7 @@ func (s *Service) HandleIngestConfirm() http.HandlerFunc {
 			rrID, vendorID, rawEmail, parsedBy,
 		)
 		if err != nil {
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			http.Error(w, "Insert vendor rate failed", http.StatusInternalServerError)
 			return
 		}
 		vrID, _ := res.LastInsertId()
@@ -351,7 +351,7 @@ func (s *Service) HandleIngestConfirm() http.HandlerFunc {
 				vrID, item.ChargeType, item.Amount, item.Unit, manuallyEdited,
 			)
 			if err != nil {
-				http.Error(w, "Internal server error", http.StatusInternalServerError)
+				http.Error(w, "Insert rate items failed", http.StatusInternalServerError)
 				return
 			}
 		}
@@ -365,7 +365,7 @@ func (s *Service) HandleIngestConfirm() http.HandlerFunc {
 		`, time.Now().UTC().Format("2006-01-02 15:04:05"), rrID)
 
 		if err := tx.Commit(); err != nil {
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			http.Error(w, "Commit rate failed", http.StatusInternalServerError)
 			return
 		}
 
@@ -687,7 +687,7 @@ func (s *Service) HandleViewRateItem() http.HandlerFunc {
 			return
 		}
 		if err != nil {
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			http.Error(w, "Load rate item failed", http.StatusInternalServerError)
 			return
 		}
 		cellTmpl.Execute(w, v)
@@ -732,7 +732,7 @@ func (s *Service) HandleEditRateItem() http.HandlerFunc {
 			return
 		}
 		if err != nil {
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			http.Error(w, "Load rate item failed", http.StatusInternalServerError)
 			return
 		}
 		tmpl.Execute(w, v)
@@ -761,7 +761,7 @@ func (s *Service) HandleUpdateRateItem() http.HandlerFunc {
 			`UPDATE vendor_rate_items SET amount = ?, manually_edited = 1 WHERE id = ?`,
 			amount, id,
 		); err != nil {
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			http.Error(w, "Update rate item failed", http.StatusInternalServerError)
 			return
 		}
 		// Delegate to HandleViewRateItem to render the updated display cell.
@@ -789,7 +789,7 @@ func (s *Service) HandleViewOriginalEmail() http.HandlerFunc {
 			return
 		}
 		if err != nil {
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			http.Error(w, "Load vendor email failed", http.StatusInternalServerError)
 			return
 		}
 

@@ -268,7 +268,7 @@ func (s *Service) HandleDashboard(tmpl *template.Template) http.HandlerFunc {
 
 		rows, err := s.DB.Query(query, args...)
 		if err != nil {
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			http.Error(w, "Query lanes failed", http.StatusInternalServerError)
 			return
 		}
 		defer rows.Close()
@@ -279,7 +279,7 @@ func (s *Service) HandleDashboard(tmpl *template.Template) http.HandlerFunc {
 			var createdStr string
 			if err := rows.Scan(&l.ID, &l.CustomerName, &l.OriginPort, &l.Destination,
 				&l.ContainerSize, &l.Direction, &l.Status, &l.OwnerName, &createdStr); err != nil {
-				http.Error(w, "Internal server error", http.StatusInternalServerError)
+				http.Error(w, "Scan lane row failed", http.StatusInternalServerError)
 				return
 			}
 			if t, err := time.Parse("2006-01-02 15:04:05", createdStr); err == nil {
@@ -299,12 +299,12 @@ func (s *Service) HandleDashboard(tmpl *template.Template) http.HandlerFunc {
 
 		ports, err := s.fetchPorts()
 		if err != nil {
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			http.Error(w, "Query ports failed", http.StatusInternalServerError)
 			return
 		}
 		users, err := s.fetchUsers()
 		if err != nil {
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			http.Error(w, "Query users failed", http.StatusInternalServerError)
 			return
 		}
 
@@ -327,7 +327,7 @@ func (s *Service) HandleNewForm(tmpl *template.Template) http.HandlerFunc {
 		user := auth.UserFromContext(r.Context())
 		ports, err := s.fetchPorts()
 		if err != nil {
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			http.Error(w, "Query ports failed", http.StatusInternalServerError)
 			return
 		}
 		tmpl.ExecuteTemplate(w, "layout.html", map[string]any{
@@ -387,13 +387,13 @@ func (s *Service) HandleCreate() http.HandlerFunc {
 					customerName,
 				)
 				if err != nil {
-					http.Error(w, "Internal server error", http.StatusInternalServerError)
+					http.Error(w, "Insert customer failed", http.StatusInternalServerError)
 					return
 				}
 				id, _ := res.LastInsertId()
 				customerID = int(id)
 			} else if err != nil {
-				http.Error(w, "Internal server error", http.StatusInternalServerError)
+				http.Error(w, "Lookup customer failed", http.StatusInternalServerError)
 				return
 			}
 		}
@@ -433,7 +433,7 @@ func (s *Service) HandleCreate() http.HandlerFunc {
 			nullableStr(notes), "draft",
 		)
 		if err != nil {
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			http.Error(w, "Insert lane failed", http.StatusInternalServerError)
 			return
 		}
 
@@ -463,7 +463,7 @@ func (s *Service) HandleAdvanceStatus() http.HandlerFunc {
 			http.Error(w, "Not found", http.StatusNotFound)
 			return
 		} else if err != nil {
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			http.Error(w, "Query lane status failed", http.StatusInternalServerError)
 			return
 		}
 
@@ -483,7 +483,7 @@ func (s *Service) HandleAdvanceStatus() http.HandlerFunc {
 			to, time.Now().UTC().Format("2006-01-02 15:04:05"), id,
 		)
 		if err != nil {
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			http.Error(w, "Update lane status failed", http.StatusInternalServerError)
 			return
 		}
 
@@ -508,7 +508,7 @@ func (s *Service) HandleDetail(tmpl *template.Template) http.HandlerFunc {
 			return
 		}
 		if err != nil {
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			http.Error(w, "Load lane failed", http.StatusInternalServerError)
 			return
 		}
 
@@ -558,7 +558,7 @@ func (s *Service) HandleEditForm(tmpl *template.Template) http.HandlerFunc {
 			return
 		}
 		if err != nil {
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			http.Error(w, "Load lane failed", http.StatusInternalServerError)
 			return
 		}
 
@@ -570,7 +570,7 @@ func (s *Service) HandleEditForm(tmpl *template.Template) http.HandlerFunc {
 
 		ports, err := s.fetchPorts()
 		if err != nil {
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			http.Error(w, "Query ports failed", http.StatusInternalServerError)
 			return
 		}
 
@@ -598,7 +598,7 @@ func (s *Service) HandleUpdate() http.HandlerFunc {
 			http.Error(w, "Not found", http.StatusNotFound)
 			return
 		} else if err != nil {
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			http.Error(w, "Query lane owner failed", http.StatusInternalServerError)
 			return
 		}
 		if ownerID != user.ID {
@@ -651,13 +651,13 @@ func (s *Service) HandleUpdate() http.HandlerFunc {
 					customerName,
 				)
 				if err != nil {
-					http.Error(w, "Internal server error", http.StatusInternalServerError)
+					http.Error(w, "Insert customer failed", http.StatusInternalServerError)
 					return
 				}
 				id64, _ := res.LastInsertId()
 				customerID = int(id64)
 			} else if err != nil {
-				http.Error(w, "Internal server error", http.StatusInternalServerError)
+				http.Error(w, "Lookup customer failed", http.StatusInternalServerError)
 				return
 			}
 		}
@@ -698,7 +698,7 @@ func (s *Service) HandleUpdate() http.HandlerFunc {
 			id,
 		)
 		if err != nil {
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			http.Error(w, "Update lane failed", http.StatusInternalServerError)
 			return
 		}
 

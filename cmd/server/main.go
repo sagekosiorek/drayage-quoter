@@ -175,7 +175,7 @@ func main() {
 			"%"+q+"%",
 		)
 		if err != nil {
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			http.Error(w, "Query customers failed", http.StatusInternalServerError)
 			return
 		}
 		defer rows.Close()
@@ -187,7 +187,7 @@ func main() {
 		for rows.Next() {
 			var s suggestion
 			if err := rows.Scan(&s.ID, &s.Name); err != nil {
-				http.Error(w, "Internal server error", http.StatusInternalServerError)
+				http.Error(w, "Scan customer row failed", http.StatusInternalServerError)
 				return
 			}
 			matches = append(matches, s)

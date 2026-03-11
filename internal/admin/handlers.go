@@ -42,7 +42,7 @@ func (s *Service) HandleUsers(tmpl *template.Template) http.HandlerFunc {
 			ORDER BY created_at DESC
 		`)
 		if err != nil {
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			http.Error(w, "Query users failed", http.StatusInternalServerError)
 			return
 		}
 		defer rows.Close()
@@ -52,7 +52,7 @@ func (s *Service) HandleUsers(tmpl *template.Template) http.HandlerFunc {
 			var u UserRow
 			var createdAtStr string
 			if err := rows.Scan(&u.ID, &u.Name, &u.Email, &u.IsAdmin, &createdAtStr); err != nil {
-				http.Error(w, "Internal server error", http.StatusInternalServerError)
+				http.Error(w, "Scan user row failed", http.StatusInternalServerError)
 				return
 			}
 			if t, err := time.Parse("2006-01-02 15:04:05", createdAtStr); err == nil {
@@ -84,7 +84,7 @@ func (s *Service) HandleAddUser() http.HandlerFunc {
 			name, email,
 		)
 		if err != nil {
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			http.Error(w, "Insert user failed", http.StatusInternalServerError)
 			return
 		}
 		http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
@@ -105,7 +105,7 @@ func (s *Service) HandleDeleteUser() http.HandlerFunc {
 			return
 		}
 		if _, err = s.DB.Exec("DELETE FROM users WHERE id = ?", id); err != nil {
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			http.Error(w, "Delete user failed", http.StatusInternalServerError)
 			return
 		}
 		http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
@@ -118,7 +118,7 @@ func (s *Service) HandlePorts(tmpl *template.Template) http.HandlerFunc {
 			 currentUser := auth.UserFromContext(r.Context())
 			 rows, err := s.DB.Query(`SELECT id, name, type FROM ports ORDER BY type, name`)
 			 if err != nil {
-					 http.Error(w, "Internal server error", http.StatusInternalServerError)
+					 http.Error(w, "Query ports failed", http.StatusInternalServerError)
 					 return
 			 }
 			 defer rows.Close()
@@ -126,7 +126,7 @@ func (s *Service) HandlePorts(tmpl *template.Template) http.HandlerFunc {
 			 for rows.Next() {
 					 var p PortRow
 					 if err := rows.Scan(&p.ID, &p.Name, &p.Type); err != nil {
-							 http.Error(w, "Internal server error", http.StatusInternalServerError)
+							 http.Error(w, "Scan port row failed", http.StatusInternalServerError)
 							 return
 					 }
 					 ports = append(ports, p)
@@ -153,7 +153,7 @@ func (s *Service) HandleAddPort() http.HandlerFunc {
 			 }
 			 _, err := s.DB.Exec("INSERT INTO ports (name, type) VALUES (?, ?)", name, portType)
 			 if err != nil {
-					 http.Error(w, "Internal server error", http.StatusInternalServerError)
+					 http.Error(w, "Insert port failed", http.StatusInternalServerError)
 					 return
 			 }
 			 http.Redirect(w, r, "/admin/ports", http.StatusSeeOther)
@@ -170,7 +170,7 @@ func (s *Service) HandleDeletePort() http.HandlerFunc {
 			 }
 			 if _, err = s.DB.Exec("DELETE FROM ports WHERE id = ?", id);
 			 err != nil {
-					 http.Error(w, "Internal server error", http.StatusInternalServerError)
+					 http.Error(w, "Delete port failed", http.StatusInternalServerError)
 					 return
 			 }
 			 http.Redirect(w, r, "/admin/ports", http.StatusSeeOther)
