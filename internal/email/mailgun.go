@@ -15,10 +15,10 @@ type Sender struct {
 	From   string // From address, e.g. "Drayage Quoter <noreply@mail.example.com>"
 }
 
-// SendMagicLink implements auth.EmailSender: sends a passwordless login link.
-func (s *Sender) SendMagicLink(to, link string) error {
-	subject := "Your Drayage Quoter login link"
-	body := fmt.Sprintf("Click the link below to log in. It expires in 15 minutes.\n\n%s\n\nIf you did not request this, you can ignore this email.", link)
+// SendLoginCode implements auth.EmailSender: sends a 6-digit login code.
+func (s *Sender) SendLoginCode(to, code string) error {
+	subject := "Your Drayage Quoter login code"
+	body := fmt.Sprintf("Your login code is: %s\n\nIt expires in 15 minutes. If you did not request this, you can ignore this email.", code)
 	return s.Send(to, subject, body)
 }
 

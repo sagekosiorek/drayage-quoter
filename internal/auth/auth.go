@@ -3,6 +3,7 @@ package auth
 import (
 	"crypto/rand"
 	"database/sql"
+	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"log"
@@ -12,7 +13,6 @@ import (
 const (
 	TokenExpiry   = 15 * time.Minute
 	SessionExpiry = 30 * 24 * time.Hour
-	TokenBytes    = 32
 )
 
 // User represents an authenticated user.
@@ -25,14 +25,14 @@ type User struct {
 
 // EmailSender abstracts email delivery.
 type EmailSender interface {
-	SendMagicLink(to string, link string) error
+	SendLoginCode(to string, code string) error
 }
 
-// LogEmailSender prints magic links to stdout for development.
+// LogEmailSender prints login codes to stdout for development.
 type LogEmailSender struct{}
 
-func (s LogEmailSender) SendMagicLink(to string, link string) error {
-	log.Printf("MAGIC LINK for %s: %s", to, link)
+func (s LogEmailSender) SendLoginCode(to string, code string) error {
+	log.Printf("LOGIN CODE for %s: %s", to, code)
 	return nil
 }
 
@@ -43,18 +43,27 @@ type Service struct {
 	BaseURL string
 }
 
-// GenerateToken creates a cryptographically random hex token.
-func GenerateToken() (string, error) {
-	b := make([]byte, TokenBytes)
+// generateSessionToken creates a cryptographically random 32-byte hex session token.
+func generateSessionToken() (string, error) {
+	b := make([]byte, 32)
 	if _, err := rand.Read(b); err != nil {
-		return "", fmt.Errorf("generate token: %w", err)
+		return "", fmt.Errorf("generate session token: %w", err)
 	}
 	return hex.EncodeToString(b), nil
 }
 
-// CreateMagicLink generates a magic link token for the given email.
+// GenerateCode creates a cryptographically random 6-digit numeric code.
+func GenerateCode() (string, error) {
+	var n uint32
+	if err := binary.Read(rand.Reader, binary.BigEndian, &n); err != nil {
+		return "", fmt.Errorf("generate code: %w", err)
+	}
+	return fmt.Sprintf("%06d", n%1_000_000), nil
+}
+
+// CreateLoginCode generates a 6-digit code for the given email and sends it.
 // Returns nil even for unknown emails to prevent enumeration.
-func (s *Service) CreateMagicLink(email string) error {
+func (s *Service) CreateLoginCode(email string) error {
 	var userID int
 	err := s.DB.QueryRow("SELECT id FROM users WHERE email = ?", email).Scan(&userID)
 	if err == sql.ErrNoRows {
@@ -64,7 +73,7 @@ func (s *Service) CreateMagicLink(email string) error {
 		return fmt.Errorf("lookup user: %w", err)
 	}
 
-	token, err := GenerateToken()
+	code, err := GenerateCode()
 	if err != nil {
 		return err
 	}
@@ -72,26 +81,25 @@ func (s *Service) CreateMagicLink(email string) error {
 	expiresAt := time.Now().UTC().Add(TokenExpiry)
 	_, err = s.DB.Exec(
 		"INSERT INTO auth_tokens (user_id, token, expires_at) VALUES (?, ?, ?)",
-		userID, token, expiresAt,
+		userID, code, expiresAt,
 	)
 	if err != nil {
-		return fmt.Errorf("store token: %w", err)
+		return fmt.Errorf("store login code: %w", err)
 	}
 
-	link := fmt.Sprintf("%s/auth/verify?token=%s", s.BaseURL, token)
-	return s.Email.SendMagicLink(email, link)
+	return s.Email.SendLoginCode(email, code)
 }
 
-// VerifyToken validates a magic link token, marks it used, and creates a session.
+// VerifyCode validates a 6-digit login code, marks it used, and creates a session.
 // Returns the authenticated user and a session token.
-func (s *Service) VerifyToken(token string) (*User, string, error) {
+func (s *Service) VerifyCode(code string) (*User, string, error) {
 	var tokenID, userID int
 	err := s.DB.QueryRow(`
 		SELECT id, user_id FROM auth_tokens
 		WHERE token = ? AND used_at IS NULL AND expires_at > CURRENT_TIMESTAMP
-	`, token).Scan(&tokenID, &userID)
+	`, code).Scan(&tokenID, &userID)
 	if err == sql.ErrNoRows {
-		return nil, "", fmt.Errorf("invalid or expired token")
+		return nil, "", fmt.Errorf("invalid or expired code")
 	}
 	if err != nil {
 		return nil, "", fmt.Errorf("lookup token: %w", err)
@@ -107,7 +115,7 @@ func (s *Service) VerifyToken(token string) (*User, string, error) {
 		return nil, "", fmt.Errorf("lookup user: %w", err)
 	}
 
-	sessionToken, err := GenerateToken()
+	sessionToken, err := generateSessionToken()
 	if err != nil {
 		return nil, "", err
 	}

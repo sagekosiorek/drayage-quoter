@@ -1,0 +1,12 @@
+{{ define "content" }}
+<h1>Enter your login code</h1>
+<p>We sent a 6-digit code to <strong>{{ .Email }}</strong>. It expires in 15 minutes.</p>
+<form method="POST" action="/login/verify">
+  <label for="code">Login code</label>
+  <input id="code" name="code" type="text" inputmode="numeric"
+         pattern="\d{6}" maxlength="6" autocomplete="one-time-code"
+         placeholder="000000" autofocus required>
+  <button type="submit">Sign in</button>
+</form>
+<p><a href="/login">Try a different email</a></p>
+{{ end }}
