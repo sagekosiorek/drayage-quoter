@@ -52,6 +52,36 @@ func resetAll(db *sql.DB) error {
 	return nil
 }
 
+// wipeAll deletes every row from all user-facing tables in FK-safe order,
+// preserving only ports (reference data) and _migrations (schema tracking).
+// After a wipe the server can be started fresh to create a new admin user.
+func wipeAll(db *sql.DB) error {
+	tables := []string{
+		"markup_items", "markups",
+		"quote_lanes", "quotes",
+		"vendor_lineups",
+		"orphan_emails",
+		"vendor_rate_items", "vendor_rates",
+		"rate_request_vendors", "rate_requests",
+		"vendor_preferences", "vendor_notes", "vendor_contacts", "vendor_ports", "vendors",
+		"lanes", "customers",
+		"email_templates",
+		"sessions", "auth_tokens", "users",
+	}
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	for _, t := range tables {
+		if _, err := tx.Exec("DELETE FROM " + t); err != nil {
+			tx.Rollback()
+			return fmt.Errorf("delete %s: %w", t, err)
+		}
+		log.Printf("  cleared %s", t)
+	}
+	return tx.Commit()
+}
+
 // ── ports ────────────────────────────────────────────────────────────────────
 
 func mustLoadPorts(db *sql.DB) portMap {

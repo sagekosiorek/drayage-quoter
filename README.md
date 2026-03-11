@@ -63,6 +63,7 @@ There's a separate `/cmd/seed` binary that can be used to inject dummy data into
 ```
 go run ./cmd/seed # seeds if the DB is empty, skips otherwise
 go run ./cmd/seed --reset # wipes all non-port/user data and re-seeds
+go run ./cmd/seed --wipe # deletes all data leaving the instance empty
 go run ./cmd/seed --db <path> # targets a specific DB file
 ```
 

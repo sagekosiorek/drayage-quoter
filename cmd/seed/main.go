@@ -1,9 +1,11 @@
 // cmd/seed populates the database with realistic demo data covering the full
 // M3 workflow. Safe to run multiple times — skips if data already exists.
 // Use --reset to wipe and re-seed from scratch.
+// Use --wipe to delete all data without reseeding (produces a blank-slate DB).
 //
 //	go run ./cmd/seed
 //	go run ./cmd/seed --reset
+//	go run ./cmd/seed --wipe
 //	go run ./cmd/seed --db /data/drayage.db
 package main
 
@@ -17,6 +19,7 @@ import (
 
 func main() {
 	reset := flag.Bool("reset", false, "wipe all non-port/user data and re-seed")
+	wipe  := flag.Bool("wipe", false, "delete all data (including users/sessions) without reseeding")
 	dbPath := flag.String("db", "", "path to SQLite database (defaults to $DB_PATH or ./data/drayage.db)")
 	flag.Parse()
 
@@ -36,6 +39,15 @@ func main() {
 
 	if err := db.Migrate(database); err != nil {
 		log.Fatalf("migrate: %v", err)
+	}
+
+	if *wipe {
+		log.Println("→ wiping all data...")
+		if err := wipeAll(database); err != nil {
+			log.Fatalf("wipe: %v", err)
+		}
+		log.Println("✓ wipe complete")
+		return
 	}
 
 	if *reset {
