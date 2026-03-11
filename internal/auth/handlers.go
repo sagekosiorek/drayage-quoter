@@ -15,8 +15,9 @@ func (s *Service) HandleLoginPage(tmpl *template.Template) http.HandlerFunc {
 	}
 }
 
-// HandleLoginSubmit processes the login form and shows the confirmation page.
-func (s *Service) HandleLoginSubmit(tmpl *template.Template) http.HandlerFunc {
+// HandleLoginSubmit processes the login form, sends a 6-digit code, and
+// redirects to the code-entry page.
+func (s *Service) HandleLoginSubmit() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		email := r.FormValue("email")
 		if email == "" {
@@ -24,28 +25,36 @@ func (s *Service) HandleLoginSubmit(tmpl *template.Template) http.HandlerFunc {
 			return
 		}
 
-		if err := s.CreateMagicLink(email); err != nil {
-			log.Printf("create magic link: %v", err)
+		if err := s.CreateLoginCode(email); err != nil {
+			log.Printf("create login code: %v", err)
 		}
 
+		http.Redirect(w, r, "/login/verify?email="+email, http.StatusSeeOther)
+	}
+}
+
+// HandleCodePage renders the 6-digit code entry form.
+func (s *Service) HandleCodePage(tmpl *template.Template) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		email := r.URL.Query().Get("email")
 		if err := tmpl.ExecuteTemplate(w, "layout.html", map[string]string{"Email": email}); err != nil {
-			log.Printf("render login sent page: %v", err)
+			log.Printf("render code entry page: %v", err)
 		}
 	}
 }
 
-// HandleVerify validates a magic link token and creates a session.
-func (s *Service) HandleVerify() http.HandlerFunc {
+// HandleVerifyCode validates the submitted 6-digit code and creates a session.
+func (s *Service) HandleVerifyCode() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		token := r.URL.Query().Get("token")
-		if token == "" {
-			http.Error(w, "Missing token", http.StatusBadRequest)
+		code := r.FormValue("code")
+		if code == "" {
+			http.Error(w, "Login code is required", http.StatusBadRequest)
 			return
 		}
 
-		_, sessionToken, err := s.VerifyToken(token)
+		_, sessionToken, err := s.VerifyCode(code)
 		if err != nil {
-			http.Error(w, "Invalid or expired link. Please request a new one.", http.StatusUnauthorized)
+			http.Error(w, "Invalid or expired code. Please request a new one.", http.StatusUnauthorized)
 			return
 		}
 

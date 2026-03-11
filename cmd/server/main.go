@@ -114,7 +114,7 @@ func main() {
 
 	// Parse templates
 	loginTmpl := templates.MustParse("layout.html", "login.html")
-	loginSentTmpl := templates.MustParse("layout.html", "login_sent.html")
+	loginVerifyTmpl := templates.MustParse("layout.html", "login_verify.html")
 	dashboardTmpl := templates.MustParse("layout.html", "dashboard.html")
 	laneNewTmpl := templates.MustParse("layout.html", "lane_new.html")
 	laneDetailTmpl := templates.MustParse("layout.html", "lane_detail.html")
@@ -147,8 +147,9 @@ func main() {
 
 	// Auth routes (unauthenticated)
 	mux.HandleFunc("GET /login", authService.HandleLoginPage(loginTmpl))
-	mux.HandleFunc("POST /login", authService.HandleLoginSubmit(loginSentTmpl))
-	mux.HandleFunc("GET /auth/verify", authService.HandleVerify())
+	mux.HandleFunc("POST /login", authService.HandleLoginSubmit())
+	mux.HandleFunc("GET /login/verify", authService.HandleCodePage(loginVerifyTmpl))
+	mux.HandleFunc("POST /login/verify", authService.HandleVerifyCode())
 	mux.HandleFunc("POST /logout", authService.HandleLogout())
 
 	// Mailgun inbound webhook (unauthenticated; HMAC-verified inside handler)
