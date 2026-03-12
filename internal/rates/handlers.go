@@ -673,7 +673,7 @@ func (s *Service) computeTotalAvg(rrID int) string {
 // GET /vendor-rate-items/{id}
 func (s *Service) HandleViewRateItem() http.HandlerFunc {
 	cellTmpl := template.Must(template.New("cell").Parse(
-		`<td class="{{.CSSClass}}" hx-get="/vendor-rate-items/{{.ID}}/edit" hx-trigger="click" hx-target="this" hx-swap="outerHTML" style="text-align:center;cursor:pointer" title="Click to edit">{{.Display}}</td>`,
+		`<td class="cell-center-click {{.CSSClass}}" hx-get="/vendor-rate-items/{{.ID}}/edit" hx-trigger="click" hx-target="this" hx-swap="outerHTML" title="Click to edit">{{.Display}}</td>`,
 	))
 	return func(w http.ResponseWriter, r *http.Request) {
 		id, err := strconv.Atoi(r.PathValue("id"))
@@ -695,16 +695,16 @@ func (s *Service) HandleViewRateItem() http.HandlerFunc {
 		// OOB: refresh the average cell for this charge type row.
 		avg := s.computeChargeTypeAvg(v.RateRequestID, v.ChargeType)
 		fmt.Fprintf(w,
-			`<td id="avg-%s" hx-swap-oob="true" style="text-align:center;background:#f9fafb;font-style:italic;color:#555;">%s</td>`,
+			`<td id="avg-%s" hx-swap-oob="true" class="cell-avg">%s</td>`,
 			v.ChargeType, avg)
 
 		// OOB: refresh the vendor's total cell and the overall average total when linehaul or fuel changes.
 		if v.ChargeType == "linehaul" || v.ChargeType == "fuel" {
 			fmt.Fprintf(w,
-				`<td id="total-%d" hx-swap-oob="true" style="text-align:center;font-weight:700;">%s</td>`,
+				`<td id="total-%d" hx-swap-oob="true" class="cell-total">%s</td>`,
 				v.VendorRateID, s.computeVendorTotal(v.VendorRateID))
 			fmt.Fprintf(w,
-				`<td id="avg-total" hx-swap-oob="true" style="text-align:center;background:#f9fafb;font-style:italic;">%s</td>`,
+				`<td id="avg-total" hx-swap-oob="true" class="cell-avg-total">%s</td>`,
 				s.computeTotalAvg(v.RateRequestID))
 		}
 	}
@@ -714,8 +714,8 @@ func (s *Service) HandleViewRateItem() http.HandlerFunc {
 // GET /vendor-rate-items/{id}/edit
 func (s *Service) HandleEditRateItem() http.HandlerFunc {
 	tmpl := template.Must(template.New("celledit").Parse(`<td class="cell-edit-form">
-<form hx-post="/vendor-rate-items/{{.ID}}" hx-target="closest td" hx-swap="outerHTML" style="display:flex;align-items:center;justify-content:center;gap:4px">
-    <input type="text" name="amount" value="{{.Amount}}" style="width:80px">
+<form hx-post="/vendor-rate-items/{{.ID}}" hx-target="closest td" hx-swap="outerHTML" >
+    <input type="text" name="amount" value="{{.Amount}}" class="input-amount">
     <button type="submit">✓</button>
     <button type="button" hx-get="/vendor-rate-items/{{.ID}}" hx-target="closest td" hx-swap="outerHTML">✗</button>
   </form>
@@ -774,7 +774,7 @@ func (s *Service) HandleUpdateRateItem() http.HandlerFunc {
 // GET /vendor-rates/{id}/email
 func (s *Service) HandleViewOriginalEmail() http.HandlerFunc {
 	plainTmpl := template.Must(template.New("email-plain").Parse(
-		`<pre style="white-space:pre-wrap;word-break:break-word;font-size:.78rem;font-family:monospace;margin:0">{{.}}</pre>`,
+		`<pre class="email-plain">{{.}}</pre>`,
 	))
 	return func(w http.ResponseWriter, r *http.Request) {
 		id, err := strconv.Atoi(r.PathValue("id"))
@@ -828,10 +828,10 @@ func (s *Service) HandleNewRateItem() http.HandlerFunc {
 		}
 		unit := DefaultUnit(ct)
 		fmt.Fprintf(w, `<td class="cell-edit-form">`+
-		`<form hx-post="/vendor-rates/%d/items" hx-target="closest td" hx-swap="outerHTML" style="display:flex;align-items:center;justify-content:center;gap:4px">`+
+		`<form hx-post="/vendor-rates/%d/items" hx-target="closest td" hx-swap="outerHTML" >`+
 			`<input type="hidden" name="charge_type" value="%s">`+
 			`<input type="hidden" name="unit" value="%s">`+
-			`<input type="text" name="amount" placeholder="0" style="width:80px">`+
+			`<input type="text" name="amount" placeholder="0" class="input-amount">`+
 			`<button type="submit">✓</button>`+
 			`<button type="button" hx-get="/vendor-rates/%d/items/empty?charge_type=%s" hx-target="closest td" hx-swap="outerHTML">✗</button>`+
 			`</form></td>`,
@@ -843,7 +843,7 @@ func (s *Service) HandleNewRateItem() http.HandlerFunc {
 // POST /vendor-rates/{id}/items
 func (s *Service) HandleCreateRateItem() http.HandlerFunc {
 	cellTmpl := template.Must(template.New("newcell").Parse(
-		`<td class="{{.CSSClass}}" hx-get="/vendor-rate-items/{{.ID}}/edit" hx-trigger="click" hx-target="this" hx-swap="outerHTML" style="text-align:center;justify-content:center;cursor:pointer" title="Click to edit">{{.Display}}</td>`,
+		`<td class="cell-center-click {{.CSSClass}}" hx-get="/vendor-rate-items/{{.ID}}/edit" hx-trigger="click" hx-target="this" hx-swap="outerHTML" title="Click to edit">{{.Display}}</td>`,
 	))
 	return func(w http.ResponseWriter, r *http.Request) {
 		vrID, err := strconv.Atoi(r.PathValue("id"))
@@ -896,16 +896,16 @@ func (s *Service) HandleCreateRateItem() http.HandlerFunc {
 		// OOB: refresh average for this charge type.
 		avg := s.computeChargeTypeAvg(rrID, ct)
 		fmt.Fprintf(w,
-			`<td id="avg-%s" hx-swap-oob="true" style="text-align:center;background:#f9fafb;font-style:italic;color:#555;">%s</td>`,
+			`<td id="avg-%s" hx-swap-oob="true" class="cell-avg">%s</td>`,
 			ct, avg)
 
 		// OOB: refresh vendor total and overall average total if linehaul or fuel was added.
 		if ct == "linehaul" || ct == "fuel" {
 			fmt.Fprintf(w,
-				`<td id="total-%d" hx-swap-oob="true" style="text-align:center;font-weight:700;">%s</td>`,
+				`<td id="total-%d" hx-swap-oob="true" class="cell-total">%s</td>`,
 				vrID, s.computeVendorTotal(vrID))
 			fmt.Fprintf(w,
-				`<td id="avg-total" hx-swap-oob="true" style="text-align:center;background:#f9fafb;font-style:italic;">%s</td>`,
+				`<td id="avg-total" hx-swap-oob="true" class="cell-avg-total">%s</td>`,
 				s.computeTotalAvg(rrID))
 		}
 	}
@@ -926,7 +926,7 @@ func (s *Service) HandleEmptyRateItem() http.HandlerFunc {
 			return
 		}
 		fmt.Fprintf(w,
-		`<td style="text-align:center;justify-content:center;color:#ccc;cursor:pointer;" hx-get="/vendor-rates/%d/items/new?charge_type=%s" hx-trigger="click" hx-target="this" hx-swap="outerHTML" title="Click to add">—</td>`,
+		`<td class="cell-center-empty" hx-get="/vendor-rates/%d/items/new?charge_type=%s" hx-trigger="click" hx-target="this" hx-swap="outerHTML" title="Click to add">—</td>`,
 			vrID, ct)
 	}
 }

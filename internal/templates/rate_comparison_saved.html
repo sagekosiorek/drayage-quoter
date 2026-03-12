@@ -3,8 +3,8 @@
 <p class="back-link"><a href="/lanes/{{ .Data.Lane.ID }}">← Back to lane</a></p>
 
 <div class="page-header">
-    <div style="display:flex;align-items:center;gap:.75rem;">
-        <h1 class="page-title" style="margin:0;">
+    <div class="page-header-start">
+        <h1 class="page-title">
             {{- if eq .Data.Lane.Direction "import" -}}
             {{ .Data.Lane.OriginPort }} {{ .Data.Lane.OriginPortType }} → {{ .Data.Lane.Destination }}
             {{- else -}}
@@ -13,7 +13,7 @@
         </h1>
         <span class="status-badge status-{{ .Data.Lane.Status }}">{{ .Data.Lane.StatusLabel }}</span>
     </div>
-    <div style="font-size:.82rem;color:#666;margin-top:.25rem;">
+    <div class="meta-text" style="margin-top:.25rem;">
         Ref: <strong>{{ .Data.RateRequest.ReferenceID }}</strong>
         &nbsp;·&nbsp; {{ len .Data.Vendors }} vendor{{ if ne (len .Data.Vendors) 1 }}s{{ end }} in lineup
     </div>
@@ -38,51 +38,51 @@ window.lineupBases = {{ .Data.LineupBases }};
                 <table class="comparison-table">
                     <thead>
                         <tr>
-                            <th style="min-width:160px;">Charge Type</th>
-                            <th style="min-width:140px;text-align:center;padding:0;">
-                                <div style="display:flex;align-items:stretch;">
-                                    <button type="button" id="carousel-prev" style="display:flex;align-items:center;padding:0 7px;font-size:.8rem;flex-shrink:0;">&larr;</button>
-                                    <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:.35rem 0;">
-                                        <span id="carousel-label" style="font-size:.72rem;font-weight:600;color:#F85F14;display:inline-block;width:90px;text-align:center;word-break:break-word;line-height:1.2;">base rate: average</span>
-                                        <div style="font-size:.7rem;color:#888;margin-top:.2rem;">Markup (P&amp;L)</div>
+                            <th class="col-min-md">Charge Type</th>
+                            <th class="carousel-header">
+                                <div class="carousel-nav">
+                                    <button type="button" id="carousel-prev" class="carousel-btn">&larr;</button>
+                                    <div class="carousel-label-wrap">
+                                        <span id="carousel-label" class="carousel-label">base rate: average</span>
+                                        <div class="carousel-sub">Markup (P&amp;L)</div>
                                     </div>
-                                    <button type="button" id="carousel-next" style="display:flex;align-items:center;padding:0 7px;font-size:.8rem;flex-shrink:0;">&rarr;</button>
+                                    <button type="button" id="carousel-next" class="carousel-btn">&rarr;</button>
                                 </div>
                             </th>
-                            <th style="min-width:130px;text-align:center;">Customer Rate</th>
-                            <th id="col-header-0" style="min-width:110px;text-align:center;background:#f9fafb;font-style:italic;color:#666;">Average</th>
+                            <th class="col-min-sm cell-center">Customer Rate</th>
+                            <th id="col-header-0" class="cell-avg" style="min-width:110px;">Average</th>
                             {{ range .Data.Vendors }}
-                            <th id="col-header-{{ .Rank }}" style="min-width:130px;text-align:center;">
-                                <div style="font-weight:600;">{{ .VendorName }}</div>
-                                <div style="font-size:.7rem;color:#888;">Rank {{ .Rank }}</div>
+                            <th id="col-header-{{ .Rank }}" class="col-min-sm cell-center">
+                                <div class="col-vendor-name">{{ .VendorName }}</div>
+                                <div class="col-vendor-rank">Rank {{ .Rank }}</div>
                             </th>
                             {{ end }}
                         </tr>
                     </thead>
                     <tbody>
                         <!-- Total Markup summary row -->
-                        <tr class="row-total" style="background:#f0fdf4;">
+                        <tr class="row-total row-highlight-green">
                             <td style="font-weight:600;">Total Markup</td>
-                            <td id="total-markup-preview" style="text-align:center;font-weight:700;"></td>
+                            <td id="total-markup-preview" class="cell-total"></td>
                             <td></td>
-                            <td style="background:#f9fafb;"></td>
+                            <td class="cell-avg"></td>
                             {{ range .Data.Vendors }}
                             <td></td>
                             {{ end }}
                         </tr>
                         <!-- Linehaul + Fuel combined row -->
-                        <tr class="row-total" style="background:#fafafa;">
+                        <tr class="row-total">
                             <td style="font-weight:600;font-style:italic;">Linehaul + Fuel</td>
                             <!-- Markup (P&L) cell — text only, computed by JS -->
-                            <td style="text-align:center;">
+                            <td class="cell-center">
                                 <span id="markup-linehaul_fuel"></span>
                             </td>
                             <!-- Customer Rate cell — input + flat/% toggle + computed total display -->
-                            <td style="text-align:center;">
+                            <td class="cell-center">
                                 <input type="text" inputmode="decimal" name="linehaul_fuel" id="input-linehaul_fuel"
-                                       style="width:80px;text-align:right;"
+                                       class="input-amount"
                                        {{ with index $.Data.Markups "linehaul_fuel" }}value="{{ .Value }}"{{ end }}>
-                                <div id="lhfuel-computed-total" style="font-size:.75rem;color:#555;margin-top:.2rem;"></div>
+                                <div id="lhfuel-computed-total" class="text-2xs text-secondary" style="margin-top:.2rem;"></div>
                                 <div id="lhfuel-lock-wrap" style="font-size:.72rem;margin-top:.2rem;display:none;">
                                     <button type="button" id="lhfuel-lock-btn"
                                             style="font-size:.72rem;padding:1px 5px;cursor:pointer;"
@@ -96,9 +96,9 @@ window.lineupBases = {{ .Data.LineupBases }};
                                         {{ with index $.Data.Markups "linehaul_fuel" }}{{ if eq .MarkupType "percent" }}checked{{ end }}{{ end }}> %</label>
                                 </div>
                             </td>
-                            <td id="avg-linehaul_fuel" style="text-align:center;background:#f9fafb;font-style:italic;">{{ .Data.AvgTotal }}</td>
+                            <td id="avg-linehaul_fuel" class="cell-avg-total">{{ .Data.AvgTotal }}</td>
                             {{ range .Data.Vendors }}
-                            <td style="text-align:center;font-weight:700;">{{ .TotalDisplay }}</td>
+                            <td class="cell-total">{{ .TotalDisplay }}</td>
                             {{ end }}
                         </tr>
                         <!-- Per-charge-type rows (excluding linehaul and fuel — shown above) -->
@@ -108,22 +108,22 @@ window.lineupBases = {{ .Data.LineupBases }};
                         <tr>
                             <td>{{ .Label }}</td>
                             <!-- Markup (P&L) cell — text only, computed by JS -->
-                            <td style="text-align:center;">
+                            <td class="cell-center">
                                 <span id="markup-{{ $ct }}"></span>
                             </td>
                             <!-- Customer Rate cell — input -->
-                            <td style="text-align:center;">
+                            <td class="cell-center">
                                 <input type="text" inputmode="decimal" name="{{ $ct }}" id="input-{{ $ct }}"
-                                       style="width:80px;text-align:right;"
+                                       class="input-amount"
                                        {{ with index $.Data.Markups $ct }}value="{{ .Value }}"{{ end }}>
                             </td>
-                            <td id="avg-{{ $ct }}" style="text-align:center;background:#f9fafb;font-style:italic;color:#555;">{{ index $.Data.Averages $ct }}</td>
+                            <td id="avg-{{ $ct }}" class="cell-avg">{{ index $.Data.Averages $ct }}</td>
                             {{ range $.Data.Vendors }}
                             {{ $cell := index .Items $ct }}
                             {{ if $cell.ID }}
-                            <td style="text-align:center;">{{ $cell.Display }}</td>
+                            <td class="cell-center">{{ $cell.Display }}</td>
                             {{ else }}
-                            <td style="text-align:center;color:#ccc;">—</td>
+                            <td class="cell-center-empty">—</td>
                             {{ end }}
                             {{ end }}
                         </tr>
@@ -133,10 +133,10 @@ window.lineupBases = {{ .Data.LineupBases }};
                 </table>
             </div>
 
-            <div style="margin-top:1rem;display:flex;align-items:center;gap:1rem;">
+            <div class="flex-row" style="margin-top:1rem;gap:1rem;">
                 <button type="submit" class="primary">Save Quote and Generate CSV →</button>
-                <span id="autosave-indicator" style="font-size:.78rem;color:#888;"></span>
-                <span style="font-size:.78rem;color:#888;">Enter customer-facing charges, then save and generate the quote CSV.</span>
+                <span id="autosave-indicator" class="label-caps text-muted"></span>
+                <span class="label-caps text-muted">Enter customer-facing charges, then save and generate the quote CSV.</span>
             </div>
 
             <!-- Auto-save trigger: fires on any form field change, debounced 300ms -->
@@ -147,7 +147,7 @@ window.lineupBases = {{ .Data.LineupBases }};
                  hx-swap="innerHTML"></div>
         </form>
 
-        <div style="margin-top:1rem;display:flex;align-items:center;gap:1rem;">
+        <div class="flex-row" style="margin-top:1rem;">
             <a href="/rate-requests/{{ .Data.RateRequest.ID }}/comparison"><button>← Edit Carrier Lineup and Rates</button></a>
         </div>
     </div>

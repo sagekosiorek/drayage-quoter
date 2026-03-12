@@ -36,7 +36,7 @@
 
 {{ if or .Hazmat .Overweight .OutOfGauge }}
 <p class="detail-section">Special Requirements</p>
-<div style="margin:.75rem 0 1.25rem;">
+<div class="detail-body">
     <div class="req-tags">
         {{ if .Hazmat }}<span class="req-tag">Hazmat</span>{{ end }}
         {{ if .Overweight }}<span class="req-tag">Overweight</span>{{ end }}
@@ -47,6 +47,6 @@
 
 {{ if .Notes }}
 <p class="detail-section">Notes</p>
-<p style="margin:.5rem 0 1.25rem; font-size:.9rem; white-space:pre-wrap;">{{ .Notes }}</p>
+<p class="text-pre-wrap" style="margin:.5rem 0 1.25rem; font-size:.9rem;">{{ .Notes }}</p>
 {{ end }}
 {{ end }}

@@ -13,7 +13,7 @@
         {{ end }}
     </select>
     <button type="submit">Filter</button>
-    {{ if or .Query .PortID }}<a href="/vendors">Clear</a>{{ end }}
+    {{ if or .Query .PortID }}<a href="/vendors" class="link-secondary">Clear</a>{{ end }}
 </form>
 
 {{ if .Vendors }}
@@ -31,7 +31,7 @@
                 <a href="/vendors/{{ .ID }}">{{ .Name }}</a>
                 {{ if .IsPreferred }}<span class="pref-star" title="Preferred">★</span>{{ end }}
             </td>
-            <td style="color:#666; font-size:.85rem;">{{ if .Ports }}{{ .Ports }}{{ else }}&mdash;{{ end }}</td>
+            <td class="text-secondary text-sm">{{ if .Ports }}{{ .Ports }}{{ else }}&mdash;{{ end }}</td>
         </tr>
         {{ end }}
     </tbody>
