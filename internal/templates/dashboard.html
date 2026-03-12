@@ -6,7 +6,7 @@
 
 <form class="filter-bar" method="GET" action="/">
     <input type="text" name="q" placeholder="Search customer, destination..." value="{{ .Query }}">
-    <select name="status">
+    <select name="status" onchange="this.form.submit()">
         <option value="">All statuses</option>
         <option value="draft"{{ if eq .Status "draft" }} selected{{ end }}>Draft</option>
         <option value="rates_requested"{{ if eq .Status "rates_requested" }} selected{{ end }}>Rates Requested</option>
@@ -14,13 +14,13 @@
         <option value="quoting"{{ if eq .Status "quoting" }} selected{{ end }}>Quoting</option>
         <option value="quoted"{{ if eq .Status "quoted" }} selected{{ end }}>Quoted</option>
     </select>
-    <select name="port">
+    <select name="port" onchange="this.form.submit()">
         <option value="">All ports</option>
         {{- range .Ports }}
         <option value="{{ .ID }}"{{ if eq .ID $.PortID }} selected{{ end }}>{{ .Name }}</option>
         {{- end }}
     </select>
-    <select name="owner">
+    <select name="owner" onchange="this.form.submit()">
         <option value="0"{{ if eq .OwnerID 0 }} selected{{ end }}>All reps</option>
         {{- range .AllUsers }}
         <option value="{{ .ID }}"{{ if eq .ID $.OwnerID }} selected{{ end }}>{{ .Name }}</option>
