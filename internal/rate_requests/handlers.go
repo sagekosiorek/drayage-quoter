@@ -759,6 +759,98 @@ func (s *Service) HandleDetail(tmpl *template.Template) http.HandlerFunc {
 	}
 }
 
+// HandleBlastStatus returns an HTML fragment for the blast status panel and an OOB swap for the
+// responses count span. Intended for HTMX polling: GET /rate-requests/{id}/blast-status
+// Polling continues while lane status is rates_requested or rates_received.
+func (s *Service) HandleBlastStatus() http.HandlerFunc {
+	tmpl := template.Must(template.New("blast").Parse(`
+{{- if .Polling -}}
+<span id="responses-count" hx-swap-oob="true"><strong>Responses:</strong> {{.Received}} / {{.Total}}</span>
+{{- end -}}
+<p class="detail-section">Blast Status</p>
+{{if .Vendors}}
+<table>
+<thead><tr><th>Vendor</th><th>Status</th><th>Actions</th></tr></thead>
+<tbody>
+{{range .Vendors}}<tr class="{{if .Responded}}rr-responded{{end}}">
+<td>
+<div style="font-weight:500;">{{.VendorName}}</div>
+{{range .Contacts}}<div style="font-size:.78rem;color:#666;">{{.Name}}{{if and .Name .Email}} · {{end}}<a href="mailto:{{.Email}}">{{.Email}}</a></div>{{end}}
+{{if not .Contacts}}<div class="rr-vendor-item-warn">(no contact on file)</div>{{end}}
+</td>
+<td>{{if .Responded}}<span style="color:#166534;font-weight:600;">Responded</span>{{else}}<span style="color:#888;">Pending</span>{{end}}</td>
+<td><div style="display:flex;gap:.35rem;flex-wrap:wrap;">
+{{if .MailtoHref}}<a href="{{.MailtoHref}}"><button class="primary">Open Email Draft</button></a>{{end}}
+<a href="/rate-requests/{{$.RRID}}/ingest?vendor_id={{.VendorID}}"><button type="button">Paste Response</button></a>
+</div></td>
+</tr>{{end}}
+</tbody>
+</table>
+{{else}}<p class="empty-state">No vendors on this rate request.</p>{{end}}`))
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		id, err := strconv.Atoi(r.PathValue("id"))
+		if err != nil || id <= 0 {
+			http.Error(w, "Not found", http.StatusNotFound)
+			return
+		}
+		rr, err := s.fetchRateRequestDetail(id)
+		if err == sql.ErrNoRows {
+			http.Error(w, fmt.Sprintf("rate request %d not found", id), http.StatusNotFound)
+			return
+		}
+		if err != nil {
+			http.Error(w, fmt.Sprintf("load blast status for rate request %d: %v", id, err), http.StatusInternalServerError)
+			return
+		}
+		polling := rr.Lane.Status == "rates_requested" || rr.Lane.Status == "rates_received"
+		w.Header().Set("Content-Type", "text/html")
+		tmpl.Execute(w, map[string]any{
+			"RRID":     rr.ID,
+			"Received": rr.ResponsesReceived,
+			"Total":    len(rr.Vendors),
+			"Vendors":  rr.Vendors,
+			"Polling":  polling,
+		})
+	}
+}
+
+// HandleResponsesCount returns an HTML fragment with the current responses count for a rate request.
+// Intended for HTMX polling on the lane detail page: GET /rate-requests/{id}/responses-count
+// Polling continues while lane status is rates_requested or rates_received.
+func (s *Service) HandleResponsesCount() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id, err := strconv.Atoi(r.PathValue("id"))
+		if err != nil || id <= 0 {
+			http.Error(w, "Not found", http.StatusNotFound)
+			return
+		}
+		var received int
+		var laneStatus string
+		err = s.DB.QueryRow(`
+			SELECT rr.responses_received, l.status
+			FROM rate_requests rr
+			JOIN lanes l ON l.id = rr.lane_id
+			WHERE rr.id = ?
+		`, id).Scan(&received, &laneStatus)
+		if err == sql.ErrNoRows {
+			http.Error(w, fmt.Sprintf("rate request %d not found", id), http.StatusNotFound)
+			return
+		}
+		if err != nil {
+			http.Error(w, fmt.Sprintf("load responses count for rate request %d: %v", id, err), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "text/html")
+		if laneStatus == "rates_requested" || laneStatus == "rates_received" {
+			fmt.Fprintf(w, `<span id="responses-received" class="detail-value" hx-get="/rate-requests/%d/responses-count" hx-trigger="every 30s" hx-swap="outerHTML">%d</span>`,
+				id, received)
+		} else {
+			fmt.Fprintf(w, `<span id="responses-received" class="detail-value">%d</span>`, received)
+		}
+	}
+}
+
 // HandleComparison renders the side-by-side vendor rate comparison and lineup builder.
 // GET /rate-requests/{id}/comparison
 func (s *Service) HandleComparison(tmpl *template.Template) http.HandlerFunc {

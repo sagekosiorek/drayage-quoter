@@ -16,14 +16,21 @@
             {{ .RateRequest.Lane.Destination }} → {{ .RateRequest.Lane.OriginPort }} {{ .RateRequest.Lane.OriginPortType }}
             {{- end -}}
         </h1>
+        {{ if eq .RateRequest.Lane.Status "rates_requested" }}
+        <span class="status-badge status-{{ .RateRequest.Lane.Status }}"
+              hx-get="/lanes/{{ .RateRequest.Lane.ID }}/status"
+              hx-trigger="every 30s"
+              hx-swap="outerHTML">{{ .RateRequest.Lane.StatusLabel }}</span>
+        {{ else }}
         <span class="status-badge status-{{ .RateRequest.Lane.Status }}">{{ .RateRequest.Lane.StatusLabel }}</span>
+        {{ end }}
     </div>
 </div>
 
 <div style="display:flex;gap:1.5rem;flex-wrap:wrap;margin-bottom:1.5rem;font-size:.85rem;color:#555;">
     <span><strong>Ref:</strong> {{ .RateRequest.ReferenceID }}</span>
     <span><strong>Created:</strong> <time datetime="{{ .RateRequest.CreatedAt }}">{{ .RateRequest.CreatedAt }}</time></span>
-    <span><strong>Responses:</strong> {{ .RateRequest.ResponsesReceived }} / {{ len .RateRequest.Vendors }}</span>
+    <span id="responses-count"><strong>Responses:</strong> {{ .RateRequest.ResponsesReceived }} / {{ len .RateRequest.Vendors }}</span>
     {{ if .RateRequest.Threshold }}<span><strong>Threshold:</strong> {{ .RateRequest.Threshold }} responses</span>{{ end }}
     {{ if .RateRequest.Deadline }}<span><strong>Deadline:</strong> <time datetime="{{ .RateRequest.Deadline }}">{{ .RateRequest.Deadline }}</time></span>{{ end }}
 </div>
@@ -46,7 +53,12 @@
     </div>
 
     <!-- Right: Blast status table -->
-    <div>
+    <div id="blast-status-panel"
+         {{ if or (eq .RateRequest.Lane.Status "rates_requested") (eq .RateRequest.Lane.Status "rates_received") }}
+         hx-get="/rate-requests/{{ .RateRequest.ID }}/blast-status"
+         hx-trigger="every 30s"
+         hx-swap="innerHTML"
+         {{ end }}>
         <p class="detail-section">Blast Status</p>
 
         {{ if .RateRequest.Vendors }}
