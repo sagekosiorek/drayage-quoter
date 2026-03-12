@@ -44,7 +44,7 @@
             <td>{{ .Name }}</td>
             <td>{{ .Email }}</td>
             <td>{{ if .IsAdmin }}Admin{{ else }}Rep{{ end }}</td>
-            <td>{{ .CreatedAt }}</td>
+            <td><time datetime="{{ .CreatedAt }}">{{ .CreatedAt }}</time></td>
             <td>
                 <form method="POST" action="/admin/users/{{ .ID }}/delete">
                     <button type="submit">Delete</button>

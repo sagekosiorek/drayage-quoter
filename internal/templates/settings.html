@@ -49,7 +49,7 @@ Estimated monthly volume: 40-60 containers</pre>
         <div class="form-actions">
             <button type="submit" class="primary">Save Template</button>
             <span class="form-timestamp">
-                {{- if .Template.UpdatedAt }}Last saved: {{ .Template.UpdatedAt }}{{ end -}}
+                {{- if .Template.UpdatedAt }}Last saved: <time datetime="{{ .Template.UpdatedAt }}">{{ .Template.UpdatedAt }}</time>{{ end -}}
             </span>
         </div>
     </form>

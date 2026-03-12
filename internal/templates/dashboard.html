@@ -55,7 +55,7 @@
             <td>{{ if eq .Status "rates_requested" }}<span class="status-badge status-{{ .Status }}"
                       hx-get="/lanes/{{ .ID }}/status" hx-trigger="every 30s" hx-swap="outerHTML">{{ .StatusLabel }}</span>{{ else }}<span class="status-badge status-{{ .Status }}">{{ .StatusLabel }}</span>{{ end }}</td>
             <td>{{ .OwnerName }}</td>
-            <td>{{ .CreatedAt }}</td>
+            <td><time datetime="{{ .CreatedAt }}">{{ .CreatedAt }}</time></td>
         </tr>
         {{- end }}
         {{- else }}

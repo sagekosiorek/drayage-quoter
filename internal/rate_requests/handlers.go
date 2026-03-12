@@ -318,19 +318,21 @@ func laneStatusLabel(s string) string {
 	}
 }
 
-// fmtDate parses a SQLite DATETIME string into a short readable date.
+// fmtDate parses a SQLite DATETIME string into a UTC RFC3339 string for client-side formatting.
+// Falls back to the raw string on parse failure.
 func fmtDate(s string) string {
 	if t, err := time.Parse("2006-01-02 15:04:05", s); err == nil {
-		return t.Format("Jan 2, 2006")
+		return t.UTC().Format(time.RFC3339)
 	}
 	return s
 }
 
-// formatDeadline parses a stored deadline and returns a human-readable string.
+// formatDeadline parses a stored deadline into a UTC RFC3339 string for client-side formatting.
+// Accepts multiple input layouts; falls back to raw string.
 func formatDeadline(s string) string {
 	for _, layout := range []string{"2006-01-02 15:04:05", "2006-01-02T15:04", "2006-01-02"} {
 		if t, err := time.Parse(layout, s); err == nil {
-			return t.Format("Jan 2, 2006 3:04 PM")
+			return t.UTC().Format(time.RFC3339)
 		}
 	}
 	return s

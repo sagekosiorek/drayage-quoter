@@ -113,8 +113,8 @@
 
     <p class="detail-footer">
         Owner: {{ .Lane.OwnerName }} &nbsp;·&nbsp;
-        Created {{ .Lane.CreatedAt }} &nbsp;·&nbsp;
-        Updated {{ .Lane.UpdatedAt }}
+        Created <time datetime="{{ .Lane.CreatedAt }}">{{ .Lane.CreatedAt }}</time> &nbsp;·&nbsp;
+        Updated <time datetime="{{ .Lane.UpdatedAt }}">{{ .Lane.UpdatedAt }}</time>
     </p>
 
 </div>

@@ -22,10 +22,10 @@
 
 <div style="display:flex;gap:1.5rem;flex-wrap:wrap;margin-bottom:1.5rem;font-size:.85rem;color:#555;">
     <span><strong>Ref:</strong> {{ .RateRequest.ReferenceID }}</span>
-    <span><strong>Created:</strong> {{ .RateRequest.CreatedAt }}</span>
+    <span><strong>Created:</strong> <time datetime="{{ .RateRequest.CreatedAt }}">{{ .RateRequest.CreatedAt }}</time></span>
     <span><strong>Responses:</strong> {{ .RateRequest.ResponsesReceived }} / {{ len .RateRequest.Vendors }}</span>
     {{ if .RateRequest.Threshold }}<span><strong>Threshold:</strong> {{ .RateRequest.Threshold }} responses</span>{{ end }}
-    {{ if .RateRequest.Deadline }}<span><strong>Deadline:</strong> {{ .RateRequest.Deadline }}</span>{{ end }}
+    {{ if .RateRequest.Deadline }}<span><strong>Deadline:</strong> <time datetime="{{ .RateRequest.Deadline }}">{{ .RateRequest.Deadline }}</time></span>{{ end }}
 </div>
 
 <div class="rr-layout">
