@@ -91,7 +91,7 @@
                     {{ range .Notes }}
                     <div class="note-item">
                         <p class="note-content">{{ .Content }}</p>
-                        <p class="note-meta">{{ .AuthorName }} &middot; {{ .CreatedAt }}</p>
+                        <p class="note-meta">{{ .AuthorName }} &middot; <time datetime="{{ .CreatedAt }}">{{ .CreatedAt }}</time></p>
                     </div>
                     {{ end }}
                     {{ else }}
@@ -127,7 +127,7 @@
     {{ end }}
 
     <p class="detail-footer" style="margin-top:2rem;">
-        Created {{ .Vendor.CreatedAt }} &nbsp;·&nbsp; Updated {{ .Vendor.UpdatedAt }}
+        Created <time datetime="{{ .Vendor.CreatedAt }}">{{ .Vendor.CreatedAt }}</time> &nbsp;·&nbsp; Updated <time datetime="{{ .Vendor.UpdatedAt }}">{{ .Vendor.UpdatedAt }}</time>
     </p>
 
 </div>

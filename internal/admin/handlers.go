@@ -56,7 +56,7 @@ func (s *Service) HandleUsers(tmpl *template.Template) http.HandlerFunc {
 				return
 			}
 			if t, err := time.Parse("2006-01-02 15:04:05", createdAtStr); err == nil {
-				u.CreatedAt = t.Format("Jan 2, 2006")
+				u.CreatedAt = t.UTC().Format(time.RFC3339)
 			} else {
 				u.CreatedAt = createdAtStr
 			}

@@ -45,7 +45,7 @@ func FetchTemplate(db *sql.DB, userID int) EmailTemplate {
 	}
 	if rawUpdatedAt.Valid {
 		if parsed, err := time.Parse(time.RFC3339, rawUpdatedAt.String); err == nil {
-			t.UpdatedAt = parsed.Format("Jan 2, 2006 3:04 PM")
+			t.UpdatedAt = parsed.UTC().Format(time.RFC3339)
 		} else {
 			t.UpdatedAt = rawUpdatedAt.String
 		}

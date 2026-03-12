@@ -155,12 +155,12 @@ func (s *Service) fetchLane(id int) (*LaneDetail, error) {
 	l.NextStatusLabel = advanceLabel(l.NextStatus)
 
 	if t, err := time.Parse("2006-01-02 15:04:05", createdStr); err == nil {
-		l.CreatedAt = t.Format("Jan 2, 2006")
+		l.CreatedAt = t.UTC().Format(time.RFC3339)
 	} else {
 		l.CreatedAt = createdStr
 	}
 	if t, err := time.Parse("2006-01-02 15:04:05", updatedStr); err == nil {
-		l.UpdatedAt = t.Format("Jan 2, 2006")
+		l.UpdatedAt = t.UTC().Format(time.RFC3339)
 	} else {
 		l.UpdatedAt = updatedStr
 	}

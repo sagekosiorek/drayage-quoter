@@ -191,10 +191,11 @@ func (s *Service) fetchPorts() ([]PortRef, error) {
 	return ports, nil
 }
 
-// fmtDate parses a SQLite DATETIME string into a readable date. Falls back to raw string.
+// fmtDate parses a SQLite DATETIME string into a UTC RFC3339 string for client-side formatting.
+// Falls back to the raw string on parse failure.
 func fmtDate(s string) string {
 	if t, err := time.Parse("2006-01-02 15:04:05", s); err == nil {
-		return t.Format("Jan 2, 2006")
+		return t.UTC().Format(time.RFC3339)
 	}
 	return s
 }
