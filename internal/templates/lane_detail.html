@@ -1,7 +1,7 @@
 {{ define "content" }}
 <div class="page-header">
     <p class="back-link"><a href="/">← Back to lanes</a></p>
-    <div style="display:flex; gap:.5rem;">
+    <div class="flex-row">
         {{ if and .Lane.IsOwner (eq .Lane.Status "draft") }}
         <a href="/lanes/{{ .Lane.ID }}/edit"><button>Edit Draft</button></a>
         {{ end }}
@@ -29,8 +29,8 @@
 </div>
 
 <div class="page-header">
-    <div style="display:flex; align-items:center; gap:.75rem;">
-        <h1 class="page-title" style="margin:0;">
+    <div class="page-header-start">
+        <h1 class="page-title">
             {{- if eq .Lane.Direction "import" -}}
             {{ .Lane.OriginPort }} {{ .Lane.OriginPortType }} → {{ .Lane.Destination }}
             {{- else -}}
@@ -46,7 +46,7 @@
     </div>
 </div>
 
-<div style="max-width: 680px;">
+<div class="content-md">
 
     <p class="detail-section">Customer</p>
     <div class="detail-grid">
@@ -85,7 +85,7 @@
 
     {{ if or .Lane.Hazmat .Lane.Overweight .Lane.OutOfGauge }}
     <p class="detail-section">Special Requirements</p>
-    <div style="margin:.75rem 0 1.25rem;">
+    <div class="detail-body">
         <div class="req-tags">
             {{ if .Lane.Hazmat }}<span class="req-tag">Hazmat</span>{{ end }}
             {{ if .Lane.Overweight }}<span class="req-tag">Overweight</span>{{ end }}
@@ -96,7 +96,7 @@
 
     {{ if .Lane.Notes }}
     <p class="detail-section">Notes</p>
-    <p style="margin:.5rem 0 1.25rem; font-size:.9rem; white-space:pre-wrap;">{{ .Lane.Notes }}</p>
+    <p class="text-pre-wrap" style="margin:.5rem 0 1.25rem; font-size:.9rem;">{{ .Lane.Notes }}</p>
     {{ end }}
 
     {{ if .RateRequest }}

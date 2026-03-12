@@ -8,8 +8,8 @@
 </div>
 
 <div class="page-header">
-    <div style="display:flex;align-items:center;gap:.75rem;">
-        <h1 class="page-title" style="margin:0;">
+    <div class="page-header-start">
+        <h1 class="page-title">
             {{- if eq .RateRequest.Lane.Direction "import" -}}
             {{ .RateRequest.Lane.OriginPort }} {{ .RateRequest.Lane.OriginPortType }} → {{ .RateRequest.Lane.Destination }}
             {{- else -}}
@@ -27,7 +27,7 @@
     </div>
 </div>
 
-<div style="display:flex;gap:1.5rem;flex-wrap:wrap;margin-bottom:1.5rem;font-size:.85rem;color:#555;">
+<div class="flex-row text-secondary text-sm" style="flex-wrap:wrap; gap:1.5rem; margin-bottom:1.5rem;">
     <span><strong>Ref:</strong> {{ .RateRequest.ReferenceID }}</span>
     <span><strong>Created:</strong> <time datetime="{{ .RateRequest.CreatedAt }}">{{ .RateRequest.CreatedAt }}</time></span>
     <span id="responses-count"><strong>Responses:</strong> {{ .RateRequest.ResponsesReceived }} / {{ len .RateRequest.Vendors }}</span>
@@ -41,14 +41,14 @@
     <div>
         <p class="detail-section">Email Draft</p>
 
-        <p style="font-size:.78rem;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.04em;margin:.75rem 0 .25rem;">Subject</p>
-        <div style="display:flex;gap:.5rem;align-items:flex-start;">
-            <div id="subject-display" style="flex:1;padding:6px 8px;border:1px solid #e5e7eb;border-radius:3px;font-size:.9rem;background:#f9fafb;word-break:break-word;">{{ .RateRequest.Subject }}</div>
+        <p class="label-caps" style="margin:.75rem 0 .25rem;">Subject</p>
+        <div class="flex-row" style="align-items:flex-start;">
+            <div id="subject-display" class="display-box">{{ .RateRequest.Subject }}</div>
         </div>
 
-        <p style="font-size:.78rem;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.04em;margin:.75rem 0 .25rem;">Body</p>
-        <div style="display:flex;gap:.5rem;align-items:flex-start;">
-            <pre id="body-display" style="flex:1;padding:8px;border:1px solid #e5e7eb;border-radius:3px;font-size:.85rem;background:#f9fafb;white-space:pre-wrap;margin:0;font-family:inherit;word-break:break-word;">{{ .RateRequest.Body }}</pre>
+        <p class="label-caps" style="margin:.75rem 0 .25rem;">Body</p>
+        <div class="flex-row" style="align-items:flex-start;">
+            <pre id="body-display" class="display-pre">{{ .RateRequest.Body }}</pre>
         </div>
     </div>
 
@@ -76,7 +76,7 @@
                     <td>
                         <div style="font-weight:500;">{{ .VendorName }}</div>
                         {{ range .Contacts }}
-                        <div style="font-size:.78rem;color:#666;">
+                        <div class="text-secondary" style="font-size:.78rem;">
                             {{ .Name }}{{ if and .Name .Email }} · {{ end }}<a href="mailto:{{ .Email }}">{{ .Email }}</a>
                         </div>
                         {{ end }}
@@ -86,13 +86,13 @@
                     </td>
                     <td>
                         {{ if .Responded }}
-                        <span style="color:#166534;font-weight:600;">Responded</span>
+                        <span class="text-success">Responded</span>
                         {{ else }}
-                        <span style="color:#888;">Pending</span>
+                        <span class="text-muted">Pending</span>
                         {{ end }}
                     </td>
                     <td>
-                        <div style="display:flex;gap:.35rem;flex-wrap:wrap;">
+                        <div class="flex-wrap-sm">
                             {{ if .MailtoHref }}
                             <a href="{{ .MailtoHref }}"><button class="primary">Open Email Draft</button></a>
                             {{ end }}

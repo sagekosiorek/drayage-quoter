@@ -775,11 +775,11 @@ func (s *Service) HandleBlastStatus() http.HandlerFunc {
 {{range .Vendors}}<tr class="{{if .Responded}}rr-responded{{end}}">
 <td>
 <div style="font-weight:500;">{{.VendorName}}</div>
-{{range .Contacts}}<div style="font-size:.78rem;color:#666;">{{.Name}}{{if and .Name .Email}} · {{end}}<a href="mailto:{{.Email}}">{{.Email}}</a></div>{{end}}
+{{range .Contacts}}<div class="rr-vendor-item-meta">{{.Name}}{{if and .Name .Email}} · {{end}}<a href="mailto:{{.Email}}">{{.Email}}</a></div>{{end}}
 {{if not .Contacts}}<div class="rr-vendor-item-warn">(no contact on file)</div>{{end}}
 </td>
-<td>{{if .Responded}}<span style="color:#166534;font-weight:600;">Responded</span>{{else}}<span style="color:#888;">Pending</span>{{end}}</td>
-<td><div style="display:flex;gap:.35rem;flex-wrap:wrap;">
+<td>{{if .Responded}}<span class="text-success">Responded</span>{{else}}<span class="text-muted">Pending</span>{{end}}</td>
+<td><div class="flex-wrap-sm">
 {{if .MailtoHref}}<a href="{{.MailtoHref}}"><button class="primary">Open Email Draft</button></a>{{end}}
 <a href="/rate-requests/{{$.RRID}}/ingest?vendor_id={{.VendorID}}"><button type="button">Paste Response</button></a>
 </div></td>
@@ -1521,7 +1521,7 @@ func (s *Service) HandleSaveMarkups() http.HandlerFunc {
 			http.Error(w, "Failed to commit markup save", http.StatusInternalServerError)
 			return
 		}
-		fmt.Fprint(w, `<span style="color:#888;">Saved ✓</span>`)
+		fmt.Fprint(w, `<span class="text-muted">Saved ✓</span>`)
 	}
 }
 
@@ -1840,11 +1840,11 @@ func (s *Service) HandleAddComparisonRow() http.HandlerFunc {
 					cssClass = "cell-llm"
 				}
 				fmt.Fprintf(&sb,
-					`<td class="%s" hx-get="/vendor-rate-items/%d/edit" hx-trigger="click" hx-target="this" hx-swap="outerHTML" style="text-align:center;cursor:pointer" title="Click to edit">%s</td>`,
+					`<td class="cell-center-click %s" hx-get="/vendor-rate-items/%d/edit" hx-trigger="click" hx-target="this" hx-swap="outerHTML" title="Click to edit">%s</td>`,
 					cssClass, cell.ID, cell.Display)
 			} else {
 				fmt.Fprintf(&sb,
-					`<td style="text-align:center;color:#ccc;cursor:pointer;" hx-get="/vendor-rates/%d/items/new?charge_type=%s" hx-trigger="click" hx-target="this" hx-swap="outerHTML" title="Click to add">—</td>`,
+					`<td class="cell-center-empty" hx-get="/vendor-rates/%d/items/new?charge_type=%s" hx-trigger="click" hx-target="this" hx-swap="outerHTML" title="Click to add">—</td>`,
 					vr.vrID, ct)
 			}
 		}
