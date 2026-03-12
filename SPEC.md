@@ -549,28 +549,18 @@ Apply markups, preview, and export customer-facing CSV.
 Styling, last-min changes, stress-testing.
 
 - [x] Modify IngestEmail()
-- [ ] Change auth method from login link to login code
-- [ ] Granularize the opaque "Internal server error" messages across the codebase.
-- [ ] Refactor main.go - modularizing the route library into a separate file.
-- [ ] User can modify the default rate request email body template
-- [ ] Modify all dates to be human readable
-- [ ] Add UI error message handling
-- [ ] Polish some of the reactivity; e.g. utilize HTMX more for small components that otherwise require full page refresh
+- [x] Change auth method from login link to login code
+- [x] Granularize the opaque "Internal server error" messages across the codebase.
+- [x] Modify all dates to be human readable
+- [x] Wire HTMX polling to rate_request_detail.html page; lane status and vendor status should refresh automatically. Also, wire it up to the vendor responses field in lane_detail.html.
+- [x] Live filtering on the dashboard soon as a new filter selection is clicked - remove the 'Filter' button.
+- [x] Remove all inline styling; all of it should be consolidated in style.css
 - [ ] Map FreightPower Shipper styling
-- [ ] File-parsing support for rate ingestion
-- [ ] Wire up LLM for rate parsing
-- [ ] mv rate_comparison_saved.html rate_comparison_markup.hmtl && rate_comparison_edit.html rate_comparison_lineup.html (and modify all internal references - route, function names, etc. to reflect)
-- [ ] Wire up email forwarding for auto-ingestion
-- [ ] User should not be able to edit the company name on lane_edit.html (it's unchangeable at this point).
-- [ ] Stress-test the performance, pagination, and UI using a lot of dummy data (github.com/brianvoe/gofakeit/v7).
-- [ ] Need some UI feedback when clicking buttons that don't redirect: 'Copy Body' @internal/templates/rate_request_detail.html
-- [ ] Live filtering on the dashboard soon as a new filter selection is clicked - remove the 'Filter' button.
 - [ ] Add a carrier to a rate request after-the-fact
-- [ ] Wire broker channel to rate_request_detail.html page; lane status and vendor status should refresh automatically. Also, wire it up to the vendor responses field in lane_detail.html.
-- [ ] Remove all inline styling; all of it should be consolidated in style.css
-- [ ] Save Lineup button should only show once at least one vendor rank is entered.
-- [ ] User should be able to manually enter a carrier rate for any cell.
-- [ ] A button to display lane details (in the email renderer) should be included on the rate_comparision_saved.html page so user knows which accessorial will incur.
 - [ ] Set default accessorial rates by user.
 - [ ] Delete a lane function
 - [ ] Add tooltips where necessary
+- [ ] File-parsing support for rate ingestion
+- [ ] Stress-test the performance, pagination, and UI using a lot of dummy data (github.com/brianvoe/gofakeit/v7).
+- [ ] Wire up LLM for rate parsing
+
