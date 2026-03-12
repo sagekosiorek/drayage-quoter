@@ -107,7 +107,14 @@
         <span class="detail-label">Vendors</span>
         <span class="detail-value">{{ .RateRequest.VendorCount }}</span>
         <span class="detail-label">Responses</span>
+        {{ if or (eq .Lane.Status "rates_requested") (eq .Lane.Status "rates_received") }}
+        <span id="responses-received" class="detail-value"
+              hx-get="/rate-requests/{{ .RateRequest.ID }}/responses-count"
+              hx-trigger="every 30s"
+              hx-swap="outerHTML">{{ .RateRequest.ResponsesReceived }}</span>
+        {{ else }}
         <span class="detail-value">{{ .RateRequest.ResponsesReceived }}</span>
+        {{ end }}
     </div>
     {{ end }}
 
