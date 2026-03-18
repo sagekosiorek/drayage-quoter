@@ -107,6 +107,7 @@ tr:last-child td { border-bottom: none; }
 
 /* Column sizing */
 .col-action-sm  { width: 70px; }
+.col-name       { width: 180px; }
 .col-min-sm     { min-width: 130px; }
 .col-min-md     { min-width: 160px; }
 .col-header-rank { min-width: 140px; text-align: center; background: var(--color-brand); color: #fff; }
