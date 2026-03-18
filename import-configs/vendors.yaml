@@ -1,0 +1,37 @@
+# Imports vendors, their port assignments, and contacts from a single flat file.
+#
+# Expected CSV/Excel headers:
+#   Vendor Name, Port Name, Contact Name, Contact Email
+#
+# Multiple contacts per port: repeat the vendor+port columns on each row.
+# Example:
+#   Vendor Name,Port Name,Contact Name,Contact Email
+#   Pacific Coast Drayage,Los Angeles,John Smith,john@pcd.com
+#   Pacific Coast Drayage,Los Angeles,Jane Doe,jane@pcd.com   ← second contact, same port
+#   Pacific Coast Drayage,Seattle,Bob Lee,bob@pcd.com
+#   Harbor Logistics,Houston,Alice Wu,alice@hl.com
+
+tables:
+  - name: vendors
+    dedup_key: name          # skip if a vendor with this name already exists
+    columns:
+      name: Vendor Name
+
+  - name: vendor_ports
+    parent: vendors
+    parent_fk: vendor_id
+    dedup_key: [vendor_id, port_id]    # skip if this vendor+port pair already exists
+    cache_key: [Vendor Name, Port Name] # CSV headers that children use to look up this row
+    foreign_keys:
+      port_id:               # resolve port_id by matching ports.name
+        table: ports
+        match: name
+        csv: Port Name
+
+  - name: vendor_contacts
+    parent: vendor_ports
+    parent_fk: vendor_ports_id
+    dedup_key: email  # skip if a vendor contact already exists
+    columns:
+      name: Contact Name
+      email: Contact Email
