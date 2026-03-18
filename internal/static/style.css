@@ -4,13 +4,15 @@
 :root {
     /* Brand */
     --color-brand:          #F85F14;  /* Schneider Orange */
+    --color-brand-light:    #FFD8CD;  /* Orange tint — hover backgrounds */
+    --color-brand-hover:    #C64C10;  /* Darkened orange — button hover */
 
     /* Text */
-    --color-text:           #111;
-    --color-text-secondary: #555;
-    --color-muted:          #888;
-    --color-faint:          #aaa;
-    --color-secondary:      #666;
+    --color-text:           #231B15;  /* Schneider dark brown */
+    --color-text-secondary: #645A53;  /* Warm gray */
+    --color-muted:          #9C8F87;
+    --color-faint:          #B8AEA8;
+    --color-secondary:      #6E6259;
 
     /* Status */
     --color-success:        #166534;
@@ -21,10 +23,10 @@
     --color-warn-border:    #fcd34d;
 
     /* Surface / borders */
-    --color-border:         #e5e7eb;
-    --color-border-light:   #f0f0f0;
-    --color-surface:        #f9fafb;
-    --color-surface-alt:    #f5f5f5;
+    --color-border:         #DDD9D5;  /* Warm border */
+    --color-border-light:   #EDE9E5;  /* Warm light border */
+    --color-surface:        #F3F1EF;  /* Schneider warm off-white */
+    --color-surface-alt:    #EAE7E3;  /* Warm table/nav bg */
 
     /* Radius */
     --radius-sm:   3px;
@@ -32,7 +34,7 @@
     --radius-pill: 10px;
 
     /* Typography */
-    --font-body: system-ui, sans-serif;
+    --font-body: 'Plus Jakarta Sans', system-ui, sans-serif;
     --font-mono: monospace;
 }
 
@@ -47,10 +49,10 @@ body { margin: 0; font-family: var(--font-body); color: var(--color-text); }
 ------------------------------------------------------- */
 .app-nav {
     display: flex; align-items: center; gap: 1rem;
-    padding: .5rem 1.5rem; border-bottom: 1px solid #ddd;
+    padding: .5rem 1.5rem; border-bottom: 1px solid var(--color-border);
     background: #fff;
 }
-.app-nav-brand { font-weight: 600; text-decoration: none; color: var(--color-text); margin-right: .5rem; }
+.app-nav-brand { font-weight: 700; text-decoration: none; color: var(--color-brand); margin-right: .5rem; }
 .app-nav a { text-decoration: none; color: #444; }
 .app-nav a:hover { color: var(--color-text); }
 .app-nav-right { margin-left: auto; display: flex; align-items: center; gap: 1rem; }
@@ -78,8 +80,8 @@ fieldset label { display: inline; font-weight: normal; margin-right: 1.25rem; }
 textarea { resize: vertical; }
 button { padding: 6px 14px; cursor: pointer; border: 1px solid #bbb; border-radius: var(--radius-sm); background: var(--color-surface-alt); font-size: .9rem; }
 button:hover { background: #eee; }
-button.primary { background: var(--color-info); color: #fff; border-color: var(--color-info); }
-button.primary:hover { background: #1648c4; }
+button.primary { background: var(--color-brand); color: #fff; border-color: var(--color-brand); }
+button.primary:hover { background: var(--color-brand-hover); }
 
 /* Inline number inputs for rate table cells */
 .input-amount    { width: 80px;  text-align: right; }
@@ -202,7 +204,7 @@ tr:last-child td { border-bottom: none; }
     cursor: pointer; font-size: .9rem; color: var(--color-text);
 }
 .suggestion-item:last-child { border-bottom: none; }
-.suggestion-item:hover { background: #f0f4ff; }
+.suggestion-item:hover { background: var(--color-brand-light); }
 
 /* -------------------------------------------------------
    Subnav (admin + settings — shared)
@@ -319,7 +321,7 @@ tr:last-child td { border-bottom: none; }
     border: 1px solid #d1d5db; border-radius: var(--radius-pill);
     background: var(--color-surface); color: var(--color-text-secondary); cursor: pointer;
 }
-.pref-toggle:hover { background: #f0f4ff; border-color: #93c5fd; color: #1e40af; }
+.pref-toggle:hover { background: var(--color-brand-light); border-color: var(--color-brand); color: var(--color-brand-hover); }
 .pref-toggle.pref-on { background: #fef9c3; border-color: #fbbf24; color: #92400e; }
 .pref-toggle.pref-on:hover { background: #fef3c7; }
 
