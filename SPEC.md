@@ -555,7 +555,10 @@ Styling, last-min changes, stress-testing.
 - [x] Wire HTMX polling to rate_request_detail.html page; lane status and vendor status should refresh automatically. Also, wire it up to the vendor responses field in lane_detail.html.
 - [x] Live filtering on the dashboard soon as a new filter selection is clicked - remove the 'Filter' button.
 - [x] Remove all inline styling; all of it should be consolidated in style.css
-- [ ] Map FreightPower Shipper styling
+- [x] Map FreightPower Shipper styling
+- [x] Upload real data
+
+### Milestone 8: Final refinements (Sprint 3)
 - [ ] Add a carrier to a rate request after-the-fact
 - [ ] Set default accessorial rates by user.
 - [ ] Delete a lane function
