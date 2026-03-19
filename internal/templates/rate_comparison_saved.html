@@ -11,7 +11,12 @@
             {{ .Data.Lane.Destination }} → {{ .Data.Lane.OriginPort }} {{ .Data.Lane.OriginPortType }}
             {{- end -}}
         </h1>
+        {{ if eq .Data.Lane.Status "quoting" }}
+        <span class="status-badge status-{{ .Data.Lane.Status }}"
+              hx-get="/lanes/{{ .Data.Lane.ID }}/status" hx-trigger="every 2s" hx-swap="outerHTML">{{ .Data.Lane.StatusLabel }}</span>
+        {{ else }}
         <span class="status-badge status-{{ .Data.Lane.Status }}">{{ .Data.Lane.StatusLabel }}</span>
+        {{ end }}
     </div>
     <div class="meta-text" style="margin-top:.25rem;">
         Ref: <strong>{{ .Data.RateRequest.ReferenceID }}</strong>
@@ -220,7 +225,7 @@ window.lineupBases = {{ .Data.LineupBases }};
 
     function fmtDollar(v) {
         if (v === 0) return "";
-        var s = "$" + Math.abs(v).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+        var s = "$" + Math.abs(v).toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
         return v < 0 ? "-" + s : "+" + s;
     }
 
@@ -248,7 +253,7 @@ window.lineupBases = {{ .Data.LineupBases }};
         var computedEl = document.getElementById("lhfuel-computed-total");
         if (computedEl) {
             computedEl.textContent = (mode === "percent" && !isNaN(lfInput) && lfInput !== 0)
-                ? "= $" + (lhFuelBase() * (1 + lfInput / 100)).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",")
+                ? "= $" + (lhFuelBase() * (1 + lfInput / 100)).toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ",")
                 : "";
         }
 

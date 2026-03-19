@@ -96,7 +96,7 @@ func ctLabel(ct string) string {
 		"detention":          "Detention ($/hr)",
 		"detention_free":     "Detention Free (hrs)",
 		"storage":            "Storage ($/day)",
-		"yard_pull":          "Yard Pull",
+		"yard_pull":          "Pre Pull",
 		"chassis_split":      "Chassis Split",
 		"mount":              "Mount",
 		"lift":               "Lift",
@@ -111,7 +111,7 @@ func ctLabel(ct string) string {
 		"hazmat":             "Hazmat",
 		"stop_off":           "Stop Off",
 		"layover":            "Layover",
-		"drop":               "Drop",
+		"drop":               "Bobtail",
 		"scale":              "Scale",
 		"congestion":         "Congestion ($/hr)",
 		"congestion_free":    "Congestion Free (hrs)",
@@ -140,7 +140,7 @@ func csvLabel(ct string) string {
 		"detention":          "Detention",
 		"detention_free":     "Detention Free Time",
 		"storage":            "Storage",
-		"yard_pull":          "Prepull",
+		"yard_pull":          "Pre Pull",
 		"chassis_split":      "Chassis Split",
 		"mount":              "Mount",
 		"lift":               "Lift",
@@ -155,7 +155,7 @@ func csvLabel(ct string) string {
 		"hazmat":             "Hazmat",
 		"stop_off":           "Stop Off",
 		"layover":            "Layover",
-		"drop":               "Drop",
+		"drop":               "Bobtail",
 		"scale":              "Scale",
 		"congestion":         "Congestion",
 		"congestion_free":    "Congestion Free Time",
@@ -174,7 +174,7 @@ func csvValue(ct string, val float64) string {
 	case "detention_free", "congestion_free", "chassis_min":
 		return fmt.Sprintf("%.0f", val)
 	}
-	return fmt.Sprintf("$%.2f", val)
+	return fmt.Sprintf("$%.0f", val)
 }
 
 // csvNotes returns the per-unit context string for the XLSX Notes column.
