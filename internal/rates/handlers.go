@@ -527,13 +527,13 @@ func safeIdx(s []string, i int) string {
 func FmtCellAmount(amount float64, unit string) string {
 	switch unit {
 	case "$":
-		return fmt.Sprintf("$%.2f", amount)
+		return fmt.Sprintf("$%.0f", amount)
 	case "%":
 		return fmt.Sprintf("%.2f%%", amount)
 	case "$/day":
-		return fmt.Sprintf("$%.2f/day", amount)
+		return fmt.Sprintf("$%.0f/day", amount)
 	case "$/hour":
-		return fmt.Sprintf("$%.2f/hr", amount)
+		return fmt.Sprintf("$%.0f/hr", amount)
 	case "days":
 		return fmt.Sprintf("%.0f days", amount)
 	case "hours":

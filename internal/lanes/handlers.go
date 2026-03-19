@@ -737,10 +737,14 @@ func (s *Service) HandleStatusBadge() http.HandlerFunc {
 		}
 		label := statusLabel(status)
 		w.Header().Set("Content-Type", "text/html")
-		if status == "rates_requested" {
+		switch status {
+		case "rates_requested":
 			fmt.Fprintf(w, `<span class="status-badge status-%s" hx-get="/lanes/%d/status" hx-trigger="every 30s" hx-swap="outerHTML">%s</span>`,
 				status, id, label)
-		} else {
+		case "quoting":
+			fmt.Fprintf(w, `<span class="status-badge status-%s" hx-get="/lanes/%d/status" hx-trigger="every 2s" hx-swap="outerHTML">%s</span>`,
+				status, id, label)
+		default:
 			fmt.Fprintf(w, `<span class="status-badge status-%s">%s</span>`, status, label)
 		}
 	}
