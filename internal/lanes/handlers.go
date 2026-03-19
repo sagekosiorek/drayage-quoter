@@ -387,13 +387,18 @@ func (s *Service) HandleCreate() http.HandlerFunc {
 					customerName,
 				)
 				if err != nil {
-					http.Error(w, "Insert customer failed", http.StatusInternalServerError)
-					return
+					// Race condition: another request may have inserted the same name concurrently.
+					// Try a re-fetch before giving up.
+					if err2 := s.DB.QueryRow("SELECT id FROM customers WHERE LOWER(name) = LOWER(?)", customerName).Scan(&customerID); err2 != nil {
+						http.Error(w, fmt.Sprintf("insert customer %q: %v", customerName, err), http.StatusInternalServerError)
+						return
+					}
+				} else {
+					id, _ := res.LastInsertId()
+					customerID = int(id)
 				}
-				id, _ := res.LastInsertId()
-				customerID = int(id)
 			} else if err != nil {
-				http.Error(w, "Lookup customer failed", http.StatusInternalServerError)
+				http.Error(w, fmt.Sprintf("lookup customer %q: %v", customerName, err), http.StatusInternalServerError)
 				return
 			}
 		}
@@ -651,13 +656,18 @@ func (s *Service) HandleUpdate() http.HandlerFunc {
 					customerName,
 				)
 				if err != nil {
-					http.Error(w, "Insert customer failed", http.StatusInternalServerError)
-					return
+					// Race condition: another request may have inserted the same name concurrently.
+					// Try a re-fetch before giving up.
+					if err2 := s.DB.QueryRow("SELECT id FROM customers WHERE LOWER(name) = LOWER(?)", customerName).Scan(&customerID); err2 != nil {
+						http.Error(w, fmt.Sprintf("insert customer %q: %v", customerName, err), http.StatusInternalServerError)
+						return
+					}
+				} else {
+					id, _ := res.LastInsertId()
+					customerID = int(id)
 				}
-				id64, _ := res.LastInsertId()
-				customerID = int(id64)
 			} else if err != nil {
-				http.Error(w, "Lookup customer failed", http.StatusInternalServerError)
+				http.Error(w, fmt.Sprintf("lookup customer %q: %v", customerName, err), http.StatusInternalServerError)
 				return
 			}
 		}
