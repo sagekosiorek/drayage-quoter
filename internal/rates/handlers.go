@@ -74,6 +74,9 @@ var reMailto = regexp.MustCompile(`mailto:([^\s"&?<>\r\n]+)`)
 // reFromTo extracts email addresses from plain-text From: and To: header lines.
 var reFromTo = regexp.MustCompile(`(?i)(?:^|\n)(?:from|to):\s*[^\n]*?([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})`)
 
+// reEmailAddr matches any bare email address anywhere in a body (fallback for forwarded emails).
+var reEmailAddr = regexp.MustCompile(`[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}`)
+
 // apiIngestRequest is the JSON body for POST /api/rates/parse.
 type apiIngestRequest struct {
 	Subject string `json:"subject"`
@@ -92,6 +95,10 @@ func (s *Service) IngestEmail(subject, body, sender string) (string, error) {
 	}
 
 	refMatch := reReferenceID.FindString(subject)
+	if refMatch == "" {
+		// For forwarded emails the RR ID may only appear in the body (original subject line).
+		refMatch = reReferenceID.FindString(body)
+	}
 	if refMatch == "" {
 		s.insertOrphan(body, subject, sender, 0)
 		return "orphaned", nil
@@ -147,6 +154,18 @@ func (s *Service) matchVendorByBody(body string, rrID int) (int, error) {
 			addrs = append(addrs, strings.ToLower(m[1]))
 		}
 	}
+	// Fallback: scan entire body for any email address. Handles forwarded emails where
+	// client-specific formats (e.g. Gmail HTML) embed addresses as plain text, not mailto links.
+	if len(addrs) == 0 {
+		seen := map[string]bool{}
+		for _, m := range reEmailAddr.FindAllString(body, -1) {
+			lower := strings.ToLower(m)
+			if !seen[lower] {
+				seen[lower] = true
+				addrs = append(addrs, lower)
+			}
+		}
+	}
 
 	for _, addr := range addrs {
 		var vendorID int
@@ -155,7 +174,7 @@ func (s *Service) matchVendorByBody(body string, rrID int) (int, error) {
 			FROM vendor_contacts vc
 			JOIN vendor_ports vp ON vc.vendor_ports_id = vp.id
 			JOIN rate_request_vendors rrv ON rrv.vendor_id = vp.vendor_id
-			WHERE vc.email = ? AND rrv.rate_request_id = ?
+			WHERE LOWER(vc.email) = ? AND rrv.rate_request_id = ?
 			LIMIT 1
 		`, addr, rrID).Scan(&vendorID)
 		if err == nil {
