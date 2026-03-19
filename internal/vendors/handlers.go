@@ -539,7 +539,7 @@ func (s *Service) HandleAddContact() http.HandlerFunc {
 			http.Error(w, "Not found", http.StatusNotFound)
 			return
 		}
-		email := strings.TrimSpace(r.FormValue("email"))
+		email := strings.ToLower(strings.TrimSpace(r.FormValue("email")))
 		if email == "" {
 			http.Error(w, "Email is required", http.StatusBadRequest)
 			return
