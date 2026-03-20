@@ -326,6 +326,13 @@ tr:last-child td { border-bottom: none; }
 .pref-toggle.pref-on { background: #fef9c3; border-color: #fbbf24; color: #92400e; }
 .pref-toggle.pref-on:hover { background: #fef3c7; }
 
+/* Danger filled button (delete actions) */
+.btn-danger {
+    background: var(--color-danger); color: #fff; border: none;
+    border-radius: var(--radius); padding: .4rem .9rem; cursor: pointer; font-size: .9rem;
+}
+.btn-danger:hover { filter: brightness(.9); }
+
 /* Danger link-style button (remove/delete in tables) */
 .btn-link-danger {
     background: none; border: none; padding: 0;

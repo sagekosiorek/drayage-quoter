@@ -752,6 +752,36 @@ func (s *Service) HandleStatusBadge() http.HandlerFunc {
 
 
 
+// HandleDelete permanently removes a lane and all associated data (rate requests, rates, lineup, quote link).
+func (s *Service) HandleDelete() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		user := auth.UserFromContext(r.Context())
+		id, err := strconv.Atoi(r.PathValue("id"))
+		if err != nil {
+			http.Error(w, "Invalid lane ID", http.StatusBadRequest)
+			return
+		}
+		var ownerID int
+		err = s.DB.QueryRow(`SELECT owner_id FROM lanes WHERE id = ?`, id).Scan(&ownerID)
+		if err == sql.ErrNoRows {
+			http.Error(w, fmt.Sprintf("lane %d not found", id), http.StatusNotFound)
+			return
+		} else if err != nil {
+			http.Error(w, fmt.Sprintf("failed to fetch lane %d: %v", id, err), http.StatusInternalServerError)
+			return
+		}
+		if ownerID != user.ID {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		if _, err := s.DB.Exec(`DELETE FROM lanes WHERE id = ?`, id); err != nil {
+			http.Error(w, fmt.Sprintf("delete lane %d failed: %v", id, err), http.StatusInternalServerError)
+			return
+		}
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+	}
+}
+
 // nullableStr returns nil if s is empty, otherwise s — so empty form fields become NULL in SQLite.
 func nullableStr(s string) interface{} {
 	if s == "" {

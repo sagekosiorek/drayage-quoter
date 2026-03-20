@@ -2,6 +2,12 @@
 <div class="page-header">
     <p class="back-link"><a href="/">← Back to lanes</a></p>
     <div class="flex-row">
+        {{ if .Lane.IsOwner }}
+        <form method="POST" action="/lanes/{{ .Lane.ID }}/delete" class="form-inline"
+              onsubmit="return confirm('Delete this lane? All rate requests and related data will also be deleted. This cannot be undone.')">
+            <button type="submit" class="btn-danger">Delete Lane</button>
+        </form>
+        {{ end }}
         {{ if and .Lane.IsOwner (eq .Lane.Status "draft") }}
         <a href="/lanes/{{ .Lane.ID }}/edit"><button>Edit Draft</button></a>
         {{ end }}

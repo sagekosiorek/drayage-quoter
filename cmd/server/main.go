@@ -210,6 +210,7 @@ func main() {
 	mux.HandleFunc("GET /lanes/{id}/edit", authService.RequireAuth(lanesSvc.HandleEditForm(laneEditTmpl)))
 	mux.HandleFunc("POST /lanes/{id}", authService.RequireAuth(lanesSvc.HandleUpdate()))
 	mux.HandleFunc("POST /lanes/{id}/status", authService.RequireAuth(lanesSvc.HandleAdvanceStatus()))
+	mux.HandleFunc("POST /lanes/{id}/delete", authService.RequireAuth(lanesSvc.HandleDelete()))
 
 	// Rate request routes
 	mux.HandleFunc("GET /lanes/{id}/rate-request/new", authService.RequireAuth(rrSvc.HandleNewForm(rrNewTmpl)))
