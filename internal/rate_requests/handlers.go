@@ -1072,6 +1072,15 @@ func (s *Service) HandleSaveLineup() http.HandlerFunc {
 			selected = append(selected, lineupEntry{vrID: vrID, rank: rank})
 		}
 
+		seen := map[int]bool{}
+		for _, entry := range selected {
+			if seen[entry.rank] {
+				http.Error(w, "Duplicate ranks: each carrier must have a unique rank", http.StatusBadRequest)
+				return
+			}
+			seen[entry.rank] = true
+		}
+
 		tx, err := s.DB.Begin()
 		if err != nil {
 			http.Error(w, "Begin transaction failed", http.StatusInternalServerError)

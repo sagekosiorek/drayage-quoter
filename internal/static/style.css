@@ -84,8 +84,8 @@ button.primary { background: var(--color-brand); color: #fff; border-color: var(
 button.primary:hover { background: var(--color-brand-hover); }
 
 /* Inline number inputs for rate table cells */
-.input-amount    { width: 80px;  text-align: right; }
-.input-amount-lg { width: 100px; text-align: right; padding: 4px 6px; border: 1px solid #d1d5db; border-radius: var(--radius-sm); }
+.input-amount    { max-width: 80px;  text-align: right; }
+.input-amount-lg { max-width: 80px; text-align: right; padding: 4px 6px; border: 1px solid #d1d5db; border-radius: var(--radius-sm); }
 
 /* -------------------------------------------------------
    Tables + cells
@@ -97,7 +97,7 @@ tr:last-child td { border-bottom: none; }
 .empty-state { text-align: center; color: var(--color-muted); padding: 2rem; }
 
 /* Cell alignment / interaction */
-.cell-center        { text-align: center; }
+.cell-center        { text-align: center; max-width: 70px; }
 .cell-center-click  { text-align: center; cursor: pointer; }
 .cell-center-empty  { text-align: center; color: var(--color-faint); cursor: pointer; }
 .cell-total         { text-align: center; font-weight: 700; }
@@ -115,7 +115,7 @@ tr:last-child td { border-bottom: none; }
 /* -------------------------------------------------------
    Layout utilities
 ------------------------------------------------------- */
-.flex-row      { display: flex; align-items: center; gap: .5rem; }
+.flex-row      { display: flex; align-items: center; gap: .5rem; padding-bottom: .5rem; }
 .flex-row-lg   { display: flex; align-items: center; gap: .75rem; }
 .flex-between  { display: flex; align-items: center; justify-content: space-between; }
 .flex-wrap-sm  { display: flex; gap: .35rem; flex-wrap: wrap; }
@@ -401,7 +401,7 @@ td.cell-llm:hover, td.cell-edited:hover { opacity: .85; }
 .email-plain { white-space: pre-wrap; word-break: break-word; font-size: .78rem; font-family: var(--font-mono); margin: 0; }
 
 /* Lineup rank input */
-.rank-input { width: 44px; font-size: .85rem; text-align: center; padding: 2px 4px;
+.rank-input { max-width: 60px; font-size: .85rem; text-align: center; padding: 2px 4px;
               border: 1px solid #d1d5db; border-radius: var(--radius-sm); }
 
 /* Carousel header cell */
