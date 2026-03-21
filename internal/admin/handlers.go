@@ -147,7 +147,7 @@ func (s *Service) HandleAddPort() http.HandlerFunc {
 					 http.Error(w, "Name and type are required", http.StatusBadRequest)
 					 return
 			 }
-			 if portType != "Seaport" && portType != "Rail Ramp" {
+			 if portType != "Port" && portType != "Rail Ramp" {
 					 http.Error(w, "Invalid port type", http.StatusBadRequest)
 					 return
 			 }
