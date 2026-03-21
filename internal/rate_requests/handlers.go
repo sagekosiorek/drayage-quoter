@@ -201,17 +201,19 @@ func xlCell(col, row int) string {
 }
 
 // generateReferenceID produces the next sequential reference ID for the current year.
+// Uses MAX on the numeric suffix so deletions never cause collisions with existing IDs.
 func generateReferenceID(db *sql.DB) (string, error) {
 	year := time.Now().Year()
-	var count int
+	var max int
 	err := db.QueryRow(
-		`SELECT COUNT(*) FROM rate_requests WHERE reference_id LIKE ?`,
+		`SELECT COALESCE(MAX(CAST(SUBSTR(reference_id, -5) AS INTEGER)), 0)
+		 FROM rate_requests WHERE reference_id LIKE ?`,
 		fmt.Sprintf("RR-%d-%%", year),
-	).Scan(&count)
+	).Scan(&max)
 	if err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("RR-%d-%05d", year, count+1), nil
+	return fmt.Sprintf("RR-%d-%05d", year, max+1), nil
 }
 
 // buildSubjectBase generates the lane-specific portion of the subject line (no reference ID).
