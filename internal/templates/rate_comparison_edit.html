@@ -149,13 +149,17 @@
 {{ end }}
 
 <script>
-document.getElementById('lineup-form').addEventListener('input', function(e) {
-    if (!e.target.matches('.rank-input')) return;
+function checkRanks() {
     const vals = [...document.querySelectorAll('.rank-input')].map(i => i.value).filter(v => v !== '');
     const hasAny  = vals.length > 0;
     const hasDupe = hasAny && vals.length !== new Set(vals).size;
     document.getElementById('lineup-action').style.display = (!hasAny || hasDupe) ? 'none' : 'flex';
     document.getElementById('lineup-error').style.display  = hasDupe ? 'flex' : 'none';
+}
+document.getElementById('lineup-form').addEventListener('input', function(e) {
+    if (!e.target.matches('.rank-input')) return;
+    checkRanks();
 });
+checkRanks();
 </script>
 {{ end }}
