@@ -1426,14 +1426,10 @@ func (s *Service) persistMarkups(tx *sql.Tx, laneID int, r *http.Request) (int64
 		}
 		entries = append(entries, markupEntry{chargeType: ct, value: val, markupType: "flat"})
 	}
-	// linehaul_fuel is a special combined entry with flat/percent toggle.
+	// linehaul_fuel stores the flat markup dollar amount (profit margin, not customer rate).
 	if lfStr := r.FormValue("linehaul_fuel"); lfStr != "" {
 		if lfVal, err := strconv.ParseFloat(lfStr, 64); err == nil && lfVal != 0 {
-			mtype := r.FormValue("markup_type_linehaul_fuel")
-			if mtype != "percent" {
-				mtype = "flat"
-			}
-			entries = append(entries, markupEntry{chargeType: "linehaul_fuel", value: lfVal, markupType: mtype})
+			entries = append(entries, markupEntry{chargeType: "linehaul_fuel", value: lfVal, markupType: "flat"})
 		}
 	}
 
@@ -1604,52 +1600,113 @@ func (s *Service) HandleGenerateCSV() http.HandlerFunc {
 			markupLookup[e.chargeType] = e
 		}
 
-		// Load rank-1 vendor rate items for the CSV (primary carrier's rates as the basis).
-		// We use the full lineup to compute values; CSV shows customer charges derived from markup.
-		type vendorAmounts struct {
-			linehaul float64
-			fuel     float64
-			items    map[string]float64
-		}
-		var primaryVendor vendorAmounts
-		primaryVendor.items = make(map[string]float64)
+		// Determine which vendor's base rates to use: carousel index 0 = average, N = rank-N vendor.
+		carouselIdx, _ := strconv.Atoi(r.FormValue("base_carousel_idx"))
 
-		priRows, err := s.DB.Query(`
-			SELECT vri.charge_type, vri.amount
+		// Load base LH+Fuel total and avg fuel% mirroring HandleSavedComparison's lineupBases build.
+		// For average: load all lineup vendor items using the same rate_request_id-scoped query, then
+		// average per-vendor totals and fuel% exactly as HandleSavedComparison does for lineupBases[0].
+		// For rank N: load items for that specific vendor_rate_id.
+		var baseLHFuel, baseFuelPct float64
+
+		// Load all lineup vendor_rate_ids for this lane (same as HandleSavedComparison).
+		type lineupItem struct{ rank int; vrID int }
+		var lineupItems []lineupItem
+		liRows, err := s.DB.Query(`
+			SELECT vl.rank, vl.vendor_rate_id
 			FROM vendor_lineups vl
-			JOIN vendor_rates vr ON vr.id = vl.vendor_rate_id
-			JOIN vendor_rate_items vri ON vri.vendor_rate_id = vr.id
-			WHERE vl.lane_id = ? AND vl.rank = 1
+			WHERE vl.lane_id = ?
+			ORDER BY vl.rank
 		`, laneID)
 		if err != nil {
-			log.Printf("HandleGenerateCSV: query primary vendor items lane=%d: %v", laneID, err)
-			http.Error(w, "Failed to load primary vendor rates", http.StatusInternalServerError)
+			log.Printf("HandleGenerateCSV: query lineup lane=%d: %v", laneID, err)
+			http.Error(w, "Failed to load lineup", http.StatusInternalServerError)
 			return
 		}
-		for priRows.Next() {
-			var ct string
-			var amount float64
-			priRows.Scan(&ct, &amount)
-			primaryVendor.items[ct] = amount
+		for liRows.Next() {
+			var li lineupItem
+			liRows.Scan(&li.rank, &li.vrID)
+			lineupItems = append(lineupItems, li)
 		}
-		priRows.Close()
-		primaryVendor.linehaul = primaryVendor.items["linehaul"]
-		primaryVendor.fuel = primaryVendor.items["fuel"]
+		liRows.Close()
 
-		// Compute linehaul+fuel customer rate (percent mode uses rank-1 vendor base).
-		lhFuelBase := primaryVendor.linehaul + primaryVendor.linehaul*primaryVendor.fuel/100
-		var lhFuelCustomer float64
-		if lfEntry, ok := markupLookup["linehaul_fuel"]; ok {
-			if lfEntry.markupType == "percent" {
-				lhFuelCustomer = lhFuelBase * (1 + lfEntry.value/100)
-			} else {
-				lhFuelCustomer = lfEntry.value // flat: user entered customer total directly
+		// Determine target vendor_rate_ids: all (average) or just the one at carouselIdx rank.
+		var targetVRIDs []int
+		for _, li := range lineupItems {
+			if carouselIdx <= 0 || li.rank == carouselIdx {
+				targetVRIDs = append(targetVRIDs, li.vrID)
 			}
-		} else {
-			lhFuelCustomer = lhFuelBase
 		}
-		// Replace linehaul_fuel entry so the output loop uses the computed dollar amount.
-		markupLookup["linehaul_fuel"] = markupEntry{chargeType: "linehaul_fuel", value: lhFuelCustomer, markupType: "flat"}
+
+		if len(targetVRIDs) > 0 {
+			// Query linehaul + fuel items for the target vendor(s), scoped to this rate request.
+			// Using rate_request_id exactly as HandleSavedComparison does to ensure same data.
+			placeholders := strings.Repeat("?,", len(targetVRIDs))
+			placeholders = placeholders[:len(placeholders)-1]
+			args := make([]any, 1+len(targetVRIDs))
+			args[0] = rrID
+			for i, id := range targetVRIDs {
+				args[i+1] = id
+			}
+			vendorLHFuel := make(map[int][2]float64) // vrID → [lh, fuel]
+			iRows, err := s.DB.Query(fmt.Sprintf(`
+				SELECT vri.vendor_rate_id, vri.charge_type, vri.amount
+				FROM vendor_rates vr
+				JOIN vendor_rate_items vri ON vri.vendor_rate_id = vr.id
+				WHERE vr.rate_request_id = ? AND vr.id IN (%s)
+				  AND vri.charge_type IN ('linehaul', 'fuel')
+			`, placeholders), args...)
+			if err != nil {
+				log.Printf("HandleGenerateCSV: query items rr=%d: %v", rrID, err)
+				http.Error(w, "Failed to load vendor rates", http.StatusInternalServerError)
+				return
+			}
+			for iRows.Next() {
+				var vrID int
+				var ct string
+				var amount float64
+				iRows.Scan(&vrID, &ct, &amount)
+				pair := vendorLHFuel[vrID]
+				if ct == "linehaul" {
+					pair[0] = amount
+				} else {
+					pair[1] = amount
+				}
+				vendorLHFuel[vrID] = pair
+			}
+			iRows.Close()
+
+			// Compute averages mirroring HandleSavedComparison: totalSum / len(vendors), fuelSum / fuelCount.
+			var totalSum, fuelSum float64
+			var fuelCount int
+			for _, vrID := range targetVRIDs {
+				pair := vendorLHFuel[vrID]
+				lh, fuel := pair[0], pair[1]
+				totalSum += lh + lh*fuel/100
+				if fuel > 0 {
+					fuelSum += fuel
+					fuelCount++
+				}
+			}
+			if len(targetVRIDs) > 0 {
+				baseLHFuel = totalSum / float64(len(targetVRIDs))
+			}
+			if fuelCount > 0 {
+				baseFuelPct = fuelSum / float64(fuelCount)
+			}
+		}
+
+		// Compute customer Linehaul, Fuel%, and LH+Fuel total from the stored flat markup.
+		// Formula: customerLHFuel = baseLHFuel + markup; customerLH = customerLHFuel / (1 + fuel%/100).
+		markupVal := markupLookup["linehaul_fuel"].value // 0 if no markup saved
+		customerLHFuel := baseLHFuel + markupVal
+		customerFuelPct := baseFuelPct
+		var customerLH float64
+		if divisor := 1 + customerFuelPct/100; divisor > 0 {
+			customerLH = customerLHFuel / divisor
+		} else {
+			customerLH = customerLHFuel
+		}
 
 		// Build XLSX workbook.
 		f := excelize.NewFile()
@@ -1680,21 +1737,31 @@ func (s *Service) HandleGenerateCSV() http.HandlerFunc {
 		row++
 
 
-		// Section header: "Applicable charges" | (empty) | "Notes" — both orange.
+		// Section header: "Applicable charges" | (empty) | "LH + Fuel" — all orange.
 		f.SetCellValue(sheet, xlCell(1, row), "Applicable charges")
-		f.SetCellValue(sheet, xlCell(3, row), "Notes")
+		f.SetCellValue(sheet, xlCell(3, row), "LH + Fuel")
 		f.SetCellStyle(sheet, xlCell(1, row), xlCell(1, row), orangeStyle)
 		f.SetCellStyle(sheet, xlCell(2, row), xlCell(2, row), orangeStyle)
 		f.SetCellStyle(sheet, xlCell(3, row), xlCell(3, row), orangeStyle)
 		row++
 
-		// Partition entered charges into applicable vs. accessorials (preserving FieldOrder).
-		// linehaul_fuel is a synthetic key not in FieldOrder, so it is handled first.
+		// Linehaul and Fuel rows: col C holds the LH+Fuel total merged across both rows.
+		// Linehaul row: label | $customerLH | $customerLHFuel (merged with fuel row below)
+		lhRow := row
+		f.SetCellValue(sheet, xlCell(1, row), "Linehaul")
+		f.SetCellValue(sheet, xlCell(2, row), csvValue("linehaul_fuel", customerLH))
+		f.SetCellValue(sheet, xlCell(3, row), csvValue("linehaul_fuel", customerLHFuel))
+		row++
+		// Fuel row: label | fuel% | (merged cell — no value set)
+		f.SetCellValue(sheet, xlCell(1, row), "Fuel (subject to change weekly)")
+		f.SetCellValue(sheet, xlCell(2, row), fmt.Sprintf("%.2f%%", customerFuelPct))
+		row++
+		// Merge col C across the Linehaul and Fuel rows so the total spans both.
+		f.MergeCell(sheet, xlCell(3, lhRow), xlCell(3, lhRow+1))
+
+		// Partition other entered charges into applicable vs. accessorials (preserving FieldOrder).
 		type quoteRow struct{ label, value, notes string }
 		var applicable, accessorials []quoteRow
-		if e := markupLookup["linehaul_fuel"]; e.value != 0 {
-			applicable = append(applicable, quoteRow{csvLabel("linehaul_fuel"), csvValue("linehaul_fuel", e.value), csvNotes("linehaul_fuel")})
-		}
 		for _, ct := range rates.FieldOrder {
 			if ct == "linehaul" || ct == "fuel" {
 				continue

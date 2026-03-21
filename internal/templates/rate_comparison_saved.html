@@ -38,6 +38,8 @@ window.lineupBases = {{ .Data.LineupBases }};
     <!-- Left: markup table + CSV generation -->
     <div>
         <form method="POST" action="/rate-requests/{{ .Data.RateRequest.ID }}/csv" id="csv-form">
+            <!-- Tracks the active carousel index so the CSV uses the same base vendor. 0 = average. -->
+            <input type="hidden" name="base_carousel_idx" id="base-carousel-idx" value="0">
 
             <div class="comparison-table-wrap">
                 <table class="comparison-table">
@@ -65,48 +67,56 @@ window.lineupBases = {{ .Data.LineupBases }};
                         </tr>
                     </thead>
                     <tbody>
-                        <!-- Total Markup summary row -->
+                        <!-- Total Markup summary row — flat markup input drives LH+Fuel computation -->
                         <tr class="row-total row-highlight-green">
                             <td style="font-weight:600;">Total Markup</td>
                             <td id="total-markup-preview" class="cell-total"></td>
-                            <td></td>
+                            <td class="cell-center">
+                                <input type="text" inputmode="decimal" name="linehaul_fuel" id="input-linehaul-markup"
+                                       class="input-amount"
+                                       {{ with index $.Data.Markups "linehaul_fuel" }}value="{{ .Value }}"{{ end }}>
+                                <div class="text-2xs text-secondary" style="margin-top:.25rem;">flat markup</div>
+                            </td>
                             <td class="cell-avg"></td>
                             {{ range .Data.Vendors }}
                             <td></td>
                             {{ end }}
                         </tr>
-                        <!-- Linehaul + Fuel combined row -->
+                        <!-- Linehaul + Fuel combined row — read-only computed from markup above -->
                         <tr class="row-total">
                             <td style="font-weight:600;font-style:italic;">Linehaul + Fuel</td>
-                            <!-- Markup (P&L) cell — text only, computed by JS -->
-                            <td class="cell-center">
-                                <span id="markup-linehaul_fuel"></span>
-                            </td>
-                            <!-- Customer Rate cell — input + flat/% toggle + computed total display -->
-                            <td class="cell-center">
-                                <input type="text" inputmode="decimal" name="linehaul_fuel" id="input-linehaul_fuel"
-                                       class="input-amount"
-                                       {{ with index $.Data.Markups "linehaul_fuel" }}value="{{ .Value }}"{{ end }}>
-                                <div id="lhfuel-computed-total" class="text-2xs text-secondary" style="margin-top:.2rem;"></div>
-                                <div id="lhfuel-lock-wrap" style="font-size:.72rem;margin-top:.2rem;display:none;">
-                                    <button type="button" id="lhfuel-lock-btn"
-                                            style="font-size:.72rem;padding:1px 5px;cursor:pointer;"
-                                            title="Lock computed total as customer rate">&#128274; Lock</button>
-                                    <span id="lhfuel-locked-label" style="display:none;color:#2563eb;font-size:.72rem;">(locked)</span>
-                                </div>
-                                <div style="font-size:.72rem;margin-top:.25rem;">
-                                    <label><input type="radio" name="markup_type_linehaul_fuel" value="flat"
-                                        {{ with index $.Data.Markups "linehaul_fuel" }}{{ if eq .MarkupType "flat" }}checked{{ end }}{{ else }}checked{{ end }}> flat</label>
-                                    <label style="margin-left:.3rem;"><input type="radio" name="markup_type_linehaul_fuel" value="percent"
-                                        {{ with index $.Data.Markups "linehaul_fuel" }}{{ if eq .MarkupType "percent" }}checked{{ end }}{{ end }}> %</label>
-                                </div>
-                            </td>
+                            <td id="markup-linehaul_fuel" class="cell-center"></td>
+                            <td id="customer-linehaul_fuel" class="cell-center text-secondary"></td>
                             <td id="avg-linehaul_fuel" class="cell-avg-total">{{ .Data.AvgTotal }}</td>
                             {{ range .Data.Vendors }}
                             <td class="cell-total">{{ .TotalDisplay }}</td>
                             {{ end }}
                         </tr>
-                        <!-- Per-charge-type rows (excluding linehaul and fuel — shown above) -->
+                        <!-- Linehaul row — read-only computed -->
+                        <tr>
+                            <td>Linehaul</td>
+                            <td></td>
+                            <td id="customer-linehaul" class="cell-center text-secondary"></td>
+                            <td id="avg-linehaul" class="cell-avg">{{ index .Data.Averages "linehaul" }}</td>
+                            {{ range .Data.Vendors }}
+                            {{ $cell := index .Items "linehaul" }}
+                            {{ if $cell.ID }}<td class="cell-center">{{ $cell.Display }}</td>
+                            {{ else }}<td class="cell-center-empty">—</td>{{ end }}
+                            {{ end }}
+                        </tr>
+                        <!-- Fuel row — read-only, mirrors base vendor fuel % -->
+                        <tr>
+                            <td>Fuel</td>
+                            <td></td>
+                            <td id="customer-fuel" class="cell-center text-secondary"></td>
+                            <td id="avg-fuel" class="cell-avg">{{ index .Data.Averages "fuel" }}</td>
+                            {{ range .Data.Vendors }}
+                            {{ $cell := index .Items "fuel" }}
+                            {{ if $cell.ID }}<td class="cell-center">{{ $cell.Display }}</td>
+                            {{ else }}<td class="cell-center-empty">—</td>{{ end }}
+                            {{ end }}
+                        </tr>
+                        <!-- Per-charge-type rows (linehaul and fuel shown as fixed rows above) -->
                         {{ range .Data.ChargeRows }}
                         {{ $ct := .Key }}
                         {{ if and (ne $ct "linehaul") (ne $ct "fuel") }}
@@ -169,8 +179,8 @@ window.lineupBases = {{ .Data.LineupBases }};
 
 <script>
 (function() {
-    var bases = window.lineupBases; // [{linehaul:X, fuel:Y, ...}, {}, ...]
-    // bases[0] = averages (raw floats), bases[1..] = rank-1..N vendor amounts
+    var bases = window.lineupBases; // [{linehaul:X, fuel:Y, linehaul_fuel:Z, ...}, ...]
+    // bases[0] = averages (raw floats + pre-computed linehaul_fuel), bases[1..] = rank-1..N vendor amounts
     var vendorNames = [
         "Average"
         {{ range .Data.Vendors }}, "{{ .VendorName }} (Rank {{ .Rank }})"{{ end }}
@@ -178,49 +188,9 @@ window.lineupBases = {{ .Data.LineupBases }};
 
     var currentIdx = 0;
 
-    // Lock state for linehaul_fuel percent mode.
-    var lhFuelLockState = { locked: false, origPct: '' };
-
-    function updateLockUI() {
-        var wrap  = document.getElementById('lhfuel-lock-wrap');
-        var btn   = document.getElementById('lhfuel-lock-btn');
-        var label = document.getElementById('lhfuel-locked-label');
-        var inPct = document.querySelector('input[name="markup_type_linehaul_fuel"]:checked')?.value === 'percent';
-        if (wrap) wrap.style.display = (inPct || lhFuelLockState.locked) ? '' : 'none';
-        if (lhFuelLockState.locked) {
-            if (btn)   { btn.textContent = '\uD83D\uDD13 Unlock'; btn.title = 'Unlock \u2014 restore percent mode'; }
-            if (label)  label.style.display = '';
-        } else {
-            if (btn)   { btn.textContent = '\uD83D\uDD12 Lock'; btn.title = 'Lock computed total as customer rate'; }
-            if (label)  label.style.display = 'none';
-        }
-    }
-
     function getBase(ct) {
         if (!bases || !bases[currentIdx]) return 0;
         return bases[currentIdx][ct] || 0;
-    }
-
-    // Linehaul + fuel combined base: pre-computed total stored in bases as "linehaul_fuel".
-    function lhFuelBase() {
-        return getBase("linehaul_fuel");
-    }
-
-    // P&L = Customer Rate − base rate. Returns null if no charge entered (input blank).
-    // For linehaul_fuel percent mode: P&L = base × pct/100 (the percent IS the margin rate).
-    function computePL(ct) {
-        var inputEl = document.getElementById("input-" + ct);
-        if (!inputEl) return null;
-        var customerCharge = parseFloat(inputEl.value);
-        if (!(customerCharge > 0)) return null;
-        if (ct === "linehaul_fuel") {
-            var base = lhFuelBase();
-            var mode = document.querySelector('input[name="markup_type_linehaul_fuel"]:checked')?.value;
-            return mode === "percent"
-                ? base * customerCharge / 100
-                : customerCharge - base;
-        }
-        return customerCharge - getBase(ct);
     }
 
     function fmtDollar(v) {
@@ -229,7 +199,11 @@ window.lineupBases = {{ .Data.LineupBases }};
         return v < 0 ? "-" + s : "+" + s;
     }
 
-    // Sets the Markup (P&L) cell text; clears it when pl is null (no charge entered).
+    function fmtAmount(v) {
+        return "$" + v.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    }
+
+    // Sets the Markup (P&L) cell text; clears it when pl is null.
     function setMarkupCell(ct, pl) {
         var el = document.getElementById("markup-" + ct);
         if (!el) return;
@@ -238,31 +212,41 @@ window.lineupBases = {{ .Data.LineupBases }};
         el.style.color = pl > 0 ? "#16a34a" : pl < 0 ? "#dc2626" : "#999";
     }
 
+    // Compute customer LH, Fuel%, and LH+Fuel from the flat markup input.
+    function computeLHFuel() {
+        var markup    = parseFloat(document.getElementById("input-linehaul-markup").value) || 0;
+        var baseLHFuel = getBase("linehaul_fuel");
+        var baseFuel   = getBase("fuel"); // percentage
+        var cLHFuel    = baseLHFuel + markup;
+        var divisor    = 1 + baseFuel / 100;
+        var cLH        = divisor > 0 ? cLHFuel / divisor : cLHFuel;
+        return { markup: markup, cLHFuel: cLHFuel, cLH: cLH, cFuelPct: baseFuel };
+    }
+
     function updatePreviews() {
-        var totalMarkup = 0;
+        var lh = computeLHFuel();
+        var totalMarkup = lh.markup > 0 ? lh.markup : 0;
 
-        // Linehaul + Fuel P&L
-        var lfPL = computePL("linehaul_fuel");
-        if (lfPL !== null) totalMarkup += lfPL;
-        setMarkupCell("linehaul_fuel", lfPL);
+        // Update computed read-only LH+Fuel cells.
+        var lfEl = document.getElementById("customer-linehaul_fuel");
+        if (lfEl) lfEl.textContent = lh.cLHFuel > 0 ? fmtAmount(lh.cLHFuel) : "";
 
-        // Computed total display for LH+Fuel percent mode
-        var lfInputEl = document.getElementById("input-linehaul_fuel");
-        var lfInput = lfInputEl && lfInputEl.value.trim() !== "" ? parseFloat(lfInputEl.value) : NaN;
-        var mode = document.querySelector('input[name="markup_type_linehaul_fuel"]:checked')?.value;
-        var computedEl = document.getElementById("lhfuel-computed-total");
-        if (computedEl) {
-            computedEl.textContent = (mode === "percent" && !isNaN(lfInput) && lfInput !== 0)
-                ? "= $" + (lhFuelBase() * (1 + lfInput / 100)).toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ",")
-                : "";
-        }
+        var lhEl = document.getElementById("customer-linehaul");
+        if (lhEl) lhEl.textContent = lh.cLH > 0 ? fmtAmount(lh.cLH) : "";
 
-        // Other charge types
+        var fuelEl = document.getElementById("customer-fuel");
+        if (fuelEl) fuelEl.textContent = lh.cFuelPct > 0 ? lh.cFuelPct.toFixed(2) + "%" : "";
+
+        // Markup (P&L) cell on Linehaul+Fuel row shows the flat markup amount.
+        setMarkupCell("linehaul_fuel", lh.markup > 0 ? lh.markup : null);
+
+        // Other charge types P&L (flat: customer rate − base).
         var allInputs = document.querySelectorAll("#csv-form input[type=text]");
         allInputs.forEach(function(input) {
             var ct = input.name;
-            if (ct === "linehaul_fuel") return;
-            var pl = computePL(ct);
+            if (ct === "linehaul_fuel") return; // handled above
+            var customerCharge = parseFloat(input.value);
+            var pl = (customerCharge > 0) ? customerCharge - getBase(ct) : null;
             if (pl !== null) totalMarkup += pl;
             setMarkupCell(ct, pl);
         });
@@ -272,7 +256,6 @@ window.lineupBases = {{ .Data.LineupBases }};
             totalEl.textContent = fmtDollar(totalMarkup);
             totalEl.style.color = totalMarkup > 0 ? "#16a34a" : totalMarkup < 0 ? "#dc2626" : "#999";
         }
-        updateLockUI();
     }
 
     function updateCarouselLabel() {
@@ -295,58 +278,29 @@ window.lineupBases = {{ .Data.LineupBases }};
         }
     }
 
+    function syncCarouselInput() {
+        var el = document.getElementById("base-carousel-idx");
+        if (el) el.value = currentIdx;
+    }
+
     document.getElementById("carousel-prev").addEventListener("click", function() {
         currentIdx = (currentIdx - 1 + bases.length) % bases.length;
+        syncCarouselInput();
         updateCarouselLabel();
         updatePreviews();
     });
     document.getElementById("carousel-next").addEventListener("click", function() {
         currentIdx = (currentIdx + 1) % bases.length;
+        syncCarouselInput();
         updateCarouselLabel();
         updatePreviews();
     });
 
-    // Live update on any input change
+    // Live update on any input change.
     document.getElementById("csv-form").addEventListener("input", updatePreviews);
 
-    // Keep lock button visibility in sync when user manually toggles flat/% radios.
-    document.querySelectorAll('input[name="markup_type_linehaul_fuel"]').forEach(function(r) {
-        r.addEventListener('change', updateLockUI);
-    });
-
-    // Lock/unlock handler for linehaul_fuel percent mode.
-    document.getElementById('lhfuel-lock-btn').addEventListener('click', function() {
-        var inputEl   = document.getElementById('input-linehaul_fuel');
-        var flatRadio = document.querySelector('input[name="markup_type_linehaul_fuel"][value="flat"]');
-        var pctRadio  = document.querySelector('input[name="markup_type_linehaul_fuel"][value="percent"]');
-
-        if (lhFuelLockState.locked) {
-            // Unlock: restore original percent value and re-enable radios.
-            lhFuelLockState.locked = false;
-            inputEl.value = lhFuelLockState.origPct;
-            if (pctRadio)  { pctRadio.checked = true;  pctRadio.disabled  = false; }
-            if (flatRadio) { flatRadio.disabled = false; }
-        } else {
-            // Lock: capture computed total, switch to flat mode at that amount.
-            var pct = parseFloat(inputEl.value);
-            if (!(pct > 0)) return; // nothing to lock without a positive percent
-            var lockedTotal = lhFuelBase() * (1 + pct / 100);
-            lhFuelLockState.origPct = inputEl.value;
-            lhFuelLockState.locked  = true;
-            inputEl.value = lockedTotal.toFixed(2);
-            if (flatRadio) { flatRadio.checked = true; flatRadio.disabled = true; }
-            if (pctRadio)  { pctRadio.disabled = true; }
-        }
-
-        updateLockUI();
-        updatePreviews();
-        // Trigger debounced auto-save so the locked amount is persisted.
-        document.getElementById('csv-form').dispatchEvent(new Event('change', { bubbles: true }));
-    });
-
-    // Initial render
+    // Initial render.
     updatePreviews();
-    updateLockUI();
     updateCarouselLabel();
 })();
 </script>
