@@ -24,9 +24,28 @@
 
 <div class="comparison-layout">
 
+
     <!-- Left: comparison table + lineup save -->
     <div>
-        <form method="POST" action="/rate-requests/{{ .Data.RateRequest.ID }}/lineup">
+        <span class="label-caps">Set ranks: 1 = primary carrier, 2 = secondary, etc. Set to 0 or blank to exclude.</span>
+
+        {{ if .Data.AvailableChargeTypes }}
+        <div class="flex-row" style="margin-top:.75rem;">
+            <select id="add-charge-type-select" name="charge_type" style="width:auto;">
+                <option value="">Add charge type...</option>
+                {{ range .Data.AvailableChargeTypes }}
+                <option value="{{ .Key }}">{{ .Label }}</option>
+                {{ end }}
+            </select>
+            <button type="button"
+                    hx-get="/rate-requests/{{ .Data.RateRequest.ID }}/comparison/add-row"
+                    hx-include="#add-charge-type-select"
+                    hx-target="#comparison-tbody"
+                    hx-swap="beforeend">Add Row</button>
+        </div>
+        {{ end }}
+
+        <form id="lineup-form" method="POST" action="/rate-requests/{{ .Data.RateRequest.ID }}/lineup">
 
             <div class="comparison-table-wrap">
                 <table class="comparison-table">
@@ -96,30 +115,14 @@
                 </table>
             </div>
 
-            <div class="flex-row" style="margin-top:1rem;gap:1rem;">
-                <button type="submit" class="primary">Save Lineup and Quote →</button>
-                <span class="label-caps">
-                    Set rank 1 = primary carrier, 2 = secondary, etc. Set to 0 or blank to exclude.
-                </span>
+            <div id="lineup-action" class="flex-row" style="display:none;margin-top:1rem;gap:1rem;">
+                <button id="save-lineup-btn" type="submit" class="primary">Save Lineup and Quote →</button>
+            </div>
+            <div id="lineup-error" class="flex-row" style="display:none;margin-top:1rem;">
+                <span class="text-danger">More than one carrier share the same rank; the rank order must be unique to proceed.</span>
             </div>
 
         </form>
-
-        {{ if .Data.AvailableChargeTypes }}
-        <div class="flex-row" style="margin-top:.75rem;">
-            <select id="add-charge-type-select" name="charge_type" style="width:auto;">
-                <option value="">Add charge type...</option>
-                {{ range .Data.AvailableChargeTypes }}
-                <option value="{{ .Key }}">{{ .Label }}</option>
-                {{ end }}
-            </select>
-            <button type="button"
-                    hx-get="/rate-requests/{{ .Data.RateRequest.ID }}/comparison/add-row"
-                    hx-include="#add-charge-type-select"
-                    hx-target="#comparison-tbody"
-                    hx-swap="beforeend">Add Row</button>
-        </div>
-        {{ end }}
 
         <p class="legend-row">
             <span class="legend-swatch legend-swatch-llm"></span> LLM-corrected &nbsp;
@@ -144,4 +147,15 @@
 
 </div>
 {{ end }}
+
+<script>
+document.getElementById('lineup-form').addEventListener('input', function(e) {
+    if (!e.target.matches('.rank-input')) return;
+    const vals = [...document.querySelectorAll('.rank-input')].map(i => i.value).filter(v => v !== '');
+    const hasAny  = vals.length > 0;
+    const hasDupe = hasAny && vals.length !== new Set(vals).size;
+    document.getElementById('lineup-action').style.display = (!hasAny || hasDupe) ? 'none' : 'flex';
+    document.getElementById('lineup-error').style.display  = hasDupe ? 'flex' : 'none';
+});
+</script>
 {{ end }}
