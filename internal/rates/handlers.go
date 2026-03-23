@@ -115,7 +115,7 @@ func (s *Service) IngestEmail(subject, body, sender string) (string, error) {
 	}
 
 	var userExists int
-	err = s.DB.QueryRow(`SELECT COUNT(*) FROM users WHERE email = ?`, sender).Scan(&userExists)
+	err = s.DB.QueryRow(`SELECT COUNT(*) FROM users WHERE LOWER(email) = ?`, strings.ToLower(sender)).Scan(&userExists)
 	if err != nil || userExists == 0 {
 		s.insertOrphan(body, subject, sender, rrID)
 		return "orphaned", nil
@@ -136,35 +136,37 @@ func (s *Service) IngestEmail(subject, body, sender string) (string, error) {
 	return "matched", nil
 }
 
-// matchVendorByBody scans body for mailto:, from:, and to: addresses and returns the first
-// vendor_id whose contacts appear in that set, scoped to the given rate request.
-// HTML bodies are scanned for mailto: links; plain-text bodies for From:/To: header lines.
+// matchVendorByBody scans body for email addresses and returns the first vendor_id whose
+// contacts appear in that set, scoped to the given rate request.
+// Three passes run unconditionally and are merged with deduplication:
+//   - Stage 1: mailto: links (HTML and any literal mailto: in plain text)
+//   - Stage 2: From:/To: header lines (plain text and embedded forwarded headers in HTML)
+//   - Stage 3: full-body scan for any bare email address (catch-all fallback)
+//
 // Returns (vendorID, nil) on first match, (0, sql.ErrNoRows) if none found.
 func (s *Service) matchVendorByBody(body string, rrID int) (int, error) {
-	lower := strings.ToLower(body)
-	isHTML := strings.Contains(lower, "<html") || strings.Contains(lower, "<!doctype") || strings.Contains(lower, "mailto:")
-
+	seen := map[string]bool{}
 	var addrs []string
-	if isHTML {
-		for _, m := range reMailto.FindAllStringSubmatch(body, -1) {
-			addrs = append(addrs, strings.ToLower(m[1]))
-		}
-	} else {
-		for _, m := range reFromTo.FindAllStringSubmatch(body, -1) {
-			addrs = append(addrs, strings.ToLower(m[1]))
+
+	collect := func(addr string) {
+		lower := strings.ToLower(addr)
+		if !seen[lower] {
+			seen[lower] = true
+			addrs = append(addrs, lower)
 		}
 	}
-	// Fallback: scan entire body for any email address. Handles forwarded emails where
-	// client-specific formats (e.g. Gmail HTML) embed addresses as plain text, not mailto links.
-	if len(addrs) == 0 {
-		seen := map[string]bool{}
-		for _, m := range reEmailAddr.FindAllString(body, -1) {
-			lower := strings.ToLower(m)
-			if !seen[lower] {
-				seen[lower] = true
-				addrs = append(addrs, lower)
-			}
-		}
+
+	// Stage 1: mailto: links.
+	for _, m := range reMailto.FindAllStringSubmatch(body, -1) {
+		collect(m[1])
+	}
+	// Stage 2: From:/To: header lines (plain text forwarded headers, including inside HTML).
+	for _, m := range reFromTo.FindAllStringSubmatch(body, -1) {
+		collect(m[1])
+	}
+	// Stage 3: any bare email address anywhere in the body.
+	for _, m := range reEmailAddr.FindAllString(body, -1) {
+		collect(m)
 	}
 
 	for _, addr := range addrs {

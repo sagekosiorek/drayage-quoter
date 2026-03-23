@@ -5,6 +5,7 @@ import (
 	"html/template"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"gitlab.com/perenne/clients/schneider/drayage-quoter/internal/auth"
@@ -74,7 +75,7 @@ func (s *Service) HandleUsers(tmpl *template.Template) http.HandlerFunc {
 func (s *Service) HandleAddUser() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		name := r.FormValue("name")
-		email := r.FormValue("email")
+		email := strings.ToLower(strings.TrimSpace(r.FormValue("email")))
 		if name == "" || email == "" {
 			http.Error(w, "Name and email are required", http.StatusBadRequest)
 			return
