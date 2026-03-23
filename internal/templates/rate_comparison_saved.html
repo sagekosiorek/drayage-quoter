@@ -37,6 +37,8 @@ window.lineupBases = {{ .Data.LineupBases }};
 
     <!-- Left: markup table + CSV generation -->
     <div>
+        <span class="label-caps text-muted">Enter customer-facing charges, then save and generate the quote CSV.</span>
+
         <form method="POST" action="/rate-requests/{{ .Data.RateRequest.ID }}/csv" id="csv-form">
             <!-- Tracks the active carousel index so the CSV uses the same base vendor. 0 = average. -->
             <input type="hidden" name="base_carousel_idx" id="base-carousel-idx" value="0">
@@ -151,7 +153,6 @@ window.lineupBases = {{ .Data.LineupBases }};
             <div class="flex-row" style="margin-top:1rem;gap:1rem;">
                 <button type="submit" class="primary">Save Quote and Generate CSV →</button>
                 <span id="autosave-indicator" class="label-caps text-muted"></span>
-                <span class="label-caps text-muted">Enter customer-facing charges, then save and generate the quote CSV.</span>
             </div>
 
             <!-- Auto-save trigger: fires on any form field change, debounced 300ms -->

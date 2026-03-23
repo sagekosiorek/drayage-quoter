@@ -136,7 +136,7 @@ tr:last-child td { border-bottom: none; }
 .text-xs        { font-size: .8rem; }
 .text-2xs       { font-size: .75rem; }
 .text-pre-wrap  { white-space: pre-wrap; word-break: break-word; }
-.label-caps     { font-size: .78rem; font-weight: 600; color: var(--color-muted); text-transform: uppercase; letter-spacing: .04em; }
+.label-caps     { font-size: .78rem; font-weight: 600; color: var(--color-muted); text-transform: uppercase; letter-spacing: .04em; padding-bottom: .05rem; }
 .meta-text      { font-size: .82rem; color: var(--color-secondary); }
 .ref-id         { font-size: .95rem; font-weight: 600; font-family: var(--font-mono); }
 .link-secondary { font-size: .875rem; color: var(--color-muted); text-decoration: none; }
