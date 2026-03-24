@@ -1137,14 +1137,15 @@ type MarkupItemRow struct {
 
 // SavedComparisonData is the template data for rate_comparison_saved.html.
 type SavedComparisonData struct {
-	RateRequest          RateRequestSnippet
-	Lane                 LaneSnippet
-	ChargeRows           []ChargeTypeRow
-	Vendors              []SavedVendorColumn // sorted by rank asc
-	Averages             map[string]string
-	AvgTotal             string
-	Markups              map[string]MarkupItemRow // keyed by charge_type; pre-fills inputs if exists
-	LineupBases          template.JS              // JSON for JS carousel: [{linehaul:X, fuel:Y, ...}, ...]
+	RateRequest        RateRequestSnippet
+	Lane               LaneSnippet
+	ChargeRows         []ChargeTypeRow
+	Vendors            []SavedVendorColumn // sorted by rank asc
+	Averages           map[string]string
+	AvgTotal           string
+	Markups            map[string]MarkupItemRow // keyed by charge_type; pre-fills inputs if exists
+	LineupBases        template.JS              // JSON for JS carousel: [{linehaul:X, fuel:Y, ...}, ...]
+	LHFuelMarkupMethod string                   // "flat"|"flat_rate"|"percent"; pre-selects dropdown
 }
 
 // HandleSavedComparison renders the markup entry + CSV generation page for a lineup.
@@ -1382,17 +1383,29 @@ func (s *Service) HandleSavedComparison(tmpl *template.Template) http.HandlerFun
 		}
 		miRows.Close()
 
+		// Determine effective markup method: saved value → user preference → default.
+		lfMarkupMethod := "flat"
+		if saved, ok := markupsMap["linehaul_fuel"]; ok {
+			lfMarkupMethod = saved.MarkupType
+		} else {
+			s.DB.QueryRow(`SELECT default_markup_method FROM user_preferences WHERE user_id = ?`, user.ID).Scan(&lfMarkupMethod)
+			if lfMarkupMethod == "" {
+				lfMarkupMethod = "flat"
+			}
+		}
+
 		if err := tmpl.ExecuteTemplate(w, "layout.html", map[string]any{
 			"User": user,
 			"Data": SavedComparisonData{
-				RateRequest:          rr,
-				Lane:                 *lane,
-				ChargeRows:           chargeRows,
-				Vendors:              vendors,
-				Averages:             averages,
-				AvgTotal:             avgTotal,
-				Markups:              markupsMap,
-				LineupBases:          template.JS(basesJSON),
+				RateRequest:        rr,
+				Lane:               *lane,
+				ChargeRows:         chargeRows,
+				Vendors:            vendors,
+				Averages:           averages,
+				AvgTotal:           avgTotal,
+				Markups:            markupsMap,
+				LineupBases:        template.JS(basesJSON),
+				LHFuelMarkupMethod: lfMarkupMethod,
 			},
 		}); err != nil {
 			log.Printf("HandleSavedComparison: template execution rr=%d: %v", rrID, err)
@@ -1426,10 +1439,14 @@ func (s *Service) persistMarkups(tx *sql.Tx, laneID int, r *http.Request) (int64
 		}
 		entries = append(entries, markupEntry{chargeType: ct, value: val, markupType: "flat"})
 	}
-	// linehaul_fuel stores the flat markup dollar amount (profit margin, not customer rate).
+	// linehaul_fuel stores the markup value; markup_type determines how it's applied.
+	lfMode := r.FormValue("linehaul_fuel_mode")
+	if lfMode != "flat_rate" && lfMode != "percent" {
+		lfMode = "flat"
+	}
 	if lfStr := r.FormValue("linehaul_fuel"); lfStr != "" {
 		if lfVal, err := strconv.ParseFloat(lfStr, 64); err == nil && lfVal != 0 {
-			entries = append(entries, markupEntry{chargeType: "linehaul_fuel", value: lfVal, markupType: "flat"})
+			entries = append(entries, markupEntry{chargeType: "linehaul_fuel", value: lfVal, markupType: lfMode})
 		}
 	}
 
@@ -1696,10 +1713,22 @@ func (s *Service) HandleGenerateCSV() http.HandlerFunc {
 			}
 		}
 
-		// Compute customer Linehaul, Fuel%, and LH+Fuel total from the stored flat markup.
-		// Formula: customerLHFuel = baseLHFuel + markup; customerLH = customerLHFuel / (1 + fuel%/100).
+		// Compute customer Linehaul, Fuel%, and LH+Fuel total from the stored markup.
+		// Markup type determines the formula:
+		//   flat_rate: customerLHFuel = markupVal (direct customer rate)
+		//   percent:   customerLHFuel = baseLHFuel * (1 + markupVal/100)
+		//   flat:      customerLHFuel = baseLHFuel + markupVal
 		markupVal := markupLookup["linehaul_fuel"].value // 0 if no markup saved
-		customerLHFuel := baseLHFuel + markupVal
+		markupType := markupLookup["linehaul_fuel"].markupType
+		var customerLHFuel float64
+		switch markupType {
+		case "flat_rate":
+			customerLHFuel = markupVal
+		case "percent":
+			customerLHFuel = baseLHFuel * (1 + markupVal/100)
+		default: // "flat"
+			customerLHFuel = baseLHFuel + markupVal
+		}
 		customerFuelPct := baseFuelPct
 		var customerLH float64
 		if divisor := 1 + customerFuelPct/100; divisor > 0 {
@@ -1718,46 +1747,55 @@ func (s *Service) HandleGenerateCSV() http.HandlerFunc {
 			Font: &excelize.Font{Bold: true, Color: "FFFFFF"},
 		})
 
+		orangeRightStyle, _ := f.NewStyle(&excelize.Style{
+			Fill: excelize.Fill{Type: "pattern", Color: []string{"F85F14"}, Pattern: 1},
+			Font: &excelize.Font{Bold: true, Color: "FFFFFF"},
+			Alignment: &excelize.Alignment{Horizontal: "right"},
+		})
+
+
 		row := 1
 
 		// Port / Destination / Direction metadata rows (column A label = orange).
 		f.SetCellValue(sheet, xlCell(1, row), "Port:")
 		f.SetCellValue(sheet, xlCell(2, row), lane.OriginPort)
-		f.SetCellStyle(sheet, xlCell(1, row), xlCell(1, row), orangeStyle)
+		f.SetCellStyle(sheet, xlCell(1, row), xlCell(1, row), orangeRightStyle)
 		row++
 
 		f.SetCellValue(sheet, xlCell(1, row), "Destination:")
 		f.SetCellValue(sheet, xlCell(2, row), lane.Destination)
-		f.SetCellStyle(sheet, xlCell(1, row), xlCell(1, row), orangeStyle)
+		f.SetCellStyle(sheet, xlCell(1, row), xlCell(1, row), orangeRightStyle)
 		row++
 
 		f.SetCellValue(sheet, xlCell(1, row), "Direction:")
 		f.SetCellValue(sheet, xlCell(2, row), lane.Direction)
-		f.SetCellStyle(sheet, xlCell(1, row), xlCell(1, row), orangeStyle)
+		f.SetCellStyle(sheet, xlCell(1, row), xlCell(1, row), orangeRightStyle)
 		row++
 
 
-		// Section header: "Applicable charges" | (empty) | "LH + Fuel" — all orange.
+		// Section header: "Applicable charges" | "Notes" | "LH + Fuel" — all orange.
 		f.SetCellValue(sheet, xlCell(1, row), "Applicable charges")
-		f.SetCellValue(sheet, xlCell(3, row), "LH + Fuel")
+		f.SetCellValue(sheet, xlCell(3, row), "Notes")
+		f.SetCellValue(sheet, xlCell(4, row), "LH + Fuel")
 		f.SetCellStyle(sheet, xlCell(1, row), xlCell(1, row), orangeStyle)
 		f.SetCellStyle(sheet, xlCell(2, row), xlCell(2, row), orangeStyle)
 		f.SetCellStyle(sheet, xlCell(3, row), xlCell(3, row), orangeStyle)
+		f.SetCellStyle(sheet, xlCell(4, row), xlCell(4, row), orangeStyle)
 		row++
 
-		// Linehaul and Fuel rows: col C holds the LH+Fuel total merged across both rows.
+		// Linehaul and Fuel rows: col D holds the LH+Fuel total merged across both rows.
 		// Linehaul row: label | $customerLH | $customerLHFuel (merged with fuel row below)
 		lhRow := row
 		f.SetCellValue(sheet, xlCell(1, row), "Linehaul")
 		f.SetCellValue(sheet, xlCell(2, row), csvValue("linehaul_fuel", customerLH))
-		f.SetCellValue(sheet, xlCell(3, row), csvValue("linehaul_fuel", customerLHFuel))
+		f.SetCellValue(sheet, xlCell(4, row), csvValue("linehaul_fuel", customerLHFuel))
 		row++
 		// Fuel row: label | fuel% | (merged cell — no value set)
 		f.SetCellValue(sheet, xlCell(1, row), "Fuel (subject to change weekly)")
 		f.SetCellValue(sheet, xlCell(2, row), fmt.Sprintf("%.2f%%", customerFuelPct))
 		row++
-		// Merge col C across the Linehaul and Fuel rows so the total spans both.
-		f.MergeCell(sheet, xlCell(3, lhRow), xlCell(3, lhRow+1))
+		// Merge col D across the Linehaul and Fuel rows so the total spans both.
+		f.MergeCell(sheet, xlCell(4, lhRow), xlCell(4, lhRow+1))
 
 		// Partition other entered charges into applicable vs. accessorials (preserving FieldOrder).
 		type quoteRow struct{ label, value, notes string }
