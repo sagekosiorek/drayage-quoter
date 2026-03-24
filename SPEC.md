@@ -561,9 +561,7 @@ Styling, last-min changes, stress-testing.
 ### Milestone 8: Final refinements (Sprint 3)
 - [ ] Add a carrier to a rate request after-the-fact
 - [ ] Set default accessorial rates by user.
-- [ ] Delete a lane function
-- [ ] Add tooltips where necessary
+- [x] Delete a lane function
 - [ ] File-parsing support for rate ingestion
-- [ ] Stress-test the performance, pagination, and UI using a lot of dummy data (github.com/brianvoe/gofakeit/v7).
 - [ ] Wire up LLM for rate parsing
 

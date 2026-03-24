@@ -1145,7 +1145,10 @@ type SavedComparisonData struct {
 	AvgTotal           string
 	Markups            map[string]MarkupItemRow // keyed by charge_type; pre-fills inputs if exists
 	LineupBases        template.JS              // JSON for JS carousel: [{linehaul:X, fuel:Y, ...}, ...]
-	LHFuelMarkupMethod string                   // "flat"|"flat_rate"|"percent"; pre-selects dropdown
+	LHFuelMarkupMethod   string  // "flat"|"flat_rate"|"percent"; pre-selects dropdown
+	Locked               bool    // true when customer rates are locked from editing
+	LockedCustomerLHFuel float64 // frozen customer LH+Fuel total at lock time (0 when unlocked)
+	LockedCustomerFuelPct float64 // frozen fuel% at lock time (0 when unlocked)
 }
 
 // HandleSavedComparison renders the markup entry + CSV generation page for a lineup.
@@ -1383,6 +1386,12 @@ func (s *Service) HandleSavedComparison(tmpl *template.Template) http.HandlerFun
 		}
 		miRows.Close()
 
+		// Load locked state and frozen customer values from markups row.
+		var locked bool
+		var custLHFuel, custFuelPct sql.NullFloat64
+		s.DB.QueryRow(`SELECT locked, customer_lhfuel, customer_fuel_pct FROM markups WHERE lane_id = ?`, rr.LaneID).
+			Scan(&locked, &custLHFuel, &custFuelPct)
+
 		// Determine effective markup method: saved value → user preference → default.
 		lfMarkupMethod := "flat"
 		if saved, ok := markupsMap["linehaul_fuel"]; ok {
@@ -1405,12 +1414,247 @@ func (s *Service) HandleSavedComparison(tmpl *template.Template) http.HandlerFun
 				AvgTotal:           avgTotal,
 				Markups:            markupsMap,
 				LineupBases:        template.JS(basesJSON),
-				LHFuelMarkupMethod: lfMarkupMethod,
+				LHFuelMarkupMethod:    lfMarkupMethod,
+				Locked:                locked,
+				LockedCustomerLHFuel:  custLHFuel.Float64,
+				LockedCustomerFuelPct: custFuelPct.Float64,
 			},
 		}); err != nil {
 			log.Printf("HandleSavedComparison: template execution rr=%d: %v", rrID, err)
 		}
 	}
+}
+
+// resolveOrCreateQuote returns the existing quote_id for the lane, or creates one if none exists.
+// The customer is proxied from the lane owner's email until a customer picker is added.
+func (s *Service) resolveOrCreateQuote(tx *sql.Tx, laneID int) (int64, error) {
+	var quoteID int64
+	err := tx.QueryRow(`SELECT q.id FROM quotes q JOIN quote_lanes ql ON ql.quote_id = q.id WHERE ql.lane_id = ?`, laneID).Scan(&quoteID)
+	if err == nil {
+		return quoteID, nil
+	}
+	if err != sql.ErrNoRows {
+		return 0, fmt.Errorf("lookup quote lane=%d: %w", laneID, err)
+	}
+	var ownerID int
+	if err2 := tx.QueryRow(`SELECT owner_id FROM lanes WHERE id = ?`, laneID).Scan(&ownerID); err2 != nil {
+		return 0, fmt.Errorf("fetch owner lane=%d: %w", laneID, err2)
+	}
+	var customerID int64
+	err2 := tx.QueryRow(`SELECT id FROM customers WHERE name = (SELECT email FROM users WHERE id = ?)`, ownerID).Scan(&customerID)
+	if err2 == sql.ErrNoRows {
+		ownerEmail := ""
+		tx.QueryRow(`SELECT email FROM users WHERE id = ?`, ownerID).Scan(&ownerEmail)
+		res2, err3 := tx.Exec(`INSERT INTO customers (name) VALUES (?)`, ownerEmail)
+		if err3 != nil {
+			return 0, fmt.Errorf("insert customer: %w", err3)
+		}
+		customerID, _ = res2.LastInsertId()
+	} else if err2 != nil {
+		return 0, fmt.Errorf("lookup customer: %w", err2)
+	}
+	res, err3 := tx.Exec(`INSERT INTO quotes (owner_id, customer_id) VALUES (?, ?)`, ownerID, customerID)
+	if err3 != nil {
+		return 0, fmt.Errorf("insert quote: %w", err3)
+	}
+	quoteID, _ = res.LastInsertId()
+	if _, err3 := tx.Exec(`INSERT INTO quote_lanes (quote_id, lane_id) VALUES (?, ?)`, quoteID, laneID); err3 != nil {
+		return 0, fmt.Errorf("insert quote_lane: %w", err3)
+	}
+	return quoteID, nil
+}
+
+// HandleToggleLock toggles the locked flag on the lane's markups row, creating it if necessary.
+// POST /rate-requests/{id}/lock
+func (s *Service) HandleToggleLock() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		rrID, err := strconv.Atoi(r.PathValue("id"))
+		if err != nil || rrID <= 0 {
+			http.Error(w, "Rate request not found", http.StatusNotFound)
+			return
+		}
+		var laneID int
+		if err := s.DB.QueryRow(`SELECT lane_id FROM rate_requests WHERE id = ?`, rrID).Scan(&laneID); err == sql.ErrNoRows {
+			http.Error(w, "Rate request not found", http.StatusNotFound)
+			return
+		} else if err != nil {
+			log.Printf("HandleToggleLock: fetch rr=%d: %v", rrID, err)
+			http.Error(w, "Failed to load rate request", http.StatusInternalServerError)
+			return
+		}
+		tx, err := s.DB.Begin()
+		if err != nil {
+			http.Error(w, "Failed to begin transaction", http.StatusInternalServerError)
+			return
+		}
+		defer tx.Rollback()
+
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "Bad request: could not parse form", http.StatusBadRequest)
+			return
+		}
+		carouselIdx, _ := strconv.Atoi(r.FormValue("base_carousel_idx"))
+
+		var markupID int64
+		var currentLocked bool
+		err = tx.QueryRow(`SELECT id, locked FROM markups WHERE lane_id = ?`, laneID).Scan(&markupID, &currentLocked)
+		if err == sql.ErrNoRows {
+			// No markups row yet — create quote and empty markups row, then lock it.
+			quoteID, err2 := s.resolveOrCreateQuote(tx, laneID)
+			if err2 != nil {
+				log.Printf("HandleToggleLock: resolve quote lane=%d: %v", laneID, err2)
+				http.Error(w, "Failed to resolve quote", http.StatusInternalServerError)
+				return
+			}
+			res, err2 := tx.Exec(`INSERT INTO markups (quote_id, lane_id, locked) VALUES (?, ?, 1)`, quoteID, laneID)
+			if err2 != nil {
+				log.Printf("HandleToggleLock: insert markups lane=%d: %v", laneID, err2)
+				http.Error(w, "Failed to create markup record", http.StatusInternalServerError)
+				return
+			}
+			markupID, _ = res.LastInsertId()
+			currentLocked = false // will fall through to the lock-save block below
+		} else if err != nil {
+			log.Printf("HandleToggleLock: query markups lane=%d: %v", laneID, err)
+			http.Error(w, "Failed to load markup record", http.StatusInternalServerError)
+			return
+		}
+
+		if currentLocked {
+			// Unlocking: clear stored customer rates.
+			if _, err2 := tx.Exec(
+				`UPDATE markups SET locked=0, customer_lhfuel=NULL, customer_fuel_pct=NULL WHERE id=?`, markupID,
+			); err2 != nil {
+				log.Printf("HandleToggleLock: unlock lane=%d: %v", laneID, err2)
+				http.Error(w, "Failed to unlock", http.StatusInternalServerError)
+				return
+			}
+		} else {
+			// Locking: compute and freeze the current customer LH+Fuel values.
+			baseLHFuel, baseFuelPct, err2 := s.computeCarouselBase(rrID, laneID, carouselIdx)
+			if err2 != nil {
+				log.Printf("HandleToggleLock: computeCarouselBase lane=%d: %v", laneID, err2)
+				http.Error(w, "Failed to compute base rates", http.StatusInternalServerError)
+				return
+			}
+			var markupVal float64
+			var markupType string
+			tx.QueryRow(`
+				SELECT mi.value, mi.markup_type FROM markup_items mi
+				JOIN markups m ON mi.markup_id = m.id
+				WHERE m.lane_id = ? AND mi.charge_type = 'linehaul_fuel'
+			`, laneID).Scan(&markupVal, &markupType)
+			var custLHFuel float64
+			switch markupType {
+			case "flat_rate":
+				custLHFuel = markupVal
+			case "percent":
+				custLHFuel = baseLHFuel * (1 + markupVal/100)
+			default: // "flat"
+				custLHFuel = baseLHFuel + markupVal
+			}
+			if _, err2 := tx.Exec(
+				`UPDATE markups SET locked=1, customer_lhfuel=?, customer_fuel_pct=? WHERE id=?`,
+				custLHFuel, baseFuelPct, markupID,
+			); err2 != nil {
+				log.Printf("HandleToggleLock: lock lane=%d: %v", laneID, err2)
+				http.Error(w, "Failed to lock", http.StatusInternalServerError)
+				return
+			}
+		}
+		if err := tx.Commit(); err != nil {
+			log.Printf("HandleToggleLock: commit lane=%d: %v", laneID, err)
+			http.Error(w, "Failed to commit lock toggle", http.StatusInternalServerError)
+			return
+		}
+		http.Redirect(w, r, fmt.Sprintf("/rate-requests/%d/comparison/saved", rrID), http.StatusSeeOther)
+	}
+}
+
+// computeCarouselBase loads the base LH+Fuel total and avg fuel% for a given rate request and
+// carousel index. carouselIdx=0 uses the average of all lineup vendors; N uses the vendor at rank N.
+// Mirrors the lineupBases construction in HandleSavedComparison exactly.
+func (s *Service) computeCarouselBase(rrID, laneID, carouselIdx int) (baseLHFuel, baseFuelPct float64, err error) {
+	type lineupItem struct {
+		rank int
+		vrID int
+	}
+	liRows, err := s.DB.Query(`
+		SELECT vl.rank, vl.vendor_rate_id
+		FROM vendor_lineups vl
+		WHERE vl.lane_id = ?
+		ORDER BY vl.rank
+	`, laneID)
+	if err != nil {
+		return 0, 0, fmt.Errorf("query lineup lane=%d: %w", laneID, err)
+	}
+	var lineupItems []lineupItem
+	for liRows.Next() {
+		var li lineupItem
+		liRows.Scan(&li.rank, &li.vrID)
+		lineupItems = append(lineupItems, li)
+	}
+	liRows.Close()
+
+	var targetVRIDs []int
+	for _, li := range lineupItems {
+		if carouselIdx <= 0 || li.rank == carouselIdx {
+			targetVRIDs = append(targetVRIDs, li.vrID)
+		}
+	}
+	if len(targetVRIDs) == 0 {
+		return 0, 0, nil
+	}
+
+	placeholders := strings.Repeat("?,", len(targetVRIDs))
+	placeholders = placeholders[:len(placeholders)-1]
+	args := make([]any, 1+len(targetVRIDs))
+	args[0] = rrID
+	for i, id := range targetVRIDs {
+		args[i+1] = id
+	}
+	vendorLHFuel := make(map[int][2]float64) // vrID → [lh, fuel%]
+	iRows, err := s.DB.Query(fmt.Sprintf(`
+		SELECT vri.vendor_rate_id, vri.charge_type, vri.amount
+		FROM vendor_rates vr
+		JOIN vendor_rate_items vri ON vri.vendor_rate_id = vr.id
+		WHERE vr.rate_request_id = ? AND vr.id IN (%s)
+		  AND vri.charge_type IN ('linehaul', 'fuel')
+	`, placeholders), args...)
+	if err != nil {
+		return 0, 0, fmt.Errorf("query vendor items rr=%d: %w", rrID, err)
+	}
+	for iRows.Next() {
+		var vrID int
+		var ct string
+		var amount float64
+		iRows.Scan(&vrID, &ct, &amount)
+		pair := vendorLHFuel[vrID]
+		if ct == "linehaul" {
+			pair[0] = amount
+		} else {
+			pair[1] = amount
+		}
+		vendorLHFuel[vrID] = pair
+	}
+	iRows.Close()
+
+	var totalSum, fuelSum float64
+	var fuelCount int
+	for _, vrID := range targetVRIDs {
+		pair := vendorLHFuel[vrID]
+		lh, fuel := pair[0], pair[1]
+		totalSum += lh + lh*fuel/100
+		if fuel > 0 {
+			fuelSum += fuel
+			fuelCount++
+		}
+	}
+	baseLHFuel = totalSum / float64(len(targetVRIDs))
+	if fuelCount > 0 {
+		baseFuelPct = fuelSum / float64(fuelCount)
+	}
+	return baseLHFuel, baseFuelPct, nil
 }
 
 // markupEntry holds a single parsed markup row from form input.
@@ -1450,46 +1694,21 @@ func (s *Service) persistMarkups(tx *sql.Tx, laneID int, r *http.Request) (int64
 		}
 	}
 
-	// Resolve or create the quote for this lane (reuse if one already exists).
-	// Customer association: lane owner is the customer proxy until a customer picker is added.
-	var quoteID int64
-	err := tx.QueryRow(`SELECT q.id FROM quotes q JOIN quote_lanes ql ON ql.quote_id = q.id WHERE ql.lane_id = ?`, laneID).Scan(&quoteID)
-	if err == sql.ErrNoRows {
-		var ownerID int
-		if err2 := tx.QueryRow(`SELECT owner_id FROM lanes WHERE id = ?`, laneID).Scan(&ownerID); err2 != nil {
-			return 0, nil, fmt.Errorf("fetch owner lane=%d: %w", laneID, err2)
-		}
-		var customerID int64
-		err2 := tx.QueryRow(`SELECT id FROM customers WHERE name = (SELECT email FROM users WHERE id = ?)`, ownerID).Scan(&customerID)
-		if err2 == sql.ErrNoRows {
-			ownerEmail := ""
-			tx.QueryRow(`SELECT email FROM users WHERE id = ?`, ownerID).Scan(&ownerEmail)
-			res2, err3 := tx.Exec(`INSERT INTO customers (name) VALUES (?)`, ownerEmail)
-			if err3 != nil {
-				return 0, nil, fmt.Errorf("insert customer: %w", err3)
-			}
-			customerID, _ = res2.LastInsertId()
-		} else if err2 != nil {
-			return 0, nil, fmt.Errorf("lookup customer: %w", err2)
-		}
-		res, err3 := tx.Exec(`INSERT INTO quotes (owner_id, customer_id) VALUES (?, ?)`, ownerID, customerID)
-		if err3 != nil {
-			return 0, nil, fmt.Errorf("insert quote: %w", err3)
-		}
-		quoteID, _ = res.LastInsertId()
-		if _, err3 := tx.Exec(`INSERT INTO quote_lanes (quote_id, lane_id) VALUES (?, ?)`, quoteID, laneID); err3 != nil {
-			return 0, nil, fmt.Errorf("insert quote_lane: %w", err3)
-		}
-	} else if err != nil {
-		return 0, nil, fmt.Errorf("lookup quote lane=%d: %w", laneID, err)
+	quoteID, err := s.resolveOrCreateQuote(tx, laneID)
+	if err != nil {
+		return 0, nil, err
 	}
+
+	// Preserve the locked flag before deleting so it survives the recreate.
+	var existingLocked int
+	tx.QueryRow(`SELECT locked FROM markups WHERE lane_id = ?`, laneID).Scan(&existingLocked)
 
 	// Delete existing markup for this lane and recreate.
 	if _, err := tx.Exec(`DELETE FROM markups WHERE lane_id = ?`, laneID); err != nil {
 		return 0, nil, fmt.Errorf("delete markups lane=%d: %w", laneID, err)
 	}
 	if len(entries) > 0 {
-		res, err := tx.Exec(`INSERT INTO markups (quote_id, lane_id) VALUES (?, ?)`, quoteID, laneID)
+		res, err := tx.Exec(`INSERT INTO markups (quote_id, lane_id, locked) VALUES (?, ?, ?)`, quoteID, laneID, existingLocked)
 		if err != nil {
 			return 0, nil, fmt.Errorf("insert markup: %w", err)
 		}
@@ -1582,33 +1801,57 @@ func (s *Service) HandleGenerateCSV() http.HandlerFunc {
 			return
 		}
 
-		// Resolve or create the quote for this lane atomically.
-		// If a quote already exists for this lane, reuse it; otherwise create one.
-		// Customer association: use lane owner as customer proxy for now (no customer picker yet).
-		tx, err := s.DB.Begin()
-		if err != nil {
-			http.Error(w, "Failed to begin transaction", http.StatusInternalServerError)
-			return
-		}
-		defer tx.Rollback()
+		// When locked, load existing markup values from DB without overwriting them.
+		// When unlocked, persist the submitted form values and update the DB as normal.
+		var isLocked bool
+		s.DB.QueryRow(`SELECT locked FROM markups WHERE lane_id = ?`, laneID).Scan(&isLocked)
 
-		_, entries, err := s.persistMarkups(tx, laneID, r)
-		if err != nil {
-			log.Printf("HandleGenerateCSV: persistMarkups rr=%d: %v", rrID, err)
-			http.Error(w, "Failed to save markup: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
+		var entries []markupEntry
+		if isLocked {
+			rows, err := s.DB.Query(`
+				SELECT mi.charge_type, mi.value, mi.markup_type
+				FROM markups m
+				JOIN markup_items mi ON mi.markup_id = m.id
+				WHERE m.lane_id = ?
+			`, laneID)
+			if err != nil {
+				log.Printf("HandleGenerateCSV: load locked markups lane=%d: %v", laneID, err)
+				http.Error(w, "Failed to load markup values", http.StatusInternalServerError)
+				return
+			}
+			for rows.Next() {
+				var e markupEntry
+				rows.Scan(&e.chargeType, &e.value, &e.markupType)
+				entries = append(entries, e)
+			}
+			rows.Close()
+			s.DB.Exec(
+				`UPDATE lanes SET status = 'quoted', updated_at = ? WHERE id = ? AND status IN ('quoting', 'quoted')`,
+				time.Now().UTC().Format("2006-01-02 15:04:05"), laneID,
+			)
+		} else {
+			tx, err := s.DB.Begin()
+			if err != nil {
+				http.Error(w, "Failed to begin transaction", http.StatusInternalServerError)
+				return
+			}
+			defer tx.Rollback()
 
-		// Advance lane to "quoted".
-		tx.Exec(
-			`UPDATE lanes SET status = 'quoted', updated_at = ? WHERE id = ? AND status IN ('quoting', 'quoted')`,
-			time.Now().UTC().Format("2006-01-02 15:04:05"), laneID,
-		)
-
-		if err := tx.Commit(); err != nil {
-			log.Printf("HandleGenerateCSV: commit: %v", err)
-			http.Error(w, "Failed to save quote", http.StatusInternalServerError)
-			return
+			_, entries, err = s.persistMarkups(tx, laneID, r)
+			if err != nil {
+				log.Printf("HandleGenerateCSV: persistMarkups rr=%d: %v", rrID, err)
+				http.Error(w, "Failed to save markup: "+err.Error(), http.StatusInternalServerError)
+				return
+			}
+			tx.Exec(
+				`UPDATE lanes SET status = 'quoted', updated_at = ? WHERE id = ? AND status IN ('quoting', 'quoted')`,
+				time.Now().UTC().Format("2006-01-02 15:04:05"), laneID,
+			)
+			if err := tx.Commit(); err != nil {
+				log.Printf("HandleGenerateCSV: commit: %v", err)
+				http.Error(w, "Failed to save quote", http.StatusInternalServerError)
+				return
+			}
 		}
 
 		// Build markup lookup for CSV generation.
@@ -1620,121 +1863,49 @@ func (s *Service) HandleGenerateCSV() http.HandlerFunc {
 		// Determine which vendor's base rates to use: carousel index 0 = average, N = rank-N vendor.
 		carouselIdx, _ := strconv.Atoi(r.FormValue("base_carousel_idx"))
 
-		// Load base LH+Fuel total and avg fuel% mirroring HandleSavedComparison's lineupBases build.
-		// For average: load all lineup vendor items using the same rate_request_id-scoped query, then
-		// average per-vendor totals and fuel% exactly as HandleSavedComparison does for lineupBases[0].
-		// For rank N: load items for that specific vendor_rate_id.
-		var baseLHFuel, baseFuelPct float64
-
-		// Load all lineup vendor_rate_ids for this lane (same as HandleSavedComparison).
-		type lineupItem struct{ rank int; vrID int }
-		var lineupItems []lineupItem
-		liRows, err := s.DB.Query(`
-			SELECT vl.rank, vl.vendor_rate_id
-			FROM vendor_lineups vl
-			WHERE vl.lane_id = ?
-			ORDER BY vl.rank
-		`, laneID)
+		baseLHFuel, baseFuelPct, err := s.computeCarouselBase(rrID, laneID, carouselIdx)
 		if err != nil {
-			log.Printf("HandleGenerateCSV: query lineup lane=%d: %v", laneID, err)
-			http.Error(w, "Failed to load lineup", http.StatusInternalServerError)
+			log.Printf("HandleGenerateCSV: computeCarouselBase rr=%d: %v", rrID, err)
+			http.Error(w, "Failed to load vendor rates", http.StatusInternalServerError)
 			return
 		}
-		for liRows.Next() {
-			var li lineupItem
-			liRows.Scan(&li.rank, &li.vrID)
-			lineupItems = append(lineupItems, li)
-		}
-		liRows.Close()
 
-		// Determine target vendor_rate_ids: all (average) or just the one at carouselIdx rank.
-		var targetVRIDs []int
-		for _, li := range lineupItems {
-			if carouselIdx <= 0 || li.rank == carouselIdx {
-				targetVRIDs = append(targetVRIDs, li.vrID)
+		// Compute customer Linehaul, Fuel%, and LH+Fuel total.
+		// When locked, use the stored values frozen at lock time.
+		// When unlocked, apply the markup formula against the carousel base.
+		var customerLHFuel, customerFuelPct float64
+		if isLocked {
+			var custLHFuel, custFuelPct sql.NullFloat64
+			s.DB.QueryRow(`SELECT customer_lhfuel, customer_fuel_pct FROM markups WHERE lane_id = ?`, laneID).
+				Scan(&custLHFuel, &custFuelPct)
+			customerLHFuel = custLHFuel.Float64
+			customerFuelPct = custFuelPct.Float64
+		} else {
+			markupVal := markupLookup["linehaul_fuel"].value
+			markupType := markupLookup["linehaul_fuel"].markupType
+			switch markupType {
+			case "flat_rate":
+				customerLHFuel = markupVal
+			case "percent":
+				customerLHFuel = baseLHFuel * (1 + markupVal/100)
+			default: // "flat"
+				customerLHFuel = baseLHFuel + markupVal
 			}
+			customerFuelPct = baseFuelPct
 		}
-
-		if len(targetVRIDs) > 0 {
-			// Query linehaul + fuel items for the target vendor(s), scoped to this rate request.
-			// Using rate_request_id exactly as HandleSavedComparison does to ensure same data.
-			placeholders := strings.Repeat("?,", len(targetVRIDs))
-			placeholders = placeholders[:len(placeholders)-1]
-			args := make([]any, 1+len(targetVRIDs))
-			args[0] = rrID
-			for i, id := range targetVRIDs {
-				args[i+1] = id
-			}
-			vendorLHFuel := make(map[int][2]float64) // vrID → [lh, fuel]
-			iRows, err := s.DB.Query(fmt.Sprintf(`
-				SELECT vri.vendor_rate_id, vri.charge_type, vri.amount
-				FROM vendor_rates vr
-				JOIN vendor_rate_items vri ON vri.vendor_rate_id = vr.id
-				WHERE vr.rate_request_id = ? AND vr.id IN (%s)
-				  AND vri.charge_type IN ('linehaul', 'fuel')
-			`, placeholders), args...)
-			if err != nil {
-				log.Printf("HandleGenerateCSV: query items rr=%d: %v", rrID, err)
-				http.Error(w, "Failed to load vendor rates", http.StatusInternalServerError)
-				return
-			}
-			for iRows.Next() {
-				var vrID int
-				var ct string
-				var amount float64
-				iRows.Scan(&vrID, &ct, &amount)
-				pair := vendorLHFuel[vrID]
-				if ct == "linehaul" {
-					pair[0] = amount
-				} else {
-					pair[1] = amount
-				}
-				vendorLHFuel[vrID] = pair
-			}
-			iRows.Close()
-
-			// Compute averages mirroring HandleSavedComparison: totalSum / len(vendors), fuelSum / fuelCount.
-			var totalSum, fuelSum float64
-			var fuelCount int
-			for _, vrID := range targetVRIDs {
-				pair := vendorLHFuel[vrID]
-				lh, fuel := pair[0], pair[1]
-				totalSum += lh + lh*fuel/100
-				if fuel > 0 {
-					fuelSum += fuel
-					fuelCount++
-				}
-			}
-			if len(targetVRIDs) > 0 {
-				baseLHFuel = totalSum / float64(len(targetVRIDs))
-			}
-			if fuelCount > 0 {
-				baseFuelPct = fuelSum / float64(fuelCount)
-			}
-		}
-
-		// Compute customer Linehaul, Fuel%, and LH+Fuel total from the stored markup.
-		// Markup type determines the formula:
-		//   flat_rate: customerLHFuel = markupVal (direct customer rate)
-		//   percent:   customerLHFuel = baseLHFuel * (1 + markupVal/100)
-		//   flat:      customerLHFuel = baseLHFuel + markupVal
-		markupVal := markupLookup["linehaul_fuel"].value // 0 if no markup saved
-		markupType := markupLookup["linehaul_fuel"].markupType
-		var customerLHFuel float64
-		switch markupType {
-		case "flat_rate":
-			customerLHFuel = markupVal
-		case "percent":
-			customerLHFuel = baseLHFuel * (1 + markupVal/100)
-		default: // "flat"
-			customerLHFuel = baseLHFuel + markupVal
-		}
-		customerFuelPct := baseFuelPct
 		var customerLH float64
 		if divisor := 1 + customerFuelPct/100; divisor > 0 {
 			customerLH = customerLHFuel / divisor
 		} else {
 			customerLH = customerLHFuel
+		}
+
+		// Auto-lock on first export: freeze customer values and lock the quote.
+		if !isLocked {
+			s.DB.Exec(
+				`UPDATE markups SET locked=1, customer_lhfuel=?, customer_fuel_pct=? WHERE lane_id=?`,
+				customerLHFuel, customerFuelPct, laneID,
+			)
 		}
 
 		// Build XLSX workbook.

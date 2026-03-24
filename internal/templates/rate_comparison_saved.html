@@ -1,6 +1,12 @@
 {{ define "content" }}
-
-<p class="back-link"><a href="/lanes/{{ .Data.Lane.ID }}">← Back to lane</a></p>
+<div class="page-header">
+    <p class="back-link"><a href="/lanes/{{ .Data.Lane.ID }}">← Back to lane</a></p>
+    <div class="flex-row">
+        <div class="flex-row" style="margin-top:1rem;">
+            <a href="/rate-requests/{{ .Data.RateRequest.ID }}/comparison" class="btn-secondary">Edit Carrier Lineup and Rates</a>
+        </div>
+    </div>
+</div>
 
 <div class="page-header">
     <div class="page-header-start">
@@ -30,16 +36,34 @@
 
 <!-- Embed lineup base data for JS carousel -->
 <script>
-window.lineupBases = {{ .Data.LineupBases }};
+window.lineupBases    = {{ .Data.LineupBases }};
+window.isLocked       = {{ if .Data.Locked }}true{{ else }}false{{ end }};
+window.lockedLHFuel   = {{ .Data.LockedCustomerLHFuel }};
+window.lockedFuelPct  = {{ .Data.LockedCustomerFuelPct }};
 </script>
 
 <div class="comparison-layout">
 
     <!-- Left: markup table + CSV generation -->
     <div>
-        <span class="label-caps text-muted">Enter customer-facing charges, then save and generate the quote CSV.</span>
+        <span class="label-caps text-muted">Enter customer-facing charges, then save and generate the quote CSV. Toggle the Customer Rate lock to modify.</span>
+
 
         <form method="POST" action="/rate-requests/{{ .Data.RateRequest.ID }}/csv" id="csv-form">
+            <div class="flex-row" style="margin-top:1rem;gap:1rem;">
+                <button type="submit" class="primary">Save Quote and Generate CSV →</button>
+                <span id="autosave-indicator" class="label-caps text-muted"></span>
+            </div>
+
+            {{ if not .Data.Locked }}
+            <!-- Auto-save trigger: fires on any form field change, debounced 300ms -->
+            <div hx-post="/rate-requests/{{ .Data.RateRequest.ID }}/markups"
+                 hx-trigger="change delay:300ms from:#csv-form"
+                 hx-include="#csv-form"
+                 hx-target="#autosave-indicator"
+                 hx-swap="innerHTML"></div>
+            {{ end }}
+
             <!-- Tracks the active carousel index so the CSV uses the same base vendor. 0 = average. -->
             <input type="hidden" name="base_carousel_idx" id="base-carousel-idx" value="0">
 
@@ -58,7 +82,17 @@ window.lineupBases = {{ .Data.LineupBases }};
                                     <button type="button" id="carousel-next" class="carousel-btn">&rarr;</button>
                                 </div>
                             </th>
-                            <th class="col-min-sm cell-center">Customer Rate</th>
+                            <th class="col-min-sm cell-center">
+                                <div>Customer Rate</div>
+                                <div style="margin-top:.35rem;">
+                                    <button type="submit"
+                                            formaction="/rate-requests/{{ .Data.RateRequest.ID }}/lock"
+                                            formmethod="POST"
+                                            class="btn-lock{{ if .Data.Locked }} btn-lock-active{{ end }}">
+                                        {{ if .Data.Locked }}Unlock{{ else }}Lock{{ end }}
+                                    </button>
+                                </div>
+                            </th>
                             <th id="col-header-0" class="cell-avg" style="min-width:110px;">Average</th>
                             {{ range .Data.Vendors }}
                             <th id="col-header-{{ .Rank }}" class="col-min-sm cell-center">
@@ -71,10 +105,10 @@ window.lineupBases = {{ .Data.LineupBases }};
                     <tbody>
                         <!-- Total Markup summary row — dropdown selects markup mode -->
                         <tr class="row-total row-highlight-green">
-                            <td style="font-weight:600;">Total Markup</td>
-                            <td id="total-markup-preview" class="cell-total"></td>
+                            <td></td>
+                            <td></td>
                             <td class="cell-center">
-                                <select id="lhfuel-mode" name="linehaul_fuel_mode" class="input-amount-lg">
+                                <select id="lhfuel-mode" name="linehaul_fuel_mode" class="input-amount-lg"{{ if .Data.Locked }} disabled{{ end }}>
                                     <option value="flat"{{ if eq .Data.LHFuelMarkupMethod "flat" }} selected{{ end }}>Flat Markup</option>
                                     <option value="flat_rate"{{ if eq .Data.LHFuelMarkupMethod "flat_rate" }} selected{{ end }}>Flat Rate</option>
                                     <option value="percent"{{ if eq .Data.LHFuelMarkupMethod "percent" }} selected{{ end }}>% Markup</option>
@@ -94,7 +128,7 @@ window.lineupBases = {{ .Data.LineupBases }};
                                 <div style="margin-top:.25rem;">
                                     <input type="text" inputmode="decimal" name="linehaul_fuel" id="input-linehaul-markup"
                                            class="input-amount"
-                                           {{ with index $.Data.Markups "linehaul_fuel" }}value="{{ .Value }}"{{ end }}>
+                                           {{ with index $.Data.Markups "linehaul_fuel" }}value="{{ .Value }}"{{ end }}{{ if $.Data.Locked }} disabled{{ end }}>
                                     <div id="lhfuel-input-label" class="text-2xs text-secondary" style="margin-top:.25rem;"></div>
                                 </div>
                             </td>
@@ -141,7 +175,7 @@ window.lineupBases = {{ .Data.LineupBases }};
                             <td class="cell-center">
                                 <input type="text" inputmode="decimal" name="{{ $ct }}" id="input-{{ $ct }}"
                                        class="input-amount"
-                                       {{ with index $.Data.Markups $ct }}value="{{ .Value }}"{{ end }}>
+                                       {{ with index $.Data.Markups $ct }}value="{{ .Value }}"{{ end }}{{ if $.Data.Locked }} disabled{{ end }}>
                             </td>
                             <td id="avg-{{ $ct }}" class="cell-avg">{{ index $.Data.Averages $ct }}</td>
                             {{ range $.Data.Vendors }}
@@ -158,23 +192,8 @@ window.lineupBases = {{ .Data.LineupBases }};
                     </tbody>
                 </table>
             </div>
-
-            <div class="flex-row" style="margin-top:1rem;gap:1rem;">
-                <button type="submit" class="primary">Save Quote and Generate CSV →</button>
-                <span id="autosave-indicator" class="label-caps text-muted"></span>
-            </div>
-
-            <!-- Auto-save trigger: fires on any form field change, debounced 300ms -->
-            <div hx-post="/rate-requests/{{ .Data.RateRequest.ID }}/markups"
-                 hx-trigger="change delay:300ms from:#csv-form"
-                 hx-include="#csv-form"
-                 hx-target="#autosave-indicator"
-                 hx-swap="innerHTML"></div>
         </form>
 
-        <div class="flex-row" style="margin-top:1rem;">
-            <a href="/rate-requests/{{ .Data.RateRequest.ID }}/comparison"><button>← Edit Carrier Lineup and Rates</button></a>
-        </div>
     </div>
 
     <!-- Right: lane details panel -->
@@ -226,26 +245,34 @@ window.lineupBases = {{ .Data.LineupBases }};
         el.style.color = pl > 0 ? "#16a34a" : pl < 0 ? "#dc2626" : "#999";
     }
 
-    // Compute customer LH, Fuel%, and LH+Fuel from the markup input, respecting the selected mode.
+    // Compute customer LH, Fuel%, and LH+Fuel.
+    // When locked, customer values are frozen; only markup (P&L) shifts with the carousel.
+    // When unlocked, values are computed live from the markup input and carousel base.
     function computeLHFuel() {
-        var inputVal   = parseFloat(document.getElementById("input-linehaul-markup").value) || 0;
         var baseLHFuel = getBase("linehaul_fuel");
-        var baseFuel   = getBase("fuel"); // percentage
-        var mode       = getMode();
-        var cLHFuel, markup;
-        if (mode === "flat_rate") {
-            cLHFuel = inputVal;
-            markup  = inputVal - baseLHFuel;
-        } else if (mode === "percent") {
-            cLHFuel = baseLHFuel * (1 + inputVal / 100);
-            markup  = cLHFuel - baseLHFuel;
-        } else { // "flat"
-            cLHFuel = baseLHFuel + inputVal;
-            markup  = inputVal;
+        var cLHFuel, markup, cFuelPct;
+        if (window.isLocked) {
+            cLHFuel  = window.lockedLHFuel;
+            cFuelPct = window.lockedFuelPct;
+            markup   = cLHFuel - baseLHFuel;
+        } else {
+            var inputVal = parseFloat(document.getElementById("input-linehaul-markup").value) || 0;
+            var mode     = getMode();
+            cFuelPct = getBase("fuel");
+            if (mode === "flat_rate") {
+                cLHFuel = inputVal;
+                markup  = inputVal - baseLHFuel;
+            } else if (mode === "percent") {
+                cLHFuel = baseLHFuel * (1 + inputVal / 100);
+                markup  = cLHFuel - baseLHFuel;
+            } else { // "flat"
+                cLHFuel = baseLHFuel + inputVal;
+                markup  = inputVal;
+            }
         }
-        var divisor = 1 + baseFuel / 100;
+        var divisor = 1 + cFuelPct / 100;
         var cLH = divisor > 0 ? cLHFuel / divisor : cLHFuel;
-        return { markup: markup, cLHFuel: cLHFuel, cLH: cLH, cFuelPct: baseFuel };
+        return { markup: markup, cLHFuel: cLHFuel, cLH: cLH, cFuelPct: cFuelPct };
     }
 
     // Show/hide the computed LH+Fuel span and update the input label based on mode.
@@ -348,6 +375,13 @@ window.lineupBases = {{ .Data.LineupBases }};
     updateModeUI();
     updatePreviews();
     updateCarouselLabel();
+
+    // Reload after CSV export so the page reflects the auto-locked state.
+    document.getElementById("csv-form").addEventListener("submit", function(e) {
+        if (!e.submitter || !e.submitter.getAttribute("formaction")) {
+            setTimeout(function() { window.location.reload(); }, 600);
+        }
+    });
 })();
 </script>
 {{ end }}
