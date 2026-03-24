@@ -227,7 +227,8 @@ func main() {
 	mux.HandleFunc("GET /rate-requests/{id}/comparison/saved", authService.RequireAuth(rrSvc.HandleSavedComparison(rrComparisonSavedTmpl)))
 	mux.HandleFunc("POST /rate-requests/{id}/lineup", authService.RequireAuth(rrSvc.HandleSaveLineup()))
 	mux.HandleFunc("POST /rate-requests/{id}/markups", authService.RequireAuth(rrSvc.HandleSaveMarkups()))
-	mux.HandleFunc("POST /rate-requests/{id}/csv", authService.RequireAuth(rrSvc.HandleGenerateCSV()))
+	mux.HandleFunc("POST /rate-requests/{id}/csv",     authService.RequireAuth(rrSvc.HandleGenerateCSV()))
+	mux.HandleFunc("POST /rate-requests/{id}/lock",    authService.RequireAuth(rrSvc.HandleToggleLock()))
 
 	// Rate ingestion + inline editing routes
 	mux.HandleFunc("POST /api/rates/parse", authService.RequireAuth(ratesSvc.HandleAPIIngest()))

@@ -142,6 +142,14 @@ tr:last-child td { border-bottom: none; }
 .link-secondary { font-size: .875rem; color: var(--color-muted); text-decoration: none; }
 .link-secondary:hover { color: var(--color-text); }
 
+/* Link styled to match the default button appearance */
+a.btn-secondary { display: inline-block; padding: 6px 14px; cursor: pointer; border: 1px solid #bbb; border-radius: var(--radius-sm); background: var(--color-surface-alt); font-size: .9rem; color: var(--color-text); text-decoration: none; }
+a.btn-secondary:hover { background: #eee; color: var(--color-text); }
+
+/* Lock/Unlock button in Customer Rate column header */
+.btn-lock        { font-size: .7rem; padding: .2rem .5rem; border-radius: var(--radius); cursor: pointer; }
+.btn-lock-active { background: var(--color-brand); color: #fff; border-color: var(--color-brand); }
+
 /* Remove button — JS-generated, applied via classList */
 .btn-remove {
     margin-top: .4rem; font-size: .8rem; color: var(--color-danger);

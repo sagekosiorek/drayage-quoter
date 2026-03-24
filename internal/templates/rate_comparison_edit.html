@@ -29,23 +29,15 @@
     <div>
         <span class="label-caps">Set ranks: 1 = primary carrier, 2 = secondary, etc. Set to 0 or blank to exclude.</span>
 
-        {{ if .Data.AvailableChargeTypes }}
-        <div class="flex-row" style="margin-top:.75rem;">
-            <select id="add-charge-type-select" name="charge_type" style="width:auto;">
-                <option value="">Add charge type...</option>
-                {{ range .Data.AvailableChargeTypes }}
-                <option value="{{ .Key }}">{{ .Label }}</option>
-                {{ end }}
-            </select>
-            <button type="button"
-                    hx-get="/rate-requests/{{ .Data.RateRequest.ID }}/comparison/add-row"
-                    hx-include="#add-charge-type-select"
-                    hx-target="#comparison-tbody"
-                    hx-swap="beforeend">Add Row</button>
-        </div>
-        {{ end }}
-
         <form id="lineup-form" method="POST" action="/rate-requests/{{ .Data.RateRequest.ID }}/lineup">
+
+            <div id="lineup-action" class="flex-row" style="display:none;margin-top:1rem;gap:1rem;">
+                <button id="save-lineup-btn" type="submit" class="primary">Save Lineup and Quote →</button>
+            </div>
+
+            <div id="lineup-error" class="flex-row" style="display:none;margin-top:1rem;">
+                <span class="text-danger">More than one carrier share the same rank; the rank order must be unique to proceed.</span>
+            </div>
 
             <div class="comparison-table-wrap">
                 <table class="comparison-table">
@@ -115,12 +107,21 @@
                 </table>
             </div>
 
-            <div id="lineup-action" class="flex-row" style="display:none;margin-top:1rem;gap:1rem;">
-                <button id="save-lineup-btn" type="submit" class="primary">Save Lineup and Quote →</button>
+            {{ if .Data.AvailableChargeTypes }}
+            <div class="flex-row" style="margin-top:.75rem;">
+                <select id="add-charge-type-select" name="charge_type" style="width:auto;">
+                    <option value="">Add charge type...</option>
+                    {{ range .Data.AvailableChargeTypes }}
+                    <option value="{{ .Key }}">{{ .Label }}</option>
+                    {{ end }}
+                </select>
+                <button type="button"
+                        hx-get="/rate-requests/{{ .Data.RateRequest.ID }}/comparison/add-row"
+                        hx-include="#add-charge-type-select"
+                        hx-target="#comparison-tbody"
+                        hx-swap="beforeend">Add Row</button>
             </div>
-            <div id="lineup-error" class="flex-row" style="display:none;margin-top:1rem;">
-                <span class="text-danger">More than one carrier share the same rank; the rank order must be unique to proceed.</span>
-            </div>
+            {{ end }}
 
         </form>
 
@@ -144,7 +145,6 @@
             {{ template "lane-detail-panel" .Data.Lane }}
         </div>
     </div>
-
 </div>
 {{ end }}
 
