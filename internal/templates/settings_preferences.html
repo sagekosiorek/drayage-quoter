@@ -1,0 +1,34 @@
+{{ define "content" }}
+<div class="page-header">
+    <h1>Settings</h1>
+</div>
+
+<nav class="subnav">
+    <a href="/settings">Email Template</a>
+    <a href="/settings/preferences" class="active">Preferences</a>
+</nav>
+
+<div class="form-narrow">
+    <p class="form-section">Preferences</p>
+    <p class="form-hint">These settings apply to your account and persist across sessions.</p>
+
+    <form method="POST" action="/settings/preferences">
+        <div>
+            <label for="default_markup_method">Default Markup Method</label>
+            <p class="form-hint">Sets the pre-selected markup mode on the quote markup page.</p>
+            <select id="default_markup_method" name="default_markup_method">
+                <option value="flat"{{ if eq .Prefs.DefaultMarkupMethod "flat" }} selected{{ end }}>Flat Markup</option>
+                <option value="flat_rate"{{ if eq .Prefs.DefaultMarkupMethod "flat_rate" }} selected{{ end }}>Flat Rate</option>
+                <option value="percent"{{ if eq .Prefs.DefaultMarkupMethod "percent" }} selected{{ end }}>% Markup</option>
+            </select>
+        </div>
+
+        <div class="form-actions">
+            <button type="submit" class="primary">Save Preferences</button>
+            <span class="form-timestamp">
+                {{- if .Prefs.UpdatedAt }}Last saved: <time datetime="{{ .Prefs.UpdatedAt }}">{{ .Prefs.UpdatedAt }}</time>{{ end -}}
+            </span>
+        </div>
+    </form>
+</div>
+{{ end }}

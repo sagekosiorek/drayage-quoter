@@ -132,7 +132,8 @@ func main() {
 	lanePanelTmpl         := templates.MustParse("lane_detail_panel.html")
 	rateIngestTmpl := templates.MustParse("layout.html", "rate_ingest.html")
 	rateResultTmpl := templates.MustParse("layout.html", "rate_ingest_result.html")
-	settingsTmpl := templates.MustParse("layout.html", "settings.html")
+	settingsTmpl      := templates.MustParse("layout.html", "settings.html")
+	settingsPrefsTmpl := templates.MustParse("layout.html", "settings_preferences.html")
 
 	customerSuggTmpl := template.Must(template.New("suggestions").Parse(
 		`{{range .}}<button type="button" class="suggestion-item" ` +
@@ -196,8 +197,10 @@ func main() {
 	}))
 
 	// Settings routes (all authenticated users)
-	mux.HandleFunc("GET /settings",        authService.RequireAuth(settingsSvc.HandleSettings(settingsTmpl)))
-	mux.HandleFunc("POST /settings", authService.RequireAuth(settingsSvc.HandleSaveTemplate()))
+	mux.HandleFunc("GET /settings",               authService.RequireAuth(settingsSvc.HandleSettings(settingsTmpl)))
+	mux.HandleFunc("POST /settings",              authService.RequireAuth(settingsSvc.HandleSaveTemplate()))
+	mux.HandleFunc("GET /settings/preferences",   authService.RequireAuth(settingsSvc.HandlePreferences(settingsPrefsTmpl)))
+	mux.HandleFunc("POST /settings/preferences",  authService.RequireAuth(settingsSvc.HandleSavePreferences()))
 
 	// Dashboard
 	mux.HandleFunc("GET /{$}", authService.RequireAuth(lanesSvc.HandleDashboard(dashboardTmpl)))

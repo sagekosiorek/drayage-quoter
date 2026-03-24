@@ -69,26 +69,35 @@ window.lineupBases = {{ .Data.LineupBases }};
                         </tr>
                     </thead>
                     <tbody>
-                        <!-- Total Markup summary row — flat markup input drives LH+Fuel computation -->
+                        <!-- Total Markup summary row — dropdown selects markup mode -->
                         <tr class="row-total row-highlight-green">
                             <td style="font-weight:600;">Total Markup</td>
                             <td id="total-markup-preview" class="cell-total"></td>
                             <td class="cell-center">
-                                <input type="text" inputmode="decimal" name="linehaul_fuel" id="input-linehaul-markup"
-                                       class="input-amount"
-                                       {{ with index $.Data.Markups "linehaul_fuel" }}value="{{ .Value }}"{{ end }}>
-                                <div class="text-2xs text-secondary" style="margin-top:.25rem;">flat markup</div>
+                                <select id="lhfuel-mode" name="linehaul_fuel_mode" class="input-amount-lg">
+                                    <option value="flat"{{ if eq .Data.LHFuelMarkupMethod "flat" }} selected{{ end }}>Flat Markup</option>
+                                    <option value="flat_rate"{{ if eq .Data.LHFuelMarkupMethod "flat_rate" }} selected{{ end }}>Flat Rate</option>
+                                    <option value="percent"{{ if eq .Data.LHFuelMarkupMethod "percent" }} selected{{ end }}>% Markup</option>
+                                </select>
                             </td>
                             <td class="cell-avg"></td>
                             {{ range .Data.Vendors }}
                             <td></td>
                             {{ end }}
                         </tr>
-                        <!-- Linehaul + Fuel combined row — read-only computed from markup above -->
+                        <!-- Linehaul + Fuel combined row — input and computed total per markup mode -->
                         <tr class="row-total">
                             <td style="font-weight:600;font-style:italic;">Linehaul + Fuel</td>
                             <td id="markup-linehaul_fuel" class="cell-center"></td>
-                            <td id="customer-linehaul_fuel" class="cell-center text-secondary"></td>
+                            <td class="cell-center">
+                                <span id="customer-linehaul_fuel" class="text-secondary"></span>
+                                <div style="margin-top:.25rem;">
+                                    <input type="text" inputmode="decimal" name="linehaul_fuel" id="input-linehaul-markup"
+                                           class="input-amount"
+                                           {{ with index $.Data.Markups "linehaul_fuel" }}value="{{ .Value }}"{{ end }}>
+                                    <div id="lhfuel-input-label" class="text-2xs text-secondary" style="margin-top:.25rem;"></div>
+                                </div>
+                            </td>
                             <td id="avg-linehaul_fuel" class="cell-avg-total">{{ .Data.AvgTotal }}</td>
                             {{ range .Data.Vendors }}
                             <td class="cell-total">{{ .TotalDisplay }}</td>
@@ -194,6 +203,10 @@ window.lineupBases = {{ .Data.LineupBases }};
         return bases[currentIdx][ct] || 0;
     }
 
+    function getMode() {
+        return document.getElementById("lhfuel-mode").value; // "flat" | "flat_rate" | "percent"
+    }
+
     function fmtDollar(v) {
         if (v === 0) return "";
         var s = "$" + Math.abs(v).toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
@@ -213,20 +226,45 @@ window.lineupBases = {{ .Data.LineupBases }};
         el.style.color = pl > 0 ? "#16a34a" : pl < 0 ? "#dc2626" : "#999";
     }
 
-    // Compute customer LH, Fuel%, and LH+Fuel from the flat markup input.
+    // Compute customer LH, Fuel%, and LH+Fuel from the markup input, respecting the selected mode.
     function computeLHFuel() {
-        var markup    = parseFloat(document.getElementById("input-linehaul-markup").value) || 0;
+        var inputVal   = parseFloat(document.getElementById("input-linehaul-markup").value) || 0;
         var baseLHFuel = getBase("linehaul_fuel");
         var baseFuel   = getBase("fuel"); // percentage
-        var cLHFuel    = baseLHFuel + markup;
-        var divisor    = 1 + baseFuel / 100;
-        var cLH        = divisor > 0 ? cLHFuel / divisor : cLHFuel;
+        var mode       = getMode();
+        var cLHFuel, markup;
+        if (mode === "flat_rate") {
+            cLHFuel = inputVal;
+            markup  = inputVal - baseLHFuel;
+        } else if (mode === "percent") {
+            cLHFuel = baseLHFuel * (1 + inputVal / 100);
+            markup  = cLHFuel - baseLHFuel;
+        } else { // "flat"
+            cLHFuel = baseLHFuel + inputVal;
+            markup  = inputVal;
+        }
+        var divisor = 1 + baseFuel / 100;
+        var cLH = divisor > 0 ? cLHFuel / divisor : cLHFuel;
         return { markup: markup, cLHFuel: cLHFuel, cLH: cLH, cFuelPct: baseFuel };
+    }
+
+    // Show/hide the computed LH+Fuel span and update the input label based on mode.
+    function updateModeUI() {
+        var mode   = getMode();
+        var lfSpan = document.getElementById("customer-linehaul_fuel");
+        var label  = document.getElementById("lhfuel-input-label");
+        if (mode === "flat_rate") {
+            if (lfSpan) lfSpan.style.display = "none";
+            if (label) label.textContent = "customer rate";
+        } else {
+            if (lfSpan) lfSpan.style.display = "";
+            if (label) label.textContent = mode === "percent" ? "% markup" : "flat markup";
+        }
     }
 
     function updatePreviews() {
         var lh = computeLHFuel();
-        var totalMarkup = lh.markup > 0 ? lh.markup : 0;
+        var totalMarkup = lh.markup;
 
         // Update computed read-only LH+Fuel cells.
         var lfEl = document.getElementById("customer-linehaul_fuel");
@@ -238,8 +276,8 @@ window.lineupBases = {{ .Data.LineupBases }};
         var fuelEl = document.getElementById("customer-fuel");
         if (fuelEl) fuelEl.textContent = lh.cFuelPct > 0 ? lh.cFuelPct.toFixed(2) + "%" : "";
 
-        // Markup (P&L) cell on Linehaul+Fuel row shows the flat markup amount.
-        setMarkupCell("linehaul_fuel", lh.markup > 0 ? lh.markup : null);
+        // Markup (P&L) cell on Linehaul+Fuel row shows the derived markup amount.
+        setMarkupCell("linehaul_fuel", lh.markup !== 0 ? lh.markup : null);
 
         // Other charge types P&L (flat: customer rate − base).
         var allInputs = document.querySelectorAll("#csv-form input[type=text]");
@@ -300,7 +338,14 @@ window.lineupBases = {{ .Data.LineupBases }};
     // Live update on any input change.
     document.getElementById("csv-form").addEventListener("input", updatePreviews);
 
+    // Mode selector drives UI layout and recalculates previews.
+    document.getElementById("lhfuel-mode").addEventListener("change", function() {
+        updateModeUI();
+        updatePreviews();
+    });
+
     // Initial render.
+    updateModeUI();
     updatePreviews();
     updateCarouselLabel();
 })();
