@@ -161,5 +161,9 @@ document.getElementById('lineup-form').addEventListener('input', function(e) {
     checkRanks();
 });
 checkRanks();
+document.body.addEventListener('htmx:afterSwap', function(e) {
+    var input = e.detail.elt.querySelector('input[type=text]');
+    if (input) { input.focus(); input.select(); }
+});
 </script>
 {{ end }}

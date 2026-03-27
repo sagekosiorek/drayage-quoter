@@ -40,6 +40,8 @@ window.lineupBases    = {{ .Data.LineupBases }};
 window.isLocked       = {{ if .Data.Locked }}true{{ else }}false{{ end }};
 window.lockedLHFuel   = {{ .Data.LockedCustomerLHFuel }};
 window.lockedFuelPct  = {{ .Data.LockedCustomerFuelPct }};
+window.savedCarouselIdx = {{ .Data.BaseCarouselIdx }};
+window.chargeTypeUnits = { {{- range .Data.ChargeRows }}"{{ .Key }}":"{{ .Unit }}",{{ end -}} };
 </script>
 
 <div class="comparison-layout">
@@ -52,6 +54,9 @@ window.lockedFuelPct  = {{ .Data.LockedCustomerFuelPct }};
         <form method="POST" action="/rate-requests/{{ .Data.RateRequest.ID }}/csv" id="csv-form">
             <div class="flex-row" style="margin-top:1rem;gap:1rem;">
                 <button type="submit" class="primary">Save Quote and Generate CSV →</button>
+                {{ if gt (len .Data.Vendors) 1 }}
+                <button type="button" id="toggle-avg-btn" class="btn-secondary">Show average</button>
+                {{ end }}
                 <span id="autosave-indicator" class="label-caps text-muted"></span>
             </div>
 
@@ -68,7 +73,7 @@ window.lockedFuelPct  = {{ .Data.LockedCustomerFuelPct }};
             <input type="hidden" name="base_carousel_idx" id="base-carousel-idx" value="0">
 
             <div class="comparison-table-wrap">
-                <table class="comparison-table">
+                <table class="comparison-table avg-col-hidden">
                     <thead>
                         <tr>
                             <th class="col-min-md">Charge Type</th>
@@ -128,7 +133,7 @@ window.lockedFuelPct  = {{ .Data.LockedCustomerFuelPct }};
                                 <div style="margin-top:.25rem;">
                                     <input type="text" inputmode="decimal" name="linehaul_fuel" id="input-linehaul-markup"
                                            class="input-amount"
-                                           {{ with index $.Data.Markups "linehaul_fuel" }}value="{{ .Value }}"{{ end }}{{ if $.Data.Locked }} disabled{{ end }}>
+                                           {{ with index $.Data.Markups "linehaul_fuel" }}{{ if ne .Value 0.0 }}value="{{ .Value }}"{{ end }}{{ end }}{{ if $.Data.Locked }} disabled{{ end }}>
                                     <div id="lhfuel-input-label" class="text-2xs text-secondary" style="margin-top:.25rem;"></div>
                                 </div>
                             </td>
@@ -175,7 +180,7 @@ window.lockedFuelPct  = {{ .Data.LockedCustomerFuelPct }};
                             <td class="cell-center">
                                 <input type="text" inputmode="decimal" name="{{ $ct }}" id="input-{{ $ct }}"
                                        class="input-amount"
-                                       {{ with index $.Data.Markups $ct }}value="{{ .Value }}"{{ end }}{{ if $.Data.Locked }} disabled{{ end }}>
+                                       {{ with index $.Data.Markups $ct }}{{ if ne .Value 0.0 }}value="{{ .Value }}"{{ end }}{{ end }}{{ if $.Data.Locked }} disabled{{ end }}>
                             </td>
                             <td id="avg-{{ $ct }}" class="cell-avg">{{ index $.Data.Averages $ct }}</td>
                             {{ range $.Data.Vendors }}
@@ -206,6 +211,11 @@ window.lockedFuelPct  = {{ .Data.LockedCustomerFuelPct }};
 
 </div>
 
+<style>
+.avg-col-hidden .cell-avg,
+.avg-col-hidden .cell-avg-total { display: none; }
+</style>
+
 <script>
 (function() {
     var bases = window.lineupBases; // [{linehaul:X, fuel:Y, linehaul_fuel:Z, ...}, ...]
@@ -215,7 +225,7 @@ window.lockedFuelPct  = {{ .Data.LockedCustomerFuelPct }};
         {{ range .Data.Vendors }}, "{{ .VendorName }} (Rank {{ .Rank }})"{{ end }}
     ];
 
-    var currentIdx = 0;
+    var currentIdx = (window.isLocked && window.savedCarouselIdx > 0) ? window.savedCarouselIdx : 1;
 
     function getBase(ct) {
         if (!bases || !bases[currentIdx]) return 0;
@@ -232,16 +242,24 @@ window.lockedFuelPct  = {{ .Data.LockedCustomerFuelPct }};
         return v < 0 ? "-" + s : "+" + s;
     }
 
+    function fmtPlain(v) {
+        if (v === 0) return "";
+        var s = Math.abs(v).toFixed(2).replace(/\.?0+$/, "");
+        return (v < 0 ? "-" : "+") + s;
+    }
+
     function fmtAmount(v) {
         return "$" + v.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
     }
 
     // Sets the Markup (P&L) cell text; clears it when pl is null.
+    // Uses dollar formatting for $-denominated units; plain number for hours/days/%.
     function setMarkupCell(ct, pl) {
         var el = document.getElementById("markup-" + ct);
         if (!el) return;
         if (pl === null) { el.textContent = ""; el.style.color = ""; return; }
-        el.textContent = fmtDollar(pl);
+        var unit = window.chargeTypeUnits ? (window.chargeTypeUnits[ct] || "$") : "$";
+        el.textContent = unit.charAt(0) === "$" ? fmtDollar(pl) : fmtPlain(pl);
         el.style.color = pl > 0 ? "#16a34a" : pl < 0 ? "#dc2626" : "#999";
     }
 
@@ -349,14 +367,26 @@ window.lockedFuelPct  = {{ .Data.LockedCustomerFuelPct }};
         if (el) el.value = currentIdx;
     }
 
+    function isAvgHidden() {
+        return document.querySelector(".comparison-table").classList.contains("avg-col-hidden");
+    }
+
     document.getElementById("carousel-prev").addEventListener("click", function() {
-        currentIdx = (currentIdx - 1 + bases.length) % bases.length;
+        if (isAvgHidden()) {
+            currentIdx = currentIdx <= 1 ? bases.length - 1 : currentIdx - 1;
+        } else {
+            currentIdx = (currentIdx - 1 + bases.length) % bases.length;
+        }
         syncCarouselInput();
         updateCarouselLabel();
         updatePreviews();
     });
     document.getElementById("carousel-next").addEventListener("click", function() {
-        currentIdx = (currentIdx + 1) % bases.length;
+        if (isAvgHidden()) {
+            currentIdx = currentIdx >= bases.length - 1 ? 1 : currentIdx + 1;
+        } else {
+            currentIdx = (currentIdx + 1) % bases.length;
+        }
         syncCarouselInput();
         updateCarouselLabel();
         updatePreviews();
@@ -375,6 +405,22 @@ window.lockedFuelPct  = {{ .Data.LockedCustomerFuelPct }};
     updateModeUI();
     updatePreviews();
     updateCarouselLabel();
+
+    // Average column toggle (only rendered when > 1 vendor).
+    var avgBtn = document.getElementById("toggle-avg-btn");
+    if (avgBtn) {
+        avgBtn.addEventListener("click", function() {
+            var tbl = document.querySelector(".comparison-table");
+            var hidden = tbl.classList.toggle("avg-col-hidden");
+            avgBtn.textContent = hidden ? "Show average" : "Hide average";
+            if (hidden && currentIdx === 0) {
+                currentIdx = 1;
+                syncCarouselInput();
+                updateCarouselLabel();
+                updatePreviews();
+            }
+        });
+    }
 
     // Reload after CSV export so the page reflects the auto-locked state.
     document.getElementById("csv-form").addEventListener("submit", function(e) {
