@@ -85,7 +85,7 @@ type apiIngestRequest struct {
 }
 
 // IngestEmail is the shared core for processing an inbound rate response email.
-// Flow: parse body → match reference ID → verify sender is a known user →
+// Flow: parse body → match reference ID → verify sender is a known user or vendor domain →
 // match vendor via mailto/From/To addresses in body → save or orphan.
 // Returns a status string ("matched" or "orphaned") and any hard error.
 func (s *Service) IngestEmail(subject, body, sender string) (string, error) {
@@ -114,11 +114,26 @@ func (s *Service) IngestEmail(subject, body, sender string) (string, error) {
 		return "", fmt.Errorf("lookup rate request %s: %w", refMatch, err)
 	}
 
+	// Accept sender if they are a known user (forwarded path) or if their email domain
+	// matches any vendor contact domain invited to this rate request (direct vendor reply).
 	var userExists int
-	err = s.DB.QueryRow(`SELECT COUNT(*) FROM users WHERE LOWER(email) = ?`, strings.ToLower(sender)).Scan(&userExists)
-	if err != nil || userExists == 0 {
-		s.insertOrphan(body, subject, sender, rrID)
-		return "orphaned", nil
+	if err = s.DB.QueryRow(`SELECT COUNT(*) FROM users WHERE LOWER(email) = ?`, strings.ToLower(sender)).Scan(&userExists); err != nil || userExists == 0 {
+		senderParts := strings.SplitN(strings.ToLower(sender), "@", 2)
+		if len(senderParts) != 2 || senderParts[1] == "" {
+			s.insertOrphan(body, subject, sender, rrID)
+			return "orphaned", nil
+		}
+		var domainMatch int
+		if err = s.DB.QueryRow(`
+			SELECT COUNT(*)
+			FROM vendor_contacts vc
+			JOIN vendor_ports vp ON vc.vendor_ports_id = vp.id
+			JOIN rate_request_vendors rrv ON rrv.vendor_id = vp.vendor_id
+			WHERE rrv.rate_request_id = ? AND LOWER(vc.email) LIKE '%@' || ?
+		`, rrID, senderParts[1]).Scan(&domainMatch); err != nil || domainMatch == 0 {
+			s.insertOrphan(body, subject, sender, rrID)
+			return "orphaned", nil
+		}
 	}
 
 	vendorID, err := s.matchVendorByBody(body, rrID)
