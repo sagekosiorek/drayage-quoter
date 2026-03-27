@@ -699,6 +699,7 @@ type RateRequestSnippet struct {
 type ChargeTypeRow struct {
 	Key   string // canonical key, e.g. "chassis_min"
 	Label string // display label, e.g. "Chassis Min (days)"
+	Unit  string // canonical unit, e.g. "$", "hours", "days"
 }
 
 // RateItemCell is one editable cell in the comparison table.
@@ -962,9 +963,9 @@ func (s *Service) HandleComparison(tmpl *template.Template) http.HandlerFunc {
 		var availableTypes []ChargeTypeRow
 		for _, ct := range rates.FieldOrder {
 			if presentTypes[ct] {
-				chargeRows = append(chargeRows, ChargeTypeRow{Key: ct, Label: ctLabel(ct)})
+				chargeRows = append(chargeRows, ChargeTypeRow{Key: ct, Label: ctLabel(ct), Unit: rates.DefaultUnit(ct)})
 			} else {
-				availableTypes = append(availableTypes, ChargeTypeRow{Key: ct, Label: ctLabel(ct)})
+				availableTypes = append(availableTypes, ChargeTypeRow{Key: ct, Label: ctLabel(ct), Unit: rates.DefaultUnit(ct)})
 			}
 		}
 
@@ -1135,7 +1136,7 @@ type MarkupItemRow struct {
 	MarkupType string // "flat" | "percent"
 }
 
-// SavedComparisonData is the template data for rate_comparison_saved.html.
+// SavedComparisonData is the template data for rate_comparison_quote.html.
 type SavedComparisonData struct {
 	RateRequest        RateRequestSnippet
 	Lane               LaneSnippet
@@ -1149,6 +1150,7 @@ type SavedComparisonData struct {
 	Locked               bool    // true when customer rates are locked from editing
 	LockedCustomerLHFuel float64 // frozen customer LH+Fuel total at lock time (0 when unlocked)
 	LockedCustomerFuelPct float64 // frozen fuel% at lock time (0 when unlocked)
+	BaseCarouselIdx      int     // carousel index active when locked; 0 when unlocked
 }
 
 // HandleSavedComparison renders the markup entry + CSV generation page for a lineup.
@@ -1304,9 +1306,9 @@ func (s *Service) HandleSavedComparison(tmpl *template.Template) http.HandlerFun
 		var availableTypes []ChargeTypeRow
 		for _, ct := range rates.FieldOrder {
 			if presentTypes[ct] {
-				chargeRows = append(chargeRows, ChargeTypeRow{Key: ct, Label: ctLabel(ct)})
+				chargeRows = append(chargeRows, ChargeTypeRow{Key: ct, Label: ctLabel(ct), Unit: rates.DefaultUnit(ct)})
 			} else {
-				availableTypes = append(availableTypes, ChargeTypeRow{Key: ct, Label: ctLabel(ct)})
+				availableTypes = append(availableTypes, ChargeTypeRow{Key: ct, Label: ctLabel(ct), Unit: rates.DefaultUnit(ct)})
 			}
 		}
 
@@ -1388,9 +1390,10 @@ func (s *Service) HandleSavedComparison(tmpl *template.Template) http.HandlerFun
 
 		// Load locked state and frozen customer values from markups row.
 		var locked bool
+		var baseCarouselIdx int
 		var custLHFuel, custFuelPct sql.NullFloat64
-		s.DB.QueryRow(`SELECT locked, customer_lhfuel, customer_fuel_pct FROM markups WHERE lane_id = ?`, rr.LaneID).
-			Scan(&locked, &custLHFuel, &custFuelPct)
+		s.DB.QueryRow(`SELECT locked, customer_lhfuel, customer_fuel_pct, base_carousel_idx FROM markups WHERE lane_id = ?`, rr.LaneID).
+			Scan(&locked, &custLHFuel, &custFuelPct, &baseCarouselIdx)
 
 		// Determine effective markup method: saved value → user preference → default.
 		lfMarkupMethod := "flat"
@@ -1418,6 +1421,7 @@ func (s *Service) HandleSavedComparison(tmpl *template.Template) http.HandlerFun
 				Locked:                locked,
 				LockedCustomerLHFuel:  custLHFuel.Float64,
 				LockedCustomerFuelPct: custFuelPct.Float64,
+				BaseCarouselIdx:       baseCarouselIdx,
 			},
 		}); err != nil {
 			log.Printf("HandleSavedComparison: template execution rr=%d: %v", rrID, err)
@@ -1523,7 +1527,7 @@ func (s *Service) HandleToggleLock() http.HandlerFunc {
 		if currentLocked {
 			// Unlocking: clear stored customer rates.
 			if _, err2 := tx.Exec(
-				`UPDATE markups SET locked=0, customer_lhfuel=NULL, customer_fuel_pct=NULL WHERE id=?`, markupID,
+				`UPDATE markups SET locked=0, customer_lhfuel=NULL, customer_fuel_pct=NULL, base_carousel_idx=0 WHERE id=?`, markupID,
 			); err2 != nil {
 				log.Printf("HandleToggleLock: unlock lane=%d: %v", laneID, err2)
 				http.Error(w, "Failed to unlock", http.StatusInternalServerError)
@@ -1554,8 +1558,8 @@ func (s *Service) HandleToggleLock() http.HandlerFunc {
 				custLHFuel = baseLHFuel + markupVal
 			}
 			if _, err2 := tx.Exec(
-				`UPDATE markups SET locked=1, customer_lhfuel=?, customer_fuel_pct=? WHERE id=?`,
-				custLHFuel, baseFuelPct, markupID,
+				`UPDATE markups SET locked=1, customer_lhfuel=?, customer_fuel_pct=?, base_carousel_idx=? WHERE id=?`,
+				custLHFuel, baseFuelPct, carouselIdx, markupID,
 			); err2 != nil {
 				log.Printf("HandleToggleLock: lock lane=%d: %v", laneID, err2)
 				http.Error(w, "Failed to lock", http.StatusInternalServerError)
@@ -1903,8 +1907,8 @@ func (s *Service) HandleGenerateCSV() http.HandlerFunc {
 		// Auto-lock on first export: freeze customer values and lock the quote.
 		if !isLocked {
 			s.DB.Exec(
-				`UPDATE markups SET locked=1, customer_lhfuel=?, customer_fuel_pct=? WHERE lane_id=?`,
-				customerLHFuel, customerFuelPct, laneID,
+				`UPDATE markups SET locked=1, customer_lhfuel=?, customer_fuel_pct=?, base_carousel_idx=? WHERE lane_id=?`,
+				customerLHFuel, customerFuelPct, carouselIdx, laneID,
 			)
 		}
 
@@ -2041,7 +2045,7 @@ func (s *Service) availableChargeTypesAfterAdd(rrID int, newCT string) []ChargeT
 	var available []ChargeTypeRow
 	for _, ct := range rates.FieldOrder {
 		if !present[ct] {
-			available = append(available, ChargeTypeRow{Key: ct, Label: ctLabel(ct)})
+			available = append(available, ChargeTypeRow{Key: ct, Label: ctLabel(ct), Unit: rates.DefaultUnit(ct)})
 		}
 	}
 	return available

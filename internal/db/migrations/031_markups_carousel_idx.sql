@@ -1,0 +1,1 @@
+ALTER TABLE markups ADD COLUMN base_carousel_idx INTEGER NOT NULL DEFAULT 0;
