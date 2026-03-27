@@ -34,13 +34,14 @@
     {{ end }}
 </div>
 
-{{ if or .Hazmat .Overweight .OutOfGauge }}
+{{ if or .Hazmat .Overweight .OutOfGauge .Reefer }}
 <p class="detail-section">Special Requirements</p>
 <div class="detail-body">
     <div class="req-tags">
         {{ if .Hazmat }}<span class="req-tag">Hazmat</span>{{ end }}
         {{ if .Overweight }}<span class="req-tag">Overweight</span>{{ end }}
         {{ if .OutOfGauge }}<span class="req-tag">Out of Gauge</span>{{ end }}
+        {{ if .Reefer }}<span class="req-tag">Reefer</span>{{ end }}
     </div>
 </div>
 {{ end }}

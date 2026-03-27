@@ -44,6 +44,7 @@ type LaneDetail struct {
 	Hazmat          bool
 	Overweight      bool
 	OutOfGauge      bool
+	Reefer          bool
 	Notes           *string
 	Status          string
 	StatusLabel     string // e.g. "Rates Requested"
@@ -122,13 +123,13 @@ type userOption struct {
 // fetchLane loads a lane with its joined owner/customer/port data.
 func (s *Service) fetchLane(id int) (*LaneDetail, error) {
 	var l LaneDetail
-	var hazmat, overweight, outOfGauge int
+	var hazmat, overweight, outOfGauge, reefer int
 	var createdStr, updatedStr string
 
 	err := s.DB.QueryRow(`
 		SELECT l.id, l.owner_id, l.destination, l.container_size, l.weight,
 		       l.direction, l.load_type, l.commodity, l.hazmat, l.overweight,
-		       l.out_of_gauge, l.notes, l.status, l.created_at, l.updated_at,
+		       l.out_of_gauge, l.reefer, l.notes, l.status, l.created_at, l.updated_at,
 		       u.name, c.id, c.name, p.id, p.name, p.type
 		FROM lanes l
 		JOIN users u ON l.owner_id = u.id
@@ -138,7 +139,7 @@ func (s *Service) fetchLane(id int) (*LaneDetail, error) {
 	`, id).Scan(
 		&l.ID, &l.OwnerID, &l.Destination, &l.ContainerSize, &l.Weight,
 		&l.Direction, &l.LoadType, &l.Commodity, &hazmat, &overweight,
-		&outOfGauge, &l.Notes, &l.Status, &createdStr, &updatedStr,
+		&outOfGauge, &reefer, &l.Notes, &l.Status, &createdStr, &updatedStr,
 		&l.OwnerName, &l.CustomerID, &l.CustomerName,
 		&l.OriginPortID, &l.OriginPort, &l.OriginPortType,
 	)
@@ -149,6 +150,7 @@ func (s *Service) fetchLane(id int) (*LaneDetail, error) {
 	l.Hazmat = hazmat == 1
 	l.Overweight = overweight == 1
 	l.OutOfGauge = outOfGauge == 1
+	l.Reefer = reefer == 1
 
 	l.StatusLabel = statusLabel(l.Status)
 	l.NextStatus = nextStatus[l.Status]
@@ -356,6 +358,7 @@ func (s *Service) HandleCreate() http.HandlerFunc {
 		hazmat := r.FormValue("hazmat") == "1"
 		overweightChecked := r.FormValue("overweight") == "1"
 		outOfGauge := r.FormValue("out_of_gauge") == "1"
+		reefer := r.FormValue("reefer") == "1"
 
 		if customerName == "" || originPortIDStr == "" || destination == "" || containerSize == "" {
 			http.Error(w, "Required fields missing", http.StatusBadRequest)
@@ -429,12 +432,12 @@ func (s *Service) HandleCreate() http.HandlerFunc {
 			INSERT INTO lanes (
 				owner_id, customer_id, origin_port_id, destination,
 				container_size, weight, direction, load_type,
-				commodity, hazmat, overweight, out_of_gauge,
+				commodity, hazmat, overweight, out_of_gauge, reefer,
 				notes, status
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			user.ID, customerID, originPortID, destination,
 			containerSize, weight, direction, loadType,
-			nullableStr(commodity), btoi(hazmat), btoi(overweightChecked), btoi(outOfGauge),
+			nullableStr(commodity), btoi(hazmat), btoi(overweightChecked), btoi(outOfGauge), btoi(reefer),
 			nullableStr(notes), "draft",
 		)
 		if err != nil {
@@ -625,6 +628,7 @@ func (s *Service) HandleUpdate() http.HandlerFunc {
 		hazmat := r.FormValue("hazmat") == "1"
 		overweightChecked := r.FormValue("overweight") == "1"
 		outOfGauge := r.FormValue("out_of_gauge") == "1"
+		reefer := r.FormValue("reefer") == "1"
 
 		if customerName == "" || originPortIDStr == "" || destination == "" || containerSize == "" {
 			http.Error(w, "Required fields missing", http.StatusBadRequest)
@@ -698,12 +702,12 @@ func (s *Service) HandleUpdate() http.HandlerFunc {
 			UPDATE lanes SET
 				customer_id = ?, origin_port_id = ?, destination = ?,
 				container_size = ?, weight = ?, direction = ?, load_type = ?,
-				commodity = ?, hazmat = ?, overweight = ?, out_of_gauge = ?,
+				commodity = ?, hazmat = ?, overweight = ?, out_of_gauge = ?, reefer = ?,
 				notes = ?, updated_at = ?
 			WHERE id = ?`,
 			customerID, originPortID, destination,
 			containerSize, weight, direction, loadType,
-			nullableStr(commodity), btoi(hazmat), btoi(overweightChecked), btoi(outOfGauge),
+			nullableStr(commodity), btoi(hazmat), btoi(overweightChecked), btoi(outOfGauge), btoi(reefer),
 			nullableStr(notes), time.Now().UTC().Format("2006-01-02 15:04:05"),
 			id,
 		)

@@ -89,13 +89,14 @@
         {{ end }}
     </div>
 
-    {{ if or .Lane.Hazmat .Lane.Overweight .Lane.OutOfGauge }}
+    {{ if or .Lane.Hazmat .Lane.Overweight .Lane.OutOfGauge .Lane.Reefer }}
     <p class="detail-section">Special Requirements</p>
     <div class="detail-body">
         <div class="req-tags">
             {{ if .Lane.Hazmat }}<span class="req-tag">Hazmat</span>{{ end }}
             {{ if .Lane.Overweight }}<span class="req-tag">Overweight</span>{{ end }}
             {{ if .Lane.OutOfGauge }}<span class="req-tag">Out of Gauge</span>{{ end }}
+            {{ if .Lane.Reefer }}<span class="req-tag">Reefer</span>{{ end }}
         </div>
     </div>
     {{ end }}

@@ -41,6 +41,7 @@ type LaneSnippet struct {
 	Hazmat         bool
 	Overweight     bool
 	OutOfGauge     bool
+	Reefer         bool
 	Status         string
 	StatusLabel    string
 }
@@ -271,6 +272,9 @@ func buildBody(lane *LaneSnippet, refID string, tmpl settings.EmailTemplate) str
 	if lane.OutOfGauge {
 		specials = append(specials, "Out of Gauge")
 	}
+	if lane.Reefer {
+		specials = append(specials, "Reefer")
+	}
 	if len(specials) > 0 {
 		fmt.Fprintf(&sb, "Special Reqs:    %s\n", strings.Join(specials, ", "))
 	}
@@ -381,12 +385,12 @@ func buildGreetingName(contacts []ContactInfo) string {
 // fetchLane loads a lean LaneSnippet for a given lane ID.
 func (s *Service) fetchLane(laneID int) (*LaneSnippet, error) {
 	var lane LaneSnippet
-	var hazmat, overweight, outOfGauge int
+	var hazmat, overweight, outOfGauge, reefer int
 
 	err := s.DB.QueryRow(`
 		SELECT l.id, p.id, p.name, p.type, l.destination, l.direction,
 		       l.container_size, l.load_type, l.commodity, l.weight,
-		       l.notes, l.hazmat, l.overweight, l.out_of_gauge, l.status, c.name
+		       l.notes, l.hazmat, l.overweight, l.out_of_gauge, l.reefer, l.status, c.name
 		FROM lanes l
 		JOIN ports p ON p.id = l.origin_port_id
 		JOIN customers c ON c.id = l.customer_id
@@ -395,7 +399,7 @@ func (s *Service) fetchLane(laneID int) (*LaneSnippet, error) {
 		&lane.ID, &lane.OriginPortID, &lane.OriginPort, &lane.OriginPortType,
 		&lane.Destination, &lane.Direction,
 		&lane.ContainerSize, &lane.LoadType, &lane.Commodity, &lane.Weight,
-		&lane.Notes, &hazmat, &overweight, &outOfGauge, &lane.Status, &lane.CustomerName,
+		&lane.Notes, &hazmat, &overweight, &outOfGauge, &reefer, &lane.Status, &lane.CustomerName,
 	)
 	if err != nil {
 		return nil, err
@@ -403,6 +407,7 @@ func (s *Service) fetchLane(laneID int) (*LaneSnippet, error) {
 	lane.Hazmat = hazmat != 0
 	lane.Overweight = overweight != 0
 	lane.OutOfGauge = outOfGauge != 0
+	lane.Reefer = reefer != 0
 	lane.StatusLabel = laneStatusLabel(lane.Status)
 	return &lane, nil
 }
