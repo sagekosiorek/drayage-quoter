@@ -823,6 +823,50 @@ func (s *Service) HandleBlastStatus() http.HandlerFunc {
 	}
 }
 
+// HandleLineupCTA returns an HTML fragment for the "Build Carrier Lineup" CTA button.
+// Polls until lane status is rates_received, then returns the static button (polling stops).
+// GET /rate-requests/{id}/lineup-cta
+func (s *Service) HandleLineupCTA() http.HandlerFunc {
+	tmpl := template.Must(template.New("lineup-cta").Parse(`
+{{- if eq .Status "rates_requested" -}}
+<div id="lineup-cta"
+     hx-get="/rate-requests/{{.RRID}}/lineup-cta"
+     hx-trigger="every 30s"
+     hx-swap="outerHTML"></div>
+{{- else if eq .Status "rates_received" -}}
+<div id="lineup-cta">
+<a href="/rate-requests/{{.RRID}}/comparison"><button class="primary">Build Carrier Lineup →</button></a>
+</div>
+{{- else -}}
+<div id="lineup-cta"></div>
+{{- end -}}`))
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		id, err := strconv.Atoi(r.PathValue("id"))
+		if err != nil || id <= 0 {
+			http.Error(w, "Not found", http.StatusNotFound)
+			return
+		}
+		var laneStatus string
+		err = s.DB.QueryRow(`
+			SELECT l.status
+			FROM rate_requests rr
+			JOIN lanes l ON l.id = rr.lane_id
+			WHERE rr.id = ?
+		`, id).Scan(&laneStatus)
+		if err == sql.ErrNoRows {
+			http.Error(w, fmt.Sprintf("rate request %d not found", id), http.StatusNotFound)
+			return
+		}
+		if err != nil {
+			http.Error(w, fmt.Sprintf("load lineup CTA for rate request %d: %v", id, err), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "text/html")
+		tmpl.Execute(w, map[string]any{"RRID": id, "Status": laneStatus})
+	}
+}
+
 // HandleResponsesCount returns an HTML fragment with the current responses count for a rate request.
 // Intended for HTMX polling on the lane detail page: GET /rate-requests/{id}/responses-count
 // Polling continues while lane status is rates_requested or rates_received.
