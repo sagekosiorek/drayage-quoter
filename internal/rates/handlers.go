@@ -23,8 +23,8 @@ type Service struct {
 	BaseURL string
 }
 
-// VendorOption is a minimal vendor row for dropdown rendering.
-type VendorOption struct {
+// CarrierOption is a minimal carrier row for dropdown rendering.
+type CarrierOption struct {
 	ID   int
 	Name string
 }
@@ -33,15 +33,15 @@ type VendorOption struct {
 type IngestFormData struct {
 	RateRequestID int
 	ReferenceID   string
-	Vendors       []VendorOption
-	PreVendorID   int // from ?vendor_id= query param
+	Carriers       []CarrierOption
+	PreCarrierID   int // from ?carrier_id= query param
 }
 
 // IngestResultData is the template data for the parse-preview page.
 type IngestResultData struct {
 	RateRequestID int
-	VendorID      int
-	VendorName    string
+	CarrierID      int
+	CarrierName    string
 	RawEmail      string
 	Items         []RateItem
 	Notes         []string
@@ -85,8 +85,8 @@ type apiIngestRequest struct {
 }
 
 // IngestEmail is the shared core for processing an inbound rate response email.
-// Flow: parse body → match reference ID → verify sender is a known user or vendor domain →
-// match vendor via mailto/From/To addresses in body → save or orphan.
+// Flow: parse body → match reference ID → verify sender is a known user or carrier domain →
+// match carrier via mailto/From/To addresses in body → save or orphan.
 // Returns a status string ("matched" or "orphaned") and any hard error.
 func (s *Service) IngestEmail(subject, body, sender string) (string, error) {
 	result, err := s.Parse(body)
@@ -115,7 +115,7 @@ func (s *Service) IngestEmail(subject, body, sender string) (string, error) {
 	}
 
 	// Accept sender if they are a known user (forwarded path) or if their email domain
-	// matches any vendor contact domain invited to this rate request (direct vendor reply).
+	// matches any carrier contact domain invited to this rate request (direct carrier reply).
 	var userExists int
 	if err = s.DB.QueryRow(`SELECT COUNT(*) FROM users WHERE LOWER(email) = ?`, strings.ToLower(sender)).Scan(&userExists); err != nil || userExists == 0 {
 		senderParts := strings.SplitN(strings.ToLower(sender), "@", 2)
@@ -126,9 +126,9 @@ func (s *Service) IngestEmail(subject, body, sender string) (string, error) {
 		var domainMatch int
 		if err = s.DB.QueryRow(`
 			SELECT COUNT(*)
-			FROM vendor_contacts vc
-			JOIN vendor_ports vp ON vc.vendor_ports_id = vp.id
-			JOIN rate_request_vendors rrv ON rrv.vendor_id = vp.vendor_id
+			FROM carrier_contacts vc
+			JOIN carrier_ports vp ON vc.carrier_ports_id = vp.id
+			JOIN rate_request_carriers rrv ON rrv.carrier_id = vp.carrier_id
 			WHERE rrv.rate_request_id = ? AND LOWER(vc.email) LIKE '%@' || ?
 		`, rrID, senderParts[1]).Scan(&domainMatch); err != nil || domainMatch == 0 {
 			s.insertOrphan(body, subject, sender, rrID)
@@ -136,30 +136,30 @@ func (s *Service) IngestEmail(subject, body, sender string) (string, error) {
 		}
 	}
 
-	vendorID, err := s.matchVendorByBody(body, rrID)
+	carrierID, err := s.matchCarrierByBody(body, rrID)
 	if err == sql.ErrNoRows {
 		s.insertOrphan(body, subject, sender, rrID)
 		return "orphaned", nil
 	}
 	if err != nil {
-		return "", fmt.Errorf("match vendor by mailto for rr %d: %w", rrID, err)
+		return "", fmt.Errorf("match carrier by mailto for rr %d: %w", rrID, err)
 	}
 
-	if err := s.saveVendorRate(rrID, vendorID, body, "regex", result.Items); err != nil {
-		return "", fmt.Errorf("save vendor rate rr=%d vendor=%d: %w", rrID, vendorID, err)
+	if err := s.saveCarrierRate(rrID, carrierID, body, "regex", result.Items); err != nil {
+		return "", fmt.Errorf("save carrier rate rr=%d carrier=%d: %w", rrID, carrierID, err)
 	}
 	return "matched", nil
 }
 
-// matchVendorByBody scans body for email addresses and returns the first vendor_id whose
+// matchCarrierByBody scans body for email addresses and returns the first carrier_id whose
 // contacts appear in that set, scoped to the given rate request.
 // Three passes run unconditionally and are merged with deduplication:
 //   - Stage 1: mailto: links (HTML and any literal mailto: in plain text)
 //   - Stage 2: From:/To: header lines (plain text and embedded forwarded headers in HTML)
 //   - Stage 3: full-body scan for any bare email address (catch-all fallback)
 //
-// Returns (vendorID, nil) on first match, (0, sql.ErrNoRows) if none found.
-func (s *Service) matchVendorByBody(body string, rrID int) (int, error) {
+// Returns (carrierID, nil) on first match, (0, sql.ErrNoRows) if none found.
+func (s *Service) matchCarrierByBody(body string, rrID int) (int, error) {
 	seen := map[string]bool{}
 	var addrs []string
 
@@ -185,17 +185,17 @@ func (s *Service) matchVendorByBody(body string, rrID int) (int, error) {
 	}
 
 	for _, addr := range addrs {
-		var vendorID int
+		var carrierID int
 		err := s.DB.QueryRow(`
-			SELECT vp.vendor_id
-			FROM vendor_contacts vc
-			JOIN vendor_ports vp ON vc.vendor_ports_id = vp.id
-			JOIN rate_request_vendors rrv ON rrv.vendor_id = vp.vendor_id
+			SELECT vp.carrier_id
+			FROM carrier_contacts vc
+			JOIN carrier_ports vp ON vc.carrier_ports_id = vp.id
+			JOIN rate_request_carriers rrv ON rrv.carrier_id = vp.carrier_id
 			WHERE LOWER(vc.email) = ? AND rrv.rate_request_id = ?
 			LIMIT 1
-		`, addr, rrID).Scan(&vendorID)
+		`, addr, rrID).Scan(&carrierID)
 		if err == nil {
-			return vendorID, nil
+			return carrierID, nil
 		}
 		if err != sql.ErrNoRows {
 			return 0, err
@@ -246,21 +246,21 @@ func (s *Service) HandleIngestForm(tmpl *template.Template) http.HandlerFunc {
 			return
 		}
 
-		vendors, err := s.fetchVendorsOnRR(rrID)
+		carriers, err := s.fetchCarriersOnRR(rrID)
 		if err != nil {
-			http.Error(w, "Load vendors failed", http.StatusInternalServerError)
+			http.Error(w, "Load carriers failed", http.StatusInternalServerError)
 			return
 		}
 
-		preVendorID, _ := strconv.Atoi(r.URL.Query().Get("vendor_id"))
+		preCarrierID, _ := strconv.Atoi(r.URL.Query().Get("carrier_id"))
 
 		tmpl.ExecuteTemplate(w, "layout.html", map[string]any{
 			"User": user,
 			"Data": IngestFormData{
 				RateRequestID: rrID,
 				ReferenceID:   refID,
-				Vendors:       vendors,
-				PreVendorID:   preVendorID,
+				Carriers:       carriers,
+				PreCarrierID:   preCarrierID,
 			},
 		})
 	}
@@ -282,7 +282,7 @@ func (s *Service) HandleIngestSubmit(tmpl *template.Template) http.HandlerFunc {
 			return
 		}
 
-		vendorID, _ := strconv.Atoi(r.FormValue("vendor_id"))
+		carrierID, _ := strconv.Atoi(r.FormValue("carrier_id"))
 		rawEmail := strings.TrimSpace(r.FormValue("raw_email"))
 
 		if rawEmail == "" {
@@ -290,8 +290,8 @@ func (s *Service) HandleIngestSubmit(tmpl *template.Template) http.HandlerFunc {
 			return
 		}
 
-		var vendorName string
-		s.DB.QueryRow(`SELECT name FROM vendors WHERE id = ?`, vendorID).Scan(&vendorName)
+		var carrierName string
+		s.DB.QueryRow(`SELECT name FROM carriers WHERE id = ?`, carrierID).Scan(&carrierName)
 
 		result, err := s.Parse(rawEmail)
 		if err != nil {
@@ -303,8 +303,8 @@ func (s *Service) HandleIngestSubmit(tmpl *template.Template) http.HandlerFunc {
 			"User": user,
 			"Data": IngestResultData{
 				RateRequestID: rrID,
-				VendorID:      vendorID,
-				VendorName:    vendorName,
+				CarrierID:      carrierID,
+				CarrierName:    carrierName,
 				RawEmail:      rawEmail,
 				Items:         result.Items,
 				Notes:         result.Notes,
@@ -327,7 +327,7 @@ func (s *Service) HandleIngestConfirm() http.HandlerFunc {
 			return
 		}
 
-		vendorID, _ := strconv.Atoi(r.FormValue("vendor_id"))
+		carrierID, _ := strconv.Atoi(r.FormValue("carrier_id"))
 		rawEmail := r.FormValue("raw_email")
 
 		chargeTypes := r.Form["charge_type[]"]
@@ -354,7 +354,7 @@ func (s *Service) HandleIngestConfirm() http.HandlerFunc {
 				Amount:     amt,
 				Unit:       safeIdx(units, i),
 				Source:     "manual",
-				Note:       strconv.Itoa(manuallyEdited), // reuse Note to carry flag into saveVendorRate
+				Note:       strconv.Itoa(manuallyEdited), // reuse Note to carry flag into saveCarrierRate
 			})
 		}
 
@@ -371,11 +371,11 @@ func (s *Service) HandleIngestConfirm() http.HandlerFunc {
 		defer tx.Rollback()
 
 		res, err := tx.Exec(
-			`INSERT INTO vendor_rates (rate_request_id, vendor_id, original_email, parsed_by) VALUES (?, ?, ?, ?)`,
-			rrID, vendorID, rawEmail, parsedBy,
+			`INSERT INTO carrier_rates (rate_request_id, carrier_id, original_email, parsed_by) VALUES (?, ?, ?, ?)`,
+			rrID, carrierID, rawEmail, parsedBy,
 		)
 		if err != nil {
-			http.Error(w, "Insert vendor rate failed", http.StatusInternalServerError)
+			http.Error(w, "Insert carrier rate failed", http.StatusInternalServerError)
 			return
 		}
 		vrID, _ := res.LastInsertId()
@@ -383,7 +383,7 @@ func (s *Service) HandleIngestConfirm() http.HandlerFunc {
 		for _, item := range items {
 			manuallyEdited, _ := strconv.Atoi(item.Note)
 			_, err := tx.Exec(
-				`INSERT INTO vendor_rate_items (vendor_rate_id, charge_type, amount, unit, manually_edited) VALUES (?, ?, ?, ?, ?)`,
+				`INSERT INTO carrier_rate_items (carrier_rate_id, charge_type, amount, unit, manually_edited) VALUES (?, ?, ?, ?, ?)`,
 				vrID, item.ChargeType, item.Amount, item.Unit, manuallyEdited,
 			)
 			if err != nil {
@@ -392,7 +392,7 @@ func (s *Service) HandleIngestConfirm() http.HandlerFunc {
 			}
 		}
 
-		tx.Exec(`UPDATE rate_request_vendors SET responded = 1 WHERE rate_request_id = ? AND vendor_id = ?`, rrID, vendorID)
+		tx.Exec(`UPDATE rate_request_carriers SET responded = 1 WHERE rate_request_id = ? AND carrier_id = ?`, rrID, carrierID)
 		tx.Exec(`UPDATE rate_requests SET responses_received = responses_received + 1 WHERE id = ?`, rrID)
 		tx.Exec(`
 			UPDATE lanes SET status = 'rates_received', updated_at = ?
@@ -411,12 +411,12 @@ func (s *Service) HandleIngestConfirm() http.HandlerFunc {
 	}
 }
 
-// fetchVendorsOnRR loads vendor options for a given rate request.
-func (s *Service) fetchVendorsOnRR(rrID int) ([]VendorOption, error) {
+// fetchCarriersOnRR loads carrier options for a given rate request.
+func (s *Service) fetchCarriersOnRR(rrID int) ([]CarrierOption, error) {
 	rows, err := s.DB.Query(`
 		SELECT v.id, v.name
-		FROM rate_request_vendors rrv
-		JOIN vendors v ON v.id = rrv.vendor_id
+		FROM rate_request_carriers rrv
+		JOIN carriers v ON v.id = rrv.carrier_id
 		WHERE rrv.rate_request_id = ?
 		ORDER BY v.name
 	`, rrID)
@@ -425,9 +425,9 @@ func (s *Service) fetchVendorsOnRR(rrID int) ([]VendorOption, error) {
 	}
 	defer rows.Close()
 
-	var opts []VendorOption
+	var opts []CarrierOption
 	for rows.Next() {
-		var o VendorOption
+		var o CarrierOption
 		if err := rows.Scan(&o.ID, &o.Name); err != nil {
 			return nil, err
 		}
@@ -436,9 +436,9 @@ func (s *Service) fetchVendorsOnRR(rrID int) ([]VendorOption, error) {
 	return opts, nil
 }
 
-// saveVendorRate inserts a vendor_rates record and its items, then updates
-// rate_request_vendors and rate_requests response counters.
-func (s *Service) saveVendorRate(rrID, vendorID int, rawEmail, parsedBy string, items []RateItem) error {
+// saveCarrierRate inserts a carrier_rates record and its items, then updates
+// rate_request_carriers and rate_requests response counters.
+func (s *Service) saveCarrierRate(rrID, carrierID int, rawEmail, parsedBy string, items []RateItem) error {
 	tx, err := s.DB.Begin()
 	if err != nil {
 		return err
@@ -446,8 +446,8 @@ func (s *Service) saveVendorRate(rrID, vendorID int, rawEmail, parsedBy string, 
 	defer tx.Rollback()
 
 	res, err := tx.Exec(
-		`INSERT INTO vendor_rates (rate_request_id, vendor_id, original_email, parsed_by) VALUES (?, ?, ?, ?)`,
-		rrID, vendorID, rawEmail, parsedBy,
+		`INSERT INTO carrier_rates (rate_request_id, carrier_id, original_email, parsed_by) VALUES (?, ?, ?, ?)`,
+		rrID, carrierID, rawEmail, parsedBy,
 	)
 	if err != nil {
 		return err
@@ -456,14 +456,14 @@ func (s *Service) saveVendorRate(rrID, vendorID int, rawEmail, parsedBy string, 
 
 	for _, item := range items {
 		if _, err := tx.Exec(
-			`INSERT INTO vendor_rate_items (vendor_rate_id, charge_type, amount, unit) VALUES (?, ?, ?, ?)`,
+			`INSERT INTO carrier_rate_items (carrier_rate_id, charge_type, amount, unit) VALUES (?, ?, ?, ?)`,
 			vrID, item.ChargeType, item.Amount, item.Unit,
 		); err != nil {
 			return err
 		}
 	}
 
-	tx.Exec(`UPDATE rate_request_vendors SET responded = 1 WHERE rate_request_id = ? AND vendor_id = ?`, rrID, vendorID)
+	tx.Exec(`UPDATE rate_request_carriers SET responded = 1 WHERE rate_request_id = ? AND carrier_id = ?`, rrID, carrierID)
 	tx.Exec(`UPDATE rate_requests SET responses_received = responses_received + 1 WHERE id = ?`, rrID)
 	tx.Exec(`
 		UPDATE lanes SET status = 'rates_received', updated_at = ?
@@ -596,7 +596,7 @@ type rateItemView struct {
 	Amount         float64
 	Unit           string
 	ChargeType     string
-	VendorRateID   int
+	CarrierRateID   int
 	RateRequestID  int
 	ManuallyEdited bool
 	ParsedBy       string
@@ -604,16 +604,16 @@ type rateItemView struct {
 	CSSClass       string
 }
 
-// fetchRateItemView loads a vendor_rate_item and computes display fields.
+// fetchRateItemView loads a carrier_rate_item and computes display fields.
 func (s *Service) fetchRateItemView(id int) (*rateItemView, error) {
 	var v rateItemView
 	var manuallyEdited int
 	err := s.DB.QueryRow(
 		`SELECT vri.id, vri.amount, vri.unit, vri.charge_type, vr.id, vr.rate_request_id, vri.manually_edited, vr.parsed_by
-		 FROM vendor_rate_items vri
-		 JOIN vendor_rates vr ON vr.id = vri.vendor_rate_id
+		 FROM carrier_rate_items vri
+		 JOIN carrier_rates vr ON vr.id = vri.carrier_rate_id
 		 WHERE vri.id = ?`, id,
-	).Scan(&v.ID, &v.Amount, &v.Unit, &v.ChargeType, &v.VendorRateID, &v.RateRequestID, &manuallyEdited, &v.ParsedBy)
+	).Scan(&v.ID, &v.Amount, &v.Unit, &v.ChargeType, &v.CarrierRateID, &v.RateRequestID, &manuallyEdited, &v.ParsedBy)
 	if err != nil {
 		return nil, err
 	}
@@ -623,14 +623,14 @@ func (s *Service) fetchRateItemView(id int) (*rateItemView, error) {
 	return &v, nil
 }
 
-// computeVendorTotal returns the formatted linehaul+fuel total for a single vendor rate record.
-func (s *Service) computeVendorTotal(vrID int) string {
+// computeCarrierTotal returns the formatted linehaul+fuel total for a single carrier rate record.
+func (s *Service) computeCarrierTotal(vrID int) string {
 	var lh, fuel sql.NullFloat64
 	s.DB.QueryRow(`
 		SELECT
 			MAX(CASE WHEN charge_type = 'linehaul' THEN amount END),
 			MAX(CASE WHEN charge_type = 'fuel'     THEN amount END)
-		FROM vendor_rate_items WHERE vendor_rate_id = ?
+		FROM carrier_rate_items WHERE carrier_rate_id = ?
 	`, vrID).Scan(&lh, &fuel)
 	if !lh.Valid {
 		return ""
@@ -642,12 +642,12 @@ func (s *Service) computeVendorTotal(vrID int) string {
 	return FmtCellAmount(lh.Float64+lh.Float64*fuelPct/100, "$")
 }
 
-// computeChargeTypeAvg returns the formatted average amount for one charge type across all vendors on a rate request.
+// computeChargeTypeAvg returns the formatted average amount for one charge type across all carriers on a rate request.
 func (s *Service) computeChargeTypeAvg(rrID int, ct string) string {
 	rows, err := s.DB.Query(`
 		SELECT vri.amount, vri.unit
-		FROM vendor_rate_items vri
-		JOIN vendor_rates vr ON vr.id = vri.vendor_rate_id
+		FROM carrier_rate_items vri
+		JOIN carrier_rates vr ON vr.id = vri.carrier_rate_id
 		WHERE vr.rate_request_id = ? AND vri.charge_type = ?
 	`, rrID, ct)
 	if err != nil {
@@ -670,14 +670,14 @@ func (s *Service) computeChargeTypeAvg(rrID int, ct string) string {
 	return FmtCellAmount(total/float64(count), unit)
 }
 
-// computeTotalAvg returns the formatted average of (linehaul + linehaul*fuel%) across all vendors on a rate request.
+// computeTotalAvg returns the formatted average of (linehaul + linehaul*fuel%) across all carriers on a rate request.
 func (s *Service) computeTotalAvg(rrID int) string {
 	rows, err := s.DB.Query(`
 		SELECT
 			MAX(CASE WHEN vri.charge_type = 'linehaul' THEN vri.amount END),
 			MAX(CASE WHEN vri.charge_type = 'fuel'     THEN vri.amount END)
-		FROM vendor_rates vr
-		JOIN vendor_rate_items vri ON vri.vendor_rate_id = vr.id
+		FROM carrier_rates vr
+		JOIN carrier_rate_items vri ON vri.carrier_rate_id = vr.id
 		WHERE vr.rate_request_id = ? AND vri.charge_type IN ('linehaul','fuel')
 		GROUP BY vr.id
 	`, rrID)
@@ -704,12 +704,12 @@ func (s *Service) computeTotalAvg(rrID int) string {
 	return FmtCellAmount(sum/float64(count), "$")
 }
 
-// HandleViewRateItem returns the display-mode TD for a vendor rate item (for HTMX swap or cancel).
+// HandleViewRateItem returns the display-mode TD for a carrier rate item (for HTMX swap or cancel).
 // Also writes OOB swaps to update the average column for that charge type (and the total row for linehaul/fuel).
-// GET /vendor-rate-items/{id}
+// GET /carrier-rate-items/{id}
 func (s *Service) HandleViewRateItem() http.HandlerFunc {
 	cellTmpl := template.Must(template.New("cell").Parse(
-		`<td class="cell-center-click {{.CSSClass}}" hx-get="/vendor-rate-items/{{.ID}}/edit" hx-trigger="click" hx-target="this" hx-swap="outerHTML" title="Click to edit">{{.Display}}</td>`,
+		`<td class="cell-center-click {{.CSSClass}}" hx-get="/carrier-rate-items/{{.ID}}/edit" hx-trigger="click" hx-target="this" hx-swap="outerHTML" title="Click to edit">{{.Display}}</td>`,
 	))
 	return func(w http.ResponseWriter, r *http.Request) {
 		id, err := strconv.Atoi(r.PathValue("id"))
@@ -734,11 +734,11 @@ func (s *Service) HandleViewRateItem() http.HandlerFunc {
 			`<td id="avg-%s" hx-swap-oob="true" class="cell-avg">%s</td>`,
 			v.ChargeType, avg)
 
-		// OOB: refresh the vendor's total cell and the overall average total when linehaul or fuel changes.
+		// OOB: refresh the carrier's total cell and the overall average total when linehaul or fuel changes.
 		if v.ChargeType == "linehaul" || v.ChargeType == "fuel" {
 			fmt.Fprintf(w,
 				`<td id="total-%d" hx-swap-oob="true" class="cell-total">%s</td>`,
-				v.VendorRateID, s.computeVendorTotal(v.VendorRateID))
+				v.CarrierRateID, s.computeCarrierTotal(v.CarrierRateID))
 			fmt.Fprintf(w,
 				`<td id="avg-total" hx-swap-oob="true" class="cell-avg-total">%s</td>`,
 				s.computeTotalAvg(v.RateRequestID))
@@ -746,14 +746,14 @@ func (s *Service) HandleViewRateItem() http.HandlerFunc {
 	}
 }
 
-// HandleEditRateItem returns an editable TD form for a vendor rate item.
-// GET /vendor-rate-items/{id}/edit
+// HandleEditRateItem returns an editable TD form for a carrier rate item.
+// GET /carrier-rate-items/{id}/edit
 func (s *Service) HandleEditRateItem() http.HandlerFunc {
 	tmpl := template.Must(template.New("celledit").Parse(`<td class="cell-edit-form">
-<form hx-post="/vendor-rate-items/{{.ID}}" hx-target="closest td" hx-swap="outerHTML" >
+<form hx-post="/carrier-rate-items/{{.ID}}" hx-target="closest td" hx-swap="outerHTML" >
     <input type="text" name="amount" value="{{.Amount}}" class="input-amount">
     <button type="submit">✓</button>
-    <button type="button" hx-get="/vendor-rate-items/{{.ID}}" hx-target="closest td" hx-swap="outerHTML">✗</button>
+    <button type="button" hx-get="/carrier-rate-items/{{.ID}}" hx-target="closest td" hx-swap="outerHTML">✗</button>
   </form>
 </td>`))
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -776,7 +776,7 @@ func (s *Service) HandleEditRateItem() http.HandlerFunc {
 }
 
 // HandleUpdateRateItem saves a manually edited rate item amount and returns the updated display TD.
-// POST /vendor-rate-items/{id}
+// POST /carrier-rate-items/{id}
 func (s *Service) HandleUpdateRateItem() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id, err := strconv.Atoi(r.PathValue("id"))
@@ -794,7 +794,7 @@ func (s *Service) HandleUpdateRateItem() http.HandlerFunc {
 			return
 		}
 		if _, err := s.DB.Exec(
-			`UPDATE vendor_rate_items SET amount = ?, manually_edited = 1 WHERE id = ?`,
+			`UPDATE carrier_rate_items SET amount = ?, manually_edited = 1 WHERE id = ?`,
 			amount, id,
 		); err != nil {
 			http.Error(w, "Update rate item failed", http.StatusInternalServerError)
@@ -805,9 +805,9 @@ func (s *Service) HandleUpdateRateItem() http.HandlerFunc {
 	}
 }
 
-// HandleViewOriginalEmail returns the raw email content for a vendor rate record.
+// HandleViewOriginalEmail returns the raw email content for a carrier rate record.
 // HTML emails are rendered in a sandboxed iframe; plain text is shown in a <pre>.
-// GET /vendor-rates/{id}/email
+// GET /carrier-rates/{id}/email
 func (s *Service) HandleViewOriginalEmail() http.HandlerFunc {
 	plainTmpl := template.Must(template.New("email-plain").Parse(
 		`<pre class="email-plain">{{.}}</pre>`,
@@ -819,13 +819,13 @@ func (s *Service) HandleViewOriginalEmail() http.HandlerFunc {
 			return
 		}
 		var rawEmail string
-		err = s.DB.QueryRow(`SELECT original_email FROM vendor_rates WHERE id = ?`, id).Scan(&rawEmail)
+		err = s.DB.QueryRow(`SELECT original_email FROM carrier_rates WHERE id = ?`, id).Scan(&rawEmail)
 		if err == sql.ErrNoRows {
 			http.Error(w, "Not found", http.StatusNotFound)
 			return
 		}
 		if err != nil {
-			http.Error(w, "Load vendor email failed", http.StatusInternalServerError)
+			http.Error(w, "Load carrier email failed", http.StatusInternalServerError)
 			return
 		}
 
@@ -843,7 +843,7 @@ func (s *Service) HandleViewOriginalEmail() http.HandlerFunc {
 }
 
 // HandleNewRateItem returns an inline create form for an empty cell (no existing item).
-// GET /vendor-rates/{id}/items/new?charge_type=
+// GET /carrier-rates/{id}/items/new?charge_type=
 func (s *Service) HandleNewRateItem() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		vrID, err := strconv.Atoi(r.PathValue("id"))
@@ -856,30 +856,30 @@ func (s *Service) HandleNewRateItem() http.HandlerFunc {
 			http.Error(w, "charge_type required", http.StatusBadRequest)
 			return
 		}
-		// Confirm vendor_rate exists.
+		// Confirm carrier_rate exists.
 		var exists int
-		if err := s.DB.QueryRow(`SELECT COUNT(*) FROM vendor_rates WHERE id = ?`, vrID).Scan(&exists); err != nil || exists == 0 {
+		if err := s.DB.QueryRow(`SELECT COUNT(*) FROM carrier_rates WHERE id = ?`, vrID).Scan(&exists); err != nil || exists == 0 {
 			http.Error(w, "Not found", http.StatusNotFound)
 			return
 		}
 		unit := DefaultUnit(ct)
 		fmt.Fprintf(w, `<td class="cell-edit-form">`+
-		`<form hx-post="/vendor-rates/%d/items" hx-target="closest td" hx-swap="outerHTML" >`+
+		`<form hx-post="/carrier-rates/%d/items" hx-target="closest td" hx-swap="outerHTML" >`+
 			`<input type="hidden" name="charge_type" value="%s">`+
 			`<input type="hidden" name="unit" value="%s">`+
 			`<input type="text" name="amount" placeholder="0" class="input-amount">`+
 			`<button type="submit">✓</button>`+
-			`<button type="button" hx-get="/vendor-rates/%d/items/empty?charge_type=%s" hx-target="closest td" hx-swap="outerHTML">✗</button>`+
+			`<button type="button" hx-get="/carrier-rates/%d/items/empty?charge_type=%s" hx-target="closest td" hx-swap="outerHTML">✗</button>`+
 			`</form></td>`,
 			vrID, ct, unit, vrID, ct)
 	}
 }
 
-// HandleCreateRateItem inserts a new vendor_rate_item and returns the display TD.
-// POST /vendor-rates/{id}/items
+// HandleCreateRateItem inserts a new carrier_rate_item and returns the display TD.
+// POST /carrier-rates/{id}/items
 func (s *Service) HandleCreateRateItem() http.HandlerFunc {
 	cellTmpl := template.Must(template.New("newcell").Parse(
-		`<td class="cell-center-click {{.CSSClass}}" hx-get="/vendor-rate-items/{{.ID}}/edit" hx-trigger="click" hx-target="this" hx-swap="outerHTML" title="Click to edit">{{.Display}}</td>`,
+		`<td class="cell-center-click {{.CSSClass}}" hx-get="/carrier-rate-items/{{.ID}}/edit" hx-trigger="click" hx-target="this" hx-swap="outerHTML" title="Click to edit">{{.Display}}</td>`,
 	))
 	return func(w http.ResponseWriter, r *http.Request) {
 		vrID, err := strconv.Atoi(r.PathValue("id"))
@@ -907,13 +907,13 @@ func (s *Service) HandleCreateRateItem() http.HandlerFunc {
 		}
 
 		var rrID int
-		if err := s.DB.QueryRow(`SELECT rate_request_id FROM vendor_rates WHERE id = ?`, vrID).Scan(&rrID); err != nil {
+		if err := s.DB.QueryRow(`SELECT rate_request_id FROM carrier_rates WHERE id = ?`, vrID).Scan(&rrID); err != nil {
 			http.Error(w, "Not found", http.StatusNotFound)
 			return
 		}
 
 		res, err := s.DB.Exec(
-			`INSERT INTO vendor_rate_items (vendor_rate_id, charge_type, amount, unit, manually_edited) VALUES (?, ?, ?, ?, 1)`,
+			`INSERT INTO carrier_rate_items (carrier_rate_id, charge_type, amount, unit, manually_edited) VALUES (?, ?, ?, ?, 1)`,
 			vrID, ct, amount, unit,
 		)
 		if err != nil {
@@ -935,11 +935,11 @@ func (s *Service) HandleCreateRateItem() http.HandlerFunc {
 			`<td id="avg-%s" hx-swap-oob="true" class="cell-avg">%s</td>`,
 			ct, avg)
 
-		// OOB: refresh vendor total and overall average total if linehaul or fuel was added.
+		// OOB: refresh carrier total and overall average total if linehaul or fuel was added.
 		if ct == "linehaul" || ct == "fuel" {
 			fmt.Fprintf(w,
 				`<td id="total-%d" hx-swap-oob="true" class="cell-total">%s</td>`,
-				vrID, s.computeVendorTotal(vrID))
+				vrID, s.computeCarrierTotal(vrID))
 			fmt.Fprintf(w,
 				`<td id="avg-total" hx-swap-oob="true" class="cell-avg-total">%s</td>`,
 				s.computeTotalAvg(rrID))
@@ -948,7 +948,7 @@ func (s *Service) HandleCreateRateItem() http.HandlerFunc {
 }
 
 // HandleEmptyRateItem returns a clickable empty TD for cancel on a new-item form.
-// GET /vendor-rates/{id}/items/empty?charge_type=
+// GET /carrier-rates/{id}/items/empty?charge_type=
 func (s *Service) HandleEmptyRateItem() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		vrID, err := strconv.Atoi(r.PathValue("id"))
@@ -962,7 +962,7 @@ func (s *Service) HandleEmptyRateItem() http.HandlerFunc {
 			return
 		}
 		fmt.Fprintf(w,
-		`<td class="cell-center-empty" hx-get="/vendor-rates/%d/items/new?charge_type=%s" hx-trigger="click" hx-target="this" hx-swap="outerHTML" title="Click to add">—</td>`,
+		`<td class="cell-center-empty" hx-get="/carrier-rates/%d/items/new?charge_type=%s" hx-trigger="click" hx-target="this" hx-swap="outerHTML" title="Click to add">—</td>`,
 			vrID, ct)
 	}
 }

@@ -74,9 +74,9 @@ func main() {
 
 	ports := mustLoadPorts(database)
 	customers := mustSeedCustomers(database)
-	vendors := mustSeedVendors(database, adminID, ports)
+	carriers := mustSeedCarriers(database, adminID, ports)
 	lanes := mustSeedLanes(database, adminID, customers, ports)
-	mustSeedRateRequests(database, lanes, vendors, ports)
+	mustSeedRateRequests(database, lanes, carriers, ports)
 
 	log.Println("✓ seed complete")
 }

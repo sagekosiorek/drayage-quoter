@@ -1,10 +1,10 @@
 {{ define "content" }}
 <div class="page-header">
-    <h1>Vendors</h1>
-    <a href="/vendors/new"><button class="primary">+ New Vendor</button></a>
+    <h1>Carriers</h1>
+    <a href="/carriers/new"><button class="primary">+ New Carrier</button></a>
 </div>
 
-<form class="filter-bar" method="GET" action="/vendors">
+<form class="filter-bar" method="GET" action="/carriers">
     <input type="text" name="q" value="{{ .Query }}" placeholder="Search by name...">
     <select name="port" onchange="this.form.submit()">
         <option value="">All ports</option>
@@ -13,22 +13,22 @@
         {{ end }}
     </select>
     <button type="submit">Filter</button>
-    {{ if or .Query .PortID }}<a href="/vendors" class="link-secondary">Clear</a>{{ end }}
+    {{ if or .Query .PortID }}<a href="/carriers" class="link-secondary">Clear</a>{{ end }}
 </form>
 
-{{ if .Vendors }}
+{{ if .Carriers }}
 <table>
     <thead>
         <tr>
-            <th>Vendor</th>
+            <th>Carrier</th>
             <th>Ports Serviced</th>
         </tr>
     </thead>
     <tbody>
-        {{ range .Vendors }}
+        {{ range .Carriers }}
         <tr>
             <td>
-                <a href="/vendors/{{ .ID }}">{{ .Name }}</a>
+                <a href="/carriers/{{ .ID }}">{{ .Name }}</a>
                 {{ if .IsPreferred }}<span class="pref-star" title="Preferred">★</span>{{ end }}
             </td>
             <td class="text-secondary text-sm">{{ if .Ports }}{{ .Ports }}{{ else }}&mdash;{{ end }}</td>
@@ -38,7 +38,7 @@
 </table>
 {{ else }}
 <p class="empty-state">
-    {{ if or .Query .PortID }}No vendors match the current filters.{{ else }}No vendors yet. <a href="/vendors/new">Add the first one.</a>{{ end }}
+    {{ if or .Query .PortID }}No carriers match the current filters.{{ else }}No carriers yet. <a href="/carriers/new">Add the first one.</a>{{ end }}
 </p>
 {{ end }}
 {{ end }}

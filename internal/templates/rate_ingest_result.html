@@ -2,7 +2,7 @@
 <p class="back-link"><a href="/rate-requests/{{ .Data.RateRequestID }}">← Back to rate request</a></p>
 
 <div class="page-header">
-    <h1 class="page-title">Parsed Rates — {{ .Data.VendorName }}</h1>
+    <h1 class="page-title">Parsed Rates — {{ .Data.CarrierName }}</h1>
 </div>
 
 {{ if .Data.Notes }}
@@ -19,7 +19,7 @@
 {{ end }}
 
 <form method="POST" action="/rate-requests/{{ .Data.RateRequestID }}/ingest/confirm">
-    <input type="hidden" name="vendor_id" value="{{ .Data.VendorID }}">
+    <input type="hidden" name="carrier_id" value="{{ .Data.CarrierID }}">
     <input type="hidden" name="raw_email" value="{{ .Data.RawEmail }}">
 
     {{ if .Data.Items }}
@@ -54,7 +54,7 @@
 
     <div class="flex-row">
         <button type="submit">Save Rates</button>
-        <a href="/rate-requests/{{ .Data.RateRequestID }}/ingest?vendor_id={{ .Data.VendorID }}">← Re-paste</a>
+        <a href="/rate-requests/{{ .Data.RateRequestID }}/ingest?carrier_id={{ .Data.CarrierID }}">← Re-paste</a>
     </div>
 </form>
 {{ end }}

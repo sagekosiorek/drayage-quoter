@@ -39,7 +39,7 @@
 <div class="flex-row text-secondary text-sm" style="flex-wrap:wrap; gap:1.5rem; margin-bottom:1.5rem;">
     <span><strong>Ref:</strong> {{ .RateRequest.ReferenceID }}</span>
     <span><strong>Created:</strong> <time datetime="{{ .RateRequest.CreatedAt }}">{{ .RateRequest.CreatedAt }}</time></span>
-    <span id="responses-count"><strong>Responses:</strong> {{ .RateRequest.ResponsesReceived }} / {{ len .RateRequest.Vendors }}</span>
+    <span id="responses-count"><strong>Responses:</strong> {{ .RateRequest.ResponsesReceived }} / {{ len .RateRequest.Carriers }}</span>
     {{ if .RateRequest.Threshold }}<span><strong>Threshold:</strong> {{ .RateRequest.Threshold }} responses</span>{{ end }}
     {{ if .RateRequest.Deadline }}<span><strong>Deadline:</strong> <time datetime="{{ .RateRequest.Deadline }}">{{ .RateRequest.Deadline }}</time></span>{{ end }}
 </div>
@@ -70,27 +70,27 @@
          {{ end }}>
         <p class="detail-section">Blast Status</p>
 
-        {{ if .RateRequest.Vendors }}
+        {{ if .RateRequest.Carriers }}
         <table>
             <thead>
                 <tr>
-                    <th>Vendor</th>
+                    <th>Carrier</th>
                     <th>Status</th>
                     <th>Actions</th>
                 </tr>
             </thead>
             <tbody>
-                {{ range .RateRequest.Vendors }}
+                {{ range .RateRequest.Carriers }}
                 <tr class="{{ if .Responded }}rr-responded{{ end }}">
                     <td>
-                        <div style="font-weight:500;">{{ .VendorName }}</div>
+                        <div style="font-weight:500;">{{ .CarrierName }}</div>
                         {{ range .Contacts }}
                         <div class="text-secondary" style="font-size:.78rem;">
                             {{ .Name }}{{ if and .Name .Email }} · {{ end }}<a href="mailto:{{ .Email }}">{{ .Email }}</a>
                         </div>
                         {{ end }}
                         {{ if not .Contacts }}
-                        <div class="rr-vendor-item-warn">(no contact on file)</div>
+                        <div class="rr-carrier-item-warn">(no contact on file)</div>
                         {{ end }}
                     </td>
                     <td>
@@ -105,7 +105,7 @@
                             {{ if .MailtoHref }}
                             <a href="{{ .MailtoHref }}"><button class="primary">Open Email Draft</button></a>
                             {{ end }}
-                            <a href="/rate-requests/{{ $.RateRequest.ID }}/ingest?vendor_id={{ .VendorID }}"><button type="button">Paste Response</button></a>
+                            <a href="/rate-requests/{{ $.RateRequest.ID }}/ingest?carrier_id={{ .CarrierID }}"><button type="button">Paste Response</button></a>
                         </div>
                     </td>
                 </tr>
@@ -113,7 +113,7 @@
             </tbody>
         </table>
         {{ else }}
-        <p class="empty-state">No vendors on this rate request.</p>
+        <p class="empty-state">No carriers on this rate request.</p>
         {{ end }}
     </div>
 

@@ -2,22 +2,22 @@
 <p class="back-link"><a href="/rate-requests/{{ .Data.RateRequestID }}">← Back to rate request</a></p>
 
 <div class="page-header">
-    <h1 class="page-title">Ingest Vendor Response</h1>
+    <h1 class="page-title">Ingest Carrier Response</h1>
     <p class="meta-text">{{ .Data.ReferenceID }}</p>
 </div>
 
 <form method="POST" action="/rate-requests/{{ .Data.RateRequestID }}/ingest" class="form-body">
-    <label class="field-label" for="vendor_id">Vendor</label>
-    <select id="vendor_id" name="vendor_id" required style="margin-bottom:1.25rem;">
-        <option value="">— select vendor —</option>
-        {{ range .Data.Vendors }}
-        <option value="{{ .ID }}" {{ if eq .ID $.Data.PreVendorID }}selected{{ end }}>{{ .Name }}</option>
+    <label class="field-label" for="carrier_id">Carrier</label>
+    <select id="carrier_id" name="carrier_id" required style="margin-bottom:1.25rem;">
+        <option value="">— select carrier —</option>
+        {{ range .Data.Carriers }}
+        <option value="{{ .ID }}" {{ if eq .ID $.Data.PreCarrierID }}selected{{ end }}>{{ .Name }}</option>
         {{ end }}
     </select>
 
     <label class="field-label" for="raw_email">Email Body</label>
     <textarea id="raw_email" name="raw_email" rows="16" required
-        placeholder="Paste the vendor's reply email here — plain text or HTML both work."></textarea>
+        placeholder="Paste the carrier's reply email here — plain text or HTML both work."></textarea>
 
     <div style="margin-top:1rem;">
         <button type="submit">Parse →</button>

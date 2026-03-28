@@ -20,7 +20,7 @@ import (
 	"gitlab.com/perenne/clients/schneider/drayage-quoter/internal/settings"
 	"gitlab.com/perenne/clients/schneider/drayage-quoter/internal/static"
 	"gitlab.com/perenne/clients/schneider/drayage-quoter/internal/templates"
-	"gitlab.com/perenne/clients/schneider/drayage-quoter/internal/vendors"
+	"gitlab.com/perenne/clients/schneider/drayage-quoter/internal/carriers"
 )
 
 func main() {
@@ -94,7 +94,7 @@ func main() {
 	adminSvc := &admin.Service{DB: database}
 	settingsSvc := &settings.Service{DB: database}
 	lanesSvc := &lanes.Service{DB: database}
-	vendorsSvc := &vendors.Service{DB: database}
+	carriersSvc := &carriers.Service{DB: database}
 	rrSvc := &rate_requests.Service{DB: database}
 	ratesSvc := &rates.Service{
 		DB:      database,
@@ -121,10 +121,10 @@ func main() {
 	laneEditTmpl := templates.MustParse("layout.html", "lane_edit.html")
 	adminUsersTmpl := templates.MustParse("layout.html", "admin_users.html")
 	adminPortsTmpl := templates.MustParse("layout.html", "admin_ports.html")
-	vendorListTmpl := templates.MustParse("layout.html", "vendor_list.html")
-	vendorNewTmpl := templates.MustParse("layout.html", "vendor_new.html")
-	vendorDetailTmpl := templates.MustParse("layout.html", "vendor_detail.html")
-	vendorEditTmpl := templates.MustParse("layout.html", "vendor_edit.html")
+	carrierListTmpl := templates.MustParse("layout.html", "carrier_list.html")
+	carrierNewTmpl := templates.MustParse("layout.html", "carrier_new.html")
+	carrierDetailTmpl := templates.MustParse("layout.html", "carrier_detail.html")
+	carrierEditTmpl := templates.MustParse("layout.html", "carrier_edit.html")
 	rrNewTmpl := templates.MustParse("layout.html", "rate_request_new.html")
 	rrDetailTmpl := templates.MustParse("layout.html", "rate_request_detail.html")
 	rrComparisonLineupTmpl := templates.MustParse("layout.html", "rate_comparison_lineup.html", "lane_detail_panel.html")
@@ -236,29 +236,29 @@ func main() {
 	mux.HandleFunc("GET /rate-requests/{id}/ingest", authService.RequireAuth(ratesSvc.HandleIngestForm(rateIngestTmpl)))
 	mux.HandleFunc("POST /rate-requests/{id}/ingest", authService.RequireAuth(ratesSvc.HandleIngestSubmit(rateResultTmpl)))
 	mux.HandleFunc("POST /rate-requests/{id}/ingest/confirm", authService.RequireAuth(ratesSvc.HandleIngestConfirm()))
-	mux.HandleFunc("GET /vendor-rate-items/{id}", authService.RequireAuth(ratesSvc.HandleViewRateItem()))
-	mux.HandleFunc("GET /vendor-rate-items/{id}/edit", authService.RequireAuth(ratesSvc.HandleEditRateItem()))
-	mux.HandleFunc("POST /vendor-rate-items/{id}", authService.RequireAuth(ratesSvc.HandleUpdateRateItem()))
-	mux.HandleFunc("GET /vendor-rates/{id}/email", authService.RequireAuth(ratesSvc.HandleViewOriginalEmail()))
-	mux.HandleFunc("GET /vendor-rates/{id}/items/new", authService.RequireAuth(ratesSvc.HandleNewRateItem()))
-	mux.HandleFunc("POST /vendor-rates/{id}/items", authService.RequireAuth(ratesSvc.HandleCreateRateItem()))
-	mux.HandleFunc("GET /vendor-rates/{id}/items/empty", authService.RequireAuth(ratesSvc.HandleEmptyRateItem()))
+	mux.HandleFunc("GET /carrier-rate-items/{id}", authService.RequireAuth(ratesSvc.HandleViewRateItem()))
+	mux.HandleFunc("GET /carrier-rate-items/{id}/edit", authService.RequireAuth(ratesSvc.HandleEditRateItem()))
+	mux.HandleFunc("POST /carrier-rate-items/{id}", authService.RequireAuth(ratesSvc.HandleUpdateRateItem()))
+	mux.HandleFunc("GET /carrier-rates/{id}/email", authService.RequireAuth(ratesSvc.HandleViewOriginalEmail()))
+	mux.HandleFunc("GET /carrier-rates/{id}/items/new", authService.RequireAuth(ratesSvc.HandleNewRateItem()))
+	mux.HandleFunc("POST /carrier-rates/{id}/items", authService.RequireAuth(ratesSvc.HandleCreateRateItem()))
+	mux.HandleFunc("GET /carrier-rates/{id}/items/empty", authService.RequireAuth(ratesSvc.HandleEmptyRateItem()))
 
-	// Vendor routes
-	mux.HandleFunc("GET /vendors", authService.RequireAuth(vendorsSvc.HandleList(vendorListTmpl)))
-	mux.HandleFunc("GET /vendors/search", authService.RequireAuth(vendorsSvc.HandleSearch()))
-	mux.HandleFunc("GET /vendors/new", authService.RequireAuth(vendorsSvc.HandleNewForm(vendorNewTmpl)))
-	mux.HandleFunc("POST /vendors", authService.RequireAuth(vendorsSvc.HandleCreate()))
-	mux.HandleFunc("GET /vendors/{id}", authService.RequireAuth(vendorsSvc.HandleDetail(vendorDetailTmpl)))
-	mux.HandleFunc("GET /vendors/{id}/edit", authService.RequireAuth(vendorsSvc.HandleEditForm(vendorEditTmpl)))
-	mux.HandleFunc("POST /vendors/{id}", authService.RequireAuth(vendorsSvc.HandleUpdate()))
-	mux.HandleFunc("POST /vendors/{id}/delete", authService.RequireAuth(vendorsSvc.HandleDelete()))
-	mux.HandleFunc("POST /vendors/{id}/ports", authService.RequireAuth(vendorsSvc.HandleAddPort()))
-	mux.HandleFunc("POST /vendors/{id}/ports/{vpid}/delete", authService.RequireAuth(vendorsSvc.HandleRemovePort()))
-	mux.HandleFunc("POST /vendors/{id}/ports/{vpid}/notes", authService.RequireAuth(vendorsSvc.HandleAddNote()))
-	mux.HandleFunc("POST /vendors/{id}/ports/{vpid}/contacts", authService.RequireAuth(vendorsSvc.HandleAddContact()))
-	mux.HandleFunc("POST /vendors/{id}/ports/{vpid}/contacts/{cid}/delete", authService.RequireAuth(vendorsSvc.HandleDeleteContact()))
-	mux.HandleFunc("POST /vendors/{id}/preferences/{pid}", authService.RequireAuth(vendorsSvc.HandleTogglePreference()))
+	// Carrier routes
+	mux.HandleFunc("GET /carriers", authService.RequireAuth(carriersSvc.HandleList(carrierListTmpl)))
+	mux.HandleFunc("GET /carriers/search", authService.RequireAuth(carriersSvc.HandleSearch()))
+	mux.HandleFunc("GET /carriers/new", authService.RequireAuth(carriersSvc.HandleNewForm(carrierNewTmpl)))
+	mux.HandleFunc("POST /carriers", authService.RequireAuth(carriersSvc.HandleCreate()))
+	mux.HandleFunc("GET /carriers/{id}", authService.RequireAuth(carriersSvc.HandleDetail(carrierDetailTmpl)))
+	mux.HandleFunc("GET /carriers/{id}/edit", authService.RequireAuth(carriersSvc.HandleEditForm(carrierEditTmpl)))
+	mux.HandleFunc("POST /carriers/{id}", authService.RequireAuth(carriersSvc.HandleUpdate()))
+	mux.HandleFunc("POST /carriers/{id}/delete", authService.RequireAuth(carriersSvc.HandleDelete()))
+	mux.HandleFunc("POST /carriers/{id}/ports", authService.RequireAuth(carriersSvc.HandleAddPort()))
+	mux.HandleFunc("POST /carriers/{id}/ports/{vpid}/delete", authService.RequireAuth(carriersSvc.HandleRemovePort()))
+	mux.HandleFunc("POST /carriers/{id}/ports/{vpid}/notes", authService.RequireAuth(carriersSvc.HandleAddNote()))
+	mux.HandleFunc("POST /carriers/{id}/ports/{vpid}/contacts", authService.RequireAuth(carriersSvc.HandleAddContact()))
+	mux.HandleFunc("POST /carriers/{id}/ports/{vpid}/contacts/{cid}/delete", authService.RequireAuth(carriersSvc.HandleDeleteContact()))
+	mux.HandleFunc("POST /carriers/{id}/preferences/{pid}", authService.RequireAuth(carriersSvc.HandleTogglePreference()))
 
 	log.Printf("listening on :%s", port)
 	if err := http.ListenAndServe(":"+port, mux); err != nil {

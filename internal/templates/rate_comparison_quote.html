@@ -26,11 +26,11 @@
     </div>
     <div class="meta-text" style="margin-top:.25rem;">
         Ref: <strong>{{ .Data.RateRequest.ReferenceID }}</strong>
-        &nbsp;·&nbsp; {{ len .Data.Vendors }} vendor{{ if ne (len .Data.Vendors) 1 }}s{{ end }} in lineup
+        &nbsp;·&nbsp; {{ len .Data.Carriers }} carrier{{ if ne (len .Data.Carriers) 1 }}s{{ end }} in lineup
     </div>
 </div>
 
-{{ if not .Data.Vendors }}
+{{ if not .Data.Carriers }}
 <p class="empty-state">No lineup saved yet. <a href="/rate-requests/{{ .Data.RateRequest.ID }}/comparison">Build a lineup</a> first.</p>
 {{ else }}
 
@@ -54,7 +54,7 @@ window.chargeTypeUnits = { {{- range .Data.ChargeRows }}"{{ .Key }}":"{{ .Unit }
         <form method="POST" action="/rate-requests/{{ .Data.RateRequest.ID }}/csv" id="csv-form">
             <div class="flex-row" style="margin-top:1rem;gap:1rem;">
                 <button type="submit" class="primary">Save Quote and Generate CSV →</button>
-                {{ if gt (len .Data.Vendors) 1 }}
+                {{ if gt (len .Data.Carriers) 1 }}
                 <button type="button" id="toggle-avg-btn" class="btn-secondary">Show average</button>
                 {{ end }}
                 <span id="autosave-indicator" class="label-caps text-muted"></span>
@@ -69,7 +69,7 @@ window.chargeTypeUnits = { {{- range .Data.ChargeRows }}"{{ .Key }}":"{{ .Unit }
                  hx-swap="innerHTML"></div>
             {{ end }}
 
-            <!-- Tracks the active carousel index so the CSV uses the same base vendor. 0 = average. -->
+            <!-- Tracks the active carousel index so the CSV uses the same base carrier. 0 = average. -->
             <input type="hidden" name="base_carousel_idx" id="base-carousel-idx" value="0">
 
             <div class="comparison-table-wrap">
@@ -99,10 +99,10 @@ window.chargeTypeUnits = { {{- range .Data.ChargeRows }}"{{ .Key }}":"{{ .Unit }
                                 </div>
                             </th>
                             <th id="col-header-0" class="cell-avg" style="min-width:110px;">Average</th>
-                            {{ range .Data.Vendors }}
+                            {{ range .Data.Carriers }}
                             <th id="col-header-{{ .Rank }}" class="col-min-sm cell-center">
-                                <div class="col-vendor-name">{{ .VendorName }}</div>
-                                <div class="col-vendor-rank">Rank {{ .Rank }}</div>
+                                <div class="col-carrier-name">{{ .CarrierName }}</div>
+                                <div class="col-carrier-rank">Rank {{ .Rank }}</div>
                             </th>
                             {{ end }}
                         </tr>
@@ -120,7 +120,7 @@ window.chargeTypeUnits = { {{- range .Data.ChargeRows }}"{{ .Key }}":"{{ .Unit }
                                 </select>
                             </td>
                             <td class="cell-avg"></td>
-                            {{ range .Data.Vendors }}
+                            {{ range .Data.Carriers }}
                             <td></td>
                             {{ end }}
                         </tr>
@@ -138,7 +138,7 @@ window.chargeTypeUnits = { {{- range .Data.ChargeRows }}"{{ .Key }}":"{{ .Unit }
                                 </div>
                             </td>
                             <td id="avg-linehaul_fuel" class="cell-avg-total">{{ .Data.AvgTotal }}</td>
-                            {{ range .Data.Vendors }}
+                            {{ range .Data.Carriers }}
                             <td class="cell-total">{{ .TotalDisplay }}</td>
                             {{ end }}
                         </tr>
@@ -148,19 +148,19 @@ window.chargeTypeUnits = { {{- range .Data.ChargeRows }}"{{ .Key }}":"{{ .Unit }
                             <td></td>
                             <td id="customer-linehaul" class="cell-center text-secondary"></td>
                             <td id="avg-linehaul" class="cell-avg">{{ index .Data.Averages "linehaul" }}</td>
-                            {{ range .Data.Vendors }}
+                            {{ range .Data.Carriers }}
                             {{ $cell := index .Items "linehaul" }}
                             {{ if $cell.ID }}<td class="cell-center">{{ $cell.Display }}</td>
                             {{ else }}<td class="cell-center-empty">—</td>{{ end }}
                             {{ end }}
                         </tr>
-                        <!-- Fuel row — read-only, mirrors base vendor fuel % -->
+                        <!-- Fuel row — read-only, mirrors base carrier fuel % -->
                         <tr>
                             <td>Fuel</td>
                             <td></td>
                             <td id="customer-fuel" class="cell-center text-secondary"></td>
                             <td id="avg-fuel" class="cell-avg">{{ index .Data.Averages "fuel" }}</td>
-                            {{ range .Data.Vendors }}
+                            {{ range .Data.Carriers }}
                             {{ $cell := index .Items "fuel" }}
                             {{ if $cell.ID }}<td class="cell-center">{{ $cell.Display }}</td>
                             {{ else }}<td class="cell-center-empty">—</td>{{ end }}
@@ -183,7 +183,7 @@ window.chargeTypeUnits = { {{- range .Data.ChargeRows }}"{{ .Key }}":"{{ .Unit }
                                        {{ with index $.Data.Markups $ct }}{{ if ne .Value 0.0 }}value="{{ .Value }}"{{ end }}{{ end }}{{ if $.Data.Locked }} disabled{{ end }}>
                             </td>
                             <td id="avg-{{ $ct }}" class="cell-avg">{{ index $.Data.Averages $ct }}</td>
-                            {{ range $.Data.Vendors }}
+                            {{ range $.Data.Carriers }}
                             {{ $cell := index .Items $ct }}
                             {{ if $cell.ID }}
                             <td class="cell-center">{{ $cell.Display }}</td>
@@ -219,10 +219,10 @@ window.chargeTypeUnits = { {{- range .Data.ChargeRows }}"{{ .Key }}":"{{ .Unit }
 <script>
 (function() {
     var bases = window.lineupBases; // [{linehaul:X, fuel:Y, linehaul_fuel:Z, ...}, ...]
-    // bases[0] = averages (raw floats + pre-computed linehaul_fuel), bases[1..] = rank-1..N vendor amounts
-    var vendorNames = [
+    // bases[0] = averages (raw floats + pre-computed linehaul_fuel), bases[1..] = rank-1..N carrier amounts
+    var carrierNames = [
         "Average"
-        {{ range .Data.Vendors }}, "{{ .VendorName }} (Rank {{ .Rank }})"{{ end }}
+        {{ range .Data.Carriers }}, "{{ .CarrierName }} (Rank {{ .Rank }})"{{ end }}
     ];
 
     var currentIdx = (window.isLocked && window.savedCarouselIdx > 0) ? window.savedCarouselIdx : 1;
@@ -345,7 +345,7 @@ window.chargeTypeUnits = { {{- range .Data.ChargeRows }}"{{ .Key }}":"{{ .Unit }
     function updateCarouselLabel() {
         var label = document.getElementById("carousel-label");
         if (label) {
-            label.textContent = currentIdx === 0 ? "base rate: average" : vendorNames[currentIdx];
+            label.textContent = currentIdx === 0 ? "base rate: average" : carrierNames[currentIdx];
         }
         // Highlight the active column header in Schneider Orange; clear all others.
         var total = bases ? bases.length : 0;
@@ -407,7 +407,7 @@ window.chargeTypeUnits = { {{- range .Data.ChargeRows }}"{{ .Key }}":"{{ .Unit }
     updatePreviews();
     updateCarouselLabel();
 
-    // Average column toggle (only rendered when > 1 vendor).
+    // Average column toggle (only rendered when > 1 carrier).
     var avgBtn = document.getElementById("toggle-avg-btn");
     if (avgBtn) {
         avgBtn.addEventListener("click", function() {

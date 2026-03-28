@@ -1,12 +1,12 @@
 {{ define "content" }}
-<p class="back-link"><a href="/vendors">← Back to vendors</a></p>
+<p class="back-link"><a href="/carriers">← Back to carriers</a></p>
 
 <div class="page-header">
-    <h1>{{ .Vendor.Name }}</h1>
+    <h1>{{ .Carrier.Name }}</h1>
     <div class="flex-row">
-        <a href="/vendors/{{ .Vendor.ID }}/edit"><button>Edit Name</button></a>
-        <form method="POST" action="/vendors/{{ .Vendor.ID }}/delete" class="form-inline"
-              onsubmit="return confirm('Delete {{ .Vendor.Name }}? This cannot be undone.')">
+        <a href="/carriers/{{ .Carrier.ID }}/edit"><button>Edit Name</button></a>
+        <form method="POST" action="/carriers/{{ .Carrier.ID }}/delete" class="form-inline"
+              onsubmit="return confirm('Delete {{ .Carrier.Name }}? This cannot be undone.')">
             <button type="submit" class="text-danger">Delete</button>
         </form>
     </div>
@@ -17,21 +17,21 @@
     {{/* ── Ports & Contacts ──────────────────────────────────── */}}
     <p class="detail-section">Ports &amp; Contacts</p>
 
-    {{ if .Vendor.AssignedPorts }}
-    {{ range .Vendor.AssignedPorts }}
+    {{ if .Carrier.AssignedPorts }}
+    {{ range .Carrier.AssignedPorts }}
     {{ $vp := . }}
     <div class="port-block">
         <div class="port-block-header">
             <span class="port-block-name">{{ .Name }}</span>
             <span class="port-block-type">{{ .Type }}</span>
             <div class="port-block-actions">
-                <form method="POST" action="/vendors/{{ $.Vendor.ID }}/preferences/{{ .PortID }}" class="form-inline">
+                <form method="POST" action="/carriers/{{ $.Carrier.ID }}/preferences/{{ .PortID }}" class="form-inline">
                     <button type="submit" class="pref-toggle {{ if .Preferred }}pref-on{{ end }}"
                             title="{{ if .Preferred }}Remove preference{{ else }}Mark as preferred{{ end }}">
                         {{ if .Preferred }}★ Preferred{{ else }}☆ Prefer{{ end }}
                     </button>
                 </form>
-                <form method="POST" action="/vendors/{{ $.Vendor.ID }}/ports/{{ .ID }}/delete" class="form-inline"
+                <form method="POST" action="/carriers/{{ $.Carrier.ID }}/ports/{{ .ID }}/delete" class="form-inline"
                       onsubmit="return confirm('Remove this port and all its contacts?')">
                     <button type="submit" class="btn-link-danger">Remove Port</button>
                 </form>
@@ -51,7 +51,7 @@
                         <td><a href="mailto:{{ .Email }}">{{ .Email }}</a></td>
                         <td>
                             <form method="POST"
-                                  action="/vendors/{{ $.Vendor.ID }}/ports/{{ $vp.ID }}/contacts/{{ .ID }}/delete"
+                                  action="/carriers/{{ $.Carrier.ID }}/ports/{{ $vp.ID }}/contacts/{{ .ID }}/delete"
                                   class="form-inline">
                                 <button type="submit" class="btn-link-danger">Remove</button>
                             </form>
@@ -66,7 +66,7 @@
 
             <details class="collapse-section">
                 <summary class="collapse-summary">Add Contact</summary>
-                <form method="POST" action="/vendors/{{ $.Vendor.ID }}/ports/{{ $vp.ID }}/contacts"
+                <form method="POST" action="/carriers/{{ $.Carrier.ID }}/ports/{{ $vp.ID }}/contacts"
                       class="form-inline content-md" style="margin-top:.75rem;">
                     <div class="form-cols">
                         <div>
@@ -75,7 +75,7 @@
                         </div>
                     </div>
                     <label>Email*</label>
-                    <input type="email" name="email" placeholder="dispatch@vendor.com" required>
+                    <input type="email" name="email" placeholder="dispatch@carrier.com" required>
                     <div class="form-actions">
                         <button class="primary" type="submit">Add Contact</button>
                     </div>
@@ -97,7 +97,7 @@
                     {{ else }}
                     <p class="text-muted text-sm" style="margin:.25rem 0 .75rem;">No notes for this port yet.</p>
                     {{ end }}
-                    <form method="POST" action="/vendors/{{ $.Vendor.ID }}/ports/{{ $vp.ID }}/notes"
+                    <form method="POST" action="/carriers/{{ $.Carrier.ID }}/ports/{{ $vp.ID }}/notes"
                           class="form-inline content-md" style="margin-top:.75rem;">
                         <textarea name="content" rows="3" placeholder="Add a shared note..."></textarea>
                         <div class="form-actions">
@@ -113,11 +113,11 @@
     <p class="text-muted" style="margin:.5rem 0 1rem;">No ports assigned yet.</p>
     {{ end }}
 
-    {{ if .Vendor.AvailablePorts }}
-    <form method="POST" action="/vendors/{{ .Vendor.ID }}/ports" class="flex-row form-inline" style="margin-top:.75rem;">
+    {{ if .Carrier.AvailablePorts }}
+    <form method="POST" action="/carriers/{{ .Carrier.ID }}/ports" class="flex-row form-inline" style="margin-top:.75rem;">
         <select name="port_id" style="width:auto;">
             <option value="">Select port...</option>
-            {{ range .Vendor.AvailablePorts }}
+            {{ range .Carrier.AvailablePorts }}
             <option value="{{ .ID }}">{{ .Name }}</option>
             {{ end }}
         </select>
@@ -126,7 +126,7 @@
     {{ end }}
 
     <p class="detail-footer" style="margin-top:2rem;">
-        Created <time datetime="{{ .Vendor.CreatedAt }}">{{ .Vendor.CreatedAt }}</time> &nbsp;·&nbsp; Updated <time datetime="{{ .Vendor.UpdatedAt }}">{{ .Vendor.UpdatedAt }}</time>
+        Created <time datetime="{{ .Carrier.CreatedAt }}">{{ .Carrier.CreatedAt }}</time> &nbsp;·&nbsp; Updated <time datetime="{{ .Carrier.UpdatedAt }}">{{ .Carrier.UpdatedAt }}</time>
     </p>
 
 </div>
