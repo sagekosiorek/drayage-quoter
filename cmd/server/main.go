@@ -220,6 +220,7 @@ func main() {
 	mux.HandleFunc("POST /lanes/{id}/rate-request", authService.RequireAuth(rrSvc.HandleCreate()))
 	mux.HandleFunc("GET /rate-requests/{id}", authService.RequireAuth(rrSvc.HandleDetail(rrDetailTmpl)))
 	mux.HandleFunc("GET /rate-requests/{id}/blast-status", authService.RequireAuth(rrSvc.HandleBlastStatus()))
+	mux.HandleFunc("GET /rate-requests/{id}/lineup-cta", authService.RequireAuth(rrSvc.HandleLineupCTA()))
 	mux.HandleFunc("GET /rate-requests/{id}/responses-count", authService.RequireAuth(rrSvc.HandleResponsesCount()))
 	mux.HandleFunc("GET /rate-requests/{id}/comparison", authService.RequireAuth(rrSvc.HandleComparison(rrComparisonLineupTmpl)))
 	mux.HandleFunc("GET /rate-requests/{id}/comparison/add-row", authService.RequireAuth(rrSvc.HandleAddComparisonRow()))

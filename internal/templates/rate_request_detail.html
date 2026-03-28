@@ -3,7 +3,16 @@
 <div class="page-header">
     <p class="back-link"><a href="/lanes/{{ .RateRequest.Lane.ID }}">← Back to lane</a></p>
     {{ if eq .RateRequest.Lane.Status "rates_received" }}
-    <a href="/rate-requests/{{ .RateRequest.ID }}/comparison"><button class="primary">Build Carrier Lineup →</button></a>
+    <div id="lineup-cta">
+        <a href="/rate-requests/{{ .RateRequest.ID }}/comparison"><button class="primary">Build Carrier Lineup →</button></a>
+    </div>
+    {{ else if eq .RateRequest.Lane.Status "rates_requested" }}
+    <div id="lineup-cta"
+         hx-get="/rate-requests/{{ .RateRequest.ID }}/lineup-cta"
+         hx-trigger="every 30s"
+         hx-swap="outerHTML"></div>
+    {{ else }}
+    <div id="lineup-cta"></div>
     {{ end }}
 </div>
 
