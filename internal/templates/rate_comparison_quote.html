@@ -402,6 +402,7 @@ window.chargeTypeUnits = { {{- range .Data.ChargeRows }}"{{ .Key }}":"{{ .Unit }
     });
 
     // Initial render.
+    syncCarouselInput();
     updateModeUI();
     updatePreviews();
     updateCarouselLabel();
