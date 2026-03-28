@@ -17,14 +17,14 @@
         <label for="subject">Subject</label>
         <input type="text" id="subject" name="subject" value="{{ .Subject }}" required>
 
-        <label for="body" style="margin-top:.75rem;">Body <span class="form-hint">([First Name] is a placeholder that will be filled per-vendor on the next page)</span></label>
+        <label for="body" style="margin-top:.75rem;">Body <span class="form-hint">([First Name] is a placeholder that will be filled per-carrier on the next page)</span></label>
         <textarea id="body" name="body" rows="20" required>{{ .Body }}</textarea>
     </div>
 
-    <!-- Right column: Vendor Selection + Settings -->
+    <!-- Right column: Carrier Selection + Settings -->
     <div>
         <div class="flex-between" style="margin-bottom:.5rem;">
-            <p class="detail-section" style="margin:0;">Vendors</p>
+            <p class="detail-section" style="margin:0;">Carriers</p>
             <div class="flex-wrap-sm">
                 <button type="button" onclick="selectAll(true)">Select All</button>
                 <button type="button" onclick="selectAll(false)">Deselect All</button>
@@ -32,32 +32,32 @@
             </div>
         </div>
 
-        <div class="rr-vendor-list">
-            {{ if .Vendors }}
-            {{ range .Vendors }}
-            <div class="rr-vendor-item">
-                <input type="checkbox" class="vendor-checkbox" name="vendor_ids" value="{{ .VendorID }}"
+        <div class="rr-carrier-list">
+            {{ if .Carriers }}
+            {{ range .Carriers }}
+            <div class="rr-carrier-item">
+                <input type="checkbox" class="carrier-checkbox" name="carrier_ids" value="{{ .CarrierID }}"
                        {{ if .Preferred }}checked{{ end }} data-preferred="{{ .Preferred }}">
                 <div>
                     <div style="font-size:.9rem;font-weight:500;">
-                        {{ .VendorName }}{{ if .Preferred }} <span class="pref-star">★</span>{{ end }}
+                        {{ .CarrierName }}{{ if .Preferred }} <span class="pref-star">★</span>{{ end }}
                     </div>
                     {{ if .Contacts }}
                     {{ range .Contacts }}
-                    <div class="rr-vendor-item-meta">{{ .Name }}{{ if and .Name .Email }} · {{ end }}{{ .Email }}</div>
+                    <div class="rr-carrier-item-meta">{{ .Name }}{{ if and .Name .Email }} · {{ end }}{{ .Email }}</div>
                     {{ end }}
                     {{ else }}
-                    <div class="rr-vendor-item-warn">(no contact on file)</div>
+                    <div class="rr-carrier-item-warn">(no contact on file)</div>
                     {{ end }}
                 </div>
             </div>
             {{ end }}
             {{ else }}
-            <div class="empty-state">No vendors assigned to this port. Add some <a href="/vendors/new">here</a></div>
+            <div class="empty-state">No carriers assigned to this port. Add some <a href="/carriers/new">here</a></div>
             {{ end }}
         </div>
 
-        {{ if .Vendors }}
+        {{ if .Carriers }}
         <p class="detail-section" style="margin-top:1.25rem;">Notification Settings</p>
 
         <label for="response_threshold">Response Threshold <span class="form-hint">(notify me after a certain number of responses)</span></label>
@@ -82,10 +82,10 @@
 
 <script>
 function selectAll(toggle) {
-    document.querySelectorAll('.vendor-checkbox').forEach(cb => cb.checked = toggle);
+    document.querySelectorAll('.carrier-checkbox').forEach(cb => cb.checked = toggle);
 }
 function selectPreferred() {
-    document.querySelectorAll('.vendor-checkbox').forEach(cb => {
+    document.querySelectorAll('.carrier-checkbox').forEach(cb => {
         cb.checked = cb.dataset.preferred === 'true';
     });
 }

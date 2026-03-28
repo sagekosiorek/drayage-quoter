@@ -14,12 +14,12 @@
     </div>
     <div class="meta-text" style="margin-top:.25rem;">
         Ref: <strong>{{ .Data.RateRequest.ReferenceID }}</strong>
-        &nbsp;·&nbsp; {{ len .Data.Vendors }} vendor{{ if ne (len .Data.Vendors) 1 }}s{{ end }} responded
+        &nbsp;·&nbsp; {{ len .Data.Carriers }} carrier{{ if ne (len .Data.Carriers) 1 }}s{{ end }} responded
     </div>
 </div>
 
-{{ if not .Data.Vendors }}
-<p class="empty-state">No vendor responses yet. <a href="/rate-requests/{{ .Data.RateRequest.ID }}">Ingest a rate response</a> to get started.</p>
+{{ if not .Data.Carriers }}
+<p class="empty-state">No carrier responses yet. <a href="/rate-requests/{{ .Data.RateRequest.ID }}">Ingest a rate response</a> to get started.</p>
 {{ else }}
 
 <div class="comparison-layout">
@@ -44,22 +44,22 @@
                     <thead>
                         <tr>
                             <th class="col-min-md">Charge Type</th>
-                            {{ range .Data.Vendors }}
-                            {{ $rank := index $.Data.Lineups .VendorRateID }}
+                            {{ range .Data.Carriers }}
+                            {{ $rank := index $.Data.Lineups .CarrierRateID }}
                             <th class="{{ if $rank }}col-header-rank{{ end }}" style="min-width:140px;text-align:center;">
-                                <div class="col-vendor-name">{{ .VendorName }}</div>
+                                <div class="col-carrier-name">{{ .CarrierName }}</div>
                                 <div class="flex-row-lg" style="justify-content:center;margin:.3rem 0;">
                                     <label class="text-secondary" style="font-size:.72rem;margin:0;">Rank:</label>
-                                    <input type="number" name="rank_{{ .VendorRateID }}"
+                                    <input type="number" name="rank_{{ .CarrierRateID }}"
                                            class="rank-input"
                                            {{ if $rank }}value="{{ $rank }}"{{ end }}
-                                           min="1" max="{{ len $.Data.Vendors }}"
+                                           min="1" max="{{ len $.Data.Carriers }}"
                                            placeholder="—"
                                            title="1 = primary carrier, 2 = secondary, etc. Leave blank to exclude.">
                                 </div>
                                 <div style="margin-top:.3rem;">
                                     <button type="button"
-                                            hx-get="/vendor-rates/{{ .VendorRateID }}/email"
+                                            hx-get="/carrier-rates/{{ .CarrierRateID }}/email"
                                             hx-target="#email-panel"
                                             hx-swap="innerHTML"
                                             style="font-size:.72rem;padding:2px 7px;">
@@ -74,8 +74,8 @@
                         <!-- TOTAL row -->
                         <tr class="row-total">
                             <td>Linehaul + Fuel</td>
-                            {{ range .Data.Vendors }}
-                            <td id="total-{{ .VendorRateID }}" class="cell-total">{{ .TotalDisplay }}</td>
+                            {{ range .Data.Carriers }}
+                            <td id="total-{{ .CarrierRateID }}" class="cell-total">{{ .TotalDisplay }}</td>
                             {{ end }}
                         </tr>
                         <!-- Per-charge-type rows -->
@@ -83,18 +83,18 @@
                         {{ $ct := .Key }}
                         <tr>
                             <td>{{ .Label }}</td>
-                            {{ range $.Data.Vendors }}
+                            {{ range $.Data.Carriers }}
                             {{ $cell := index .Items $ct }}
                             {{ if $cell.ID }}
                             <td class="cell-center-click {{ if $cell.ManuallyEdited }}cell-edited{{ else if eq $cell.ParsedBy "llm" }}cell-llm{{ end }}"
-                                hx-get="/vendor-rate-items/{{ $cell.ID }}/edit"
+                                hx-get="/carrier-rate-items/{{ $cell.ID }}/edit"
                                 hx-trigger="click"
                                 hx-target="this"
                                 hx-swap="outerHTML"
                                 title="Click to edit">{{ $cell.Display }}</td>
                             {{ else }}
                             <td class="cell-center-empty"
-                                hx-get="/vendor-rates/{{ .VendorRateID }}/items/new?charge_type={{ $ct }}"
+                                hx-get="/carrier-rates/{{ .CarrierRateID }}/items/new?charge_type={{ $ct }}"
                                 hx-trigger="click"
                                 hx-target="this"
                                 hx-swap="outerHTML"
@@ -140,7 +140,7 @@
                 hx-swap="innerHTML"
                 style="font-size:.72rem;padding:2px 7px;margin-bottom:.5rem;">Lane Details</button>
         <p class="detail-section">Lane Details</p>
-        <p class="label-caps text-muted" style="margin:.25rem 0 .75rem;">Click "View Email" on a vendor column to display their rate response here.</p>
+        <p class="label-caps text-muted" style="margin:.25rem 0 .75rem;">Click "View Email" on a carrier column to display their rate response here.</p>
         <div id="email-panel" class="email-panel">
             {{ template "lane-detail-panel" .Data.Lane }}
         </div>

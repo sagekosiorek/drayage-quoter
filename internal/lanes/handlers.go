@@ -20,7 +20,7 @@ type Service struct {
 type RateRequestSnippet struct {
 	ID                int
 	ReferenceID       string
-	VendorCount       int
+	CarrierCount       int
 	ResponsesReceived int
 }
 
@@ -523,20 +523,20 @@ func (s *Service) HandleDetail(tmpl *template.Template) http.HandlerFunc {
 		lane.IsOwner = lane.OwnerID == user.ID
 
 		var rr *RateRequestSnippet
-		var rrID, rrVendorCount, rrResponsesReceived int
+		var rrID, rrCarrierCount, rrResponsesReceived int
 		var rrRefID string
 		err = s.DB.QueryRow(`
 			SELECT rr.id, rr.reference_id, rr.responses_received,
-			       (SELECT COUNT(*) FROM rate_request_vendors WHERE rate_request_id = rr.id)
+			       (SELECT COUNT(*) FROM rate_request_carriers WHERE rate_request_id = rr.id)
 			FROM rate_requests rr
 			WHERE rr.lane_id = ?
 			ORDER BY rr.created_at DESC LIMIT 1
-		`, id).Scan(&rrID, &rrRefID, &rrResponsesReceived, &rrVendorCount)
+		`, id).Scan(&rrID, &rrRefID, &rrResponsesReceived, &rrCarrierCount)
 		if err == nil {
 			rr = &RateRequestSnippet{
 				ID:                rrID,
 				ReferenceID:       rrRefID,
-				VendorCount:       rrVendorCount,
+				CarrierCount:       rrCarrierCount,
 				ResponsesReceived: rrResponsesReceived,
 			}
 		}

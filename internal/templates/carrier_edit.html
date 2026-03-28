@@ -1,14 +1,14 @@
 {{ define "content" }}
-<p class="back-link"><a href="/vendors/{{ .VendorID }}">← Back to vendor</a></p>
-<h1 class="page-title">Edit Vendor</h1>
+<p class="back-link"><a href="/carriers/{{ .CarrierID }}">← Back to carrier</a></p>
+<h1 class="page-title">Edit Carrier</h1>
 
-<form method="POST" action="/vendors/{{ .VendorID }}" class="form-narrow">
+<form method="POST" action="/carriers/{{ .CarrierID }}" class="form-narrow">
     <label for="name">Company Name*</label>
     <input type="text" id="name" name="name" value="{{ .Name }}" required>
 
     <div class="form-actions">
         <button class="primary" type="submit">Save</button>
-        <a href="/vendors/{{ .VendorID }}">Cancel</a>
+        <a href="/carriers/{{ .CarrierID }}">Cancel</a>
     </div>
 </form>
 {{ end }}

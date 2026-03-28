@@ -11,17 +11,17 @@ import (
 // portMap maps port name → ports.id.
 type portMap map[string]int
 
-// vendorInfo tracks a vendor's DB id and its vendor_ports row IDs keyed by
+// carrierInfo tracks a carrier's DB id and its carrier_ports row IDs keyed by
 // the same port-name substring used when the row was inserted.
-type vendorInfo struct {
+type carrierInfo struct {
 	id    int
-	vpIDs map[string]int // portSubstr → vendor_ports.id
+	vpIDs map[string]int // portSubstr → carrier_ports.id
 }
 
 // laneRecord carries just enough lane data for rate request generation.
 type laneRecord struct {
 	id        int
-	portSubstr string // matches the portSubstr used in mustSeedVendors
+	portSubstr string // matches the portSubstr used in mustSeedCarriers
 	portName  string
 	portType  string
 	dest      string
@@ -34,13 +34,13 @@ type laneRecord struct {
 // resetAll deletes all seeded data in FK-safe order, leaving ports and users intact.
 func resetAll(db *sql.DB) error {
 	for _, t := range []string{
-		"rate_request_vendors",
+		"rate_request_carriers",
 		"rate_requests",
-		"vendor_preferences",
-		"vendor_notes",
-		"vendor_contacts",
-		"vendor_ports",
-		"vendors",
+		"carrier_preferences",
+		"carrier_notes",
+		"carrier_contacts",
+		"carrier_ports",
+		"carriers",
 		"lanes",
 		"customers",
 	} {
@@ -59,11 +59,11 @@ func wipeAll(db *sql.DB) error {
 	tables := []string{
 		"markup_items", "markups",
 		"quote_lanes", "quotes",
-		"vendor_lineups",
+		"carrier_lineups",
 		"orphan_emails",
-		"vendor_rate_items", "vendor_rates",
-		"rate_request_vendors", "rate_requests",
-		"vendor_preferences", "vendor_notes", "vendor_contacts", "vendor_ports", "vendors",
+		"carrier_rate_items", "carrier_rates",
+		"rate_request_carriers", "rate_requests",
+		"carrier_preferences", "carrier_notes", "carrier_contacts", "carrier_ports", "carriers",
 		"lanes", "customers",
 		"email_templates",
 		"sessions", "auth_tokens", "users",
@@ -159,21 +159,21 @@ func mustSeedCustomers(db *sql.DB) map[string]int {
 	return ids
 }
 
-// ── vendors ──────────────────────────────────────────────────────────────────
+// ── carriers ──────────────────────────────────────────────────────────────────
 
-func mustSeedVendors(db *sql.DB, adminID int, ports portMap) map[string]vendorInfo {
+func mustSeedCarriers(db *sql.DB, adminID int, ports portMap) map[string]carrierInfo {
 	type contact struct{ name, email string }
 	type portDef struct {
 		sub       string // substring used to match port name
 		preferred bool
 		contacts  []contact
 	}
-	type vendorDef struct {
+	type carrierDef struct {
 		name  string
 		ports []portDef
 	}
 
-	defs := []vendorDef{
+	defs := []carrierDef{
 		{
 			name: "Pacific Coast Drayage",
 			ports: []portDef{
@@ -261,43 +261,43 @@ func mustSeedVendors(db *sql.DB, adminID int, ports portMap) map[string]vendorIn
 		},
 	}
 
-	vendors := map[string]vendorInfo{}
+	carriers := map[string]carrierInfo{}
 	for _, def := range defs {
-		res, err := db.Exec("INSERT INTO vendors (name) VALUES (?)", def.name)
+		res, err := db.Exec("INSERT INTO carriers (name) VALUES (?)", def.name)
 		if err != nil {
-			log.Fatalf("insert vendor %q: %v", def.name, err)
+			log.Fatalf("insert carrier %q: %v", def.name, err)
 		}
 		vid, _ := res.LastInsertId()
-		vi := vendorInfo{id: int(vid), vpIDs: map[string]int{}}
+		vi := carrierInfo{id: int(vid), vpIDs: map[string]int{}}
 
 		for _, pd := range def.ports {
 			pid := portBySubstr(ports, pd.sub)
 			vpRes, err := db.Exec(
-				"INSERT INTO vendor_ports (vendor_id, port_id) VALUES (?, ?)", vid, pid,
+				"INSERT INTO carrier_ports (carrier_id, port_id) VALUES (?, ?)", vid, pid,
 			)
 			if err != nil {
-				log.Fatalf("insert vendor_port %q @ %s: %v", def.name, pd.sub, err)
+				log.Fatalf("insert carrier_port %q @ %s: %v", def.name, pd.sub, err)
 			}
 			vpID, _ := vpRes.LastInsertId()
 			vi.vpIDs[pd.sub] = int(vpID)
 
 			for _, c := range pd.contacts {
 				db.Exec(
-					"INSERT INTO vendor_contacts (vendor_ports_id, name, email) VALUES (?, ?, ?, ?)",
+					"INSERT INTO carrier_contacts (carrier_ports_id, name, email) VALUES (?, ?, ?, ?)",
 					vpID, ns(c.name), c.email,
 				)
 			}
 			if pd.preferred {
 				db.Exec(
-					"INSERT INTO vendor_preferences (user_id, vendor_id, port_id) VALUES (?, ?, ?)",
+					"INSERT INTO carrier_preferences (user_id, carrier_id, port_id) VALUES (?, ?, ?)",
 					adminID, vid, pid,
 				)
 			}
 		}
-		vendors[def.name] = vi
+		carriers[def.name] = vi
 	}
-	log.Printf("  seeded %d vendors", len(defs))
-	return vendors
+	log.Printf("  seeded %d carriers", len(defs))
+	return carriers
 }
 
 // ── lanes ────────────────────────────────────────────────────────────────────
@@ -435,7 +435,7 @@ func mustSeedLanes(db *sql.DB, adminID int, customers map[string]int, ports port
 
 // ── rate requests ─────────────────────────────────────────────────────────────
 
-func mustSeedRateRequests(db *sql.DB, lanes []laneRecord, vendors map[string]vendorInfo, ports portMap) {
+func mustSeedRateRequests(db *sql.DB, lanes []laneRecord, carriers map[string]carrierInfo, ports portMap) {
 	// Only lanes at rates_requested status (indices 5, 6, 7 in the defs above).
 	requested := []laneRecord{}
 	for _, l := range lanes {
@@ -448,7 +448,7 @@ func mustSeedRateRequests(db *sql.DB, lanes []laneRecord, vendors map[string]ven
 
 	type rrDef struct {
 		lane        laneRecord
-		vendorNames []string
+		carrierNames []string
 		threshold   interface{}
 		deadlineHrs int // 0 = no deadline
 	}
@@ -461,17 +461,17 @@ func mustSeedRateRequests(db *sql.DB, lanes []laneRecord, vendors map[string]ven
 	defs := []rrDef{
 		{
 			lane:        requested[0], // LA/LB → Chicago
-			vendorNames: []string{"Pacific Coast Drayage", "Harbor Logistics Group"},
+			carrierNames: []string{"Pacific Coast Drayage", "Harbor Logistics Group"},
 			threshold:   3,
 			deadlineHrs: 48,
 		},
 		{
 			lane:        requested[1], // Savannah → Charlotte
-			vendorNames: []string{"Gulf Transport Solutions", "Atlantic Drayage Co"},
+			carrierNames: []string{"Gulf Transport Solutions", "Atlantic Drayage Co"},
 		},
 		{
 			lane:        requested[2], // NY/NJ → Atlanta
-			vendorNames: []string{"Atlantic Drayage Co"},
+			carrierNames: []string{"Atlantic Drayage Co"},
 			threshold:   2,
 			deadlineHrs: 72,
 		},
@@ -499,13 +499,13 @@ func mustSeedRateRequests(db *sql.DB, lanes []laneRecord, vendors map[string]ven
 		}
 		rrID, _ := res.LastInsertId()
 
-		for _, vname := range def.vendorNames {
-			vi, ok := vendors[vname]
+		for _, vname := range def.carrierNames {
+			vi, ok := carriers[vname]
 			if !ok {
-				log.Fatalf("vendor not found: %q", vname)
+				log.Fatalf("carrier not found: %q", vname)
 			}
 			db.Exec(
-				"INSERT OR IGNORE INTO rate_request_vendors (rate_request_id, vendor_id) VALUES (?, ?)",
+				"INSERT OR IGNORE INTO rate_request_carriers (rate_request_id, carrier_id) VALUES (?, ?)",
 				rrID, vi.id,
 			)
 		}

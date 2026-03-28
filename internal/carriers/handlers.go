@@ -1,4 +1,4 @@
-package vendors
+package carriers
 
 import (
 	"database/sql"
@@ -12,13 +12,13 @@ import (
 	"gitlab.com/perenne/clients/schneider/drayage-quoter/internal/auth"
 )
 
-// Service handles vendor operations.
+// Service handles carrier operations.
 type Service struct {
 	DB *sql.DB
 }
 
-// VendorRow holds list-view data for a single vendor.
-type VendorRow struct {
+// CarrierRow holds list-view data for a single carrier.
+type CarrierRow struct {
 	ID           int
 	Name         string
 	Ports        string // comma-joined port names from GROUP_CONCAT
@@ -26,19 +26,19 @@ type VendorRow struct {
 	IsPreferred  bool
 }
 
-// VendorDetail holds all data for the vendor detail view.
-type VendorDetail struct {
+// CarrierDetail holds all data for the carrier detail view.
+type CarrierDetail struct {
 	ID             int
 	Name           string
-	AssignedPorts  []VendorPort // ports this vendor services, each with their contacts and notes
+	AssignedPorts  []CarrierPort // ports this carrier services, each with their contacts and notes
 	AvailablePorts []PortRef    // ports not yet assigned (for add dropdown)
 	CreatedAt      string
 	UpdatedAt      string
 }
 
-// VendorPort is a vendor_ports row joined with port name/type, its contacts, and port-scoped notes.
-type VendorPort struct {
-	ID        int // vendor_ports.id (used for contact, note, and remove-port routes)
+// CarrierPort is a carrier_ports row joined with port name/type, its contacts, and port-scoped notes.
+type CarrierPort struct {
+	ID        int // carrier_ports.id (used for contact, note, and remove-port routes)
 	PortID    int // ports.id (used for preference toggle route)
 	Name      string
 	Type      string
@@ -53,14 +53,14 @@ type PortRef struct {
 	Name string
 }
 
-// ContactRow holds a single vendor contact.
+// ContactRow holds a single carrier contact.
 type ContactRow struct {
 	ID    int
 	Name  string
 	Email string
 }
 
-// NoteRow holds a vendor note with its author's display name.
+// NoteRow holds a carrier note with its author's display name.
 type NoteRow struct {
 	ID         int
 	AuthorName string
@@ -68,13 +68,13 @@ type NoteRow struct {
 	CreatedAt  string
 }
 
-// fetchVendorDetail loads the vendor plus all sub-resources, with contacts grouped by port.
-func (s *Service) fetchVendorDetail(vendorID, userID int) (*VendorDetail, error) {
-	var v VendorDetail
+// fetchCarrierDetail loads the carrier plus all sub-resources, with contacts grouped by port.
+func (s *Service) fetchCarrierDetail(carrierID, userID int) (*CarrierDetail, error) {
+	var v CarrierDetail
 	var created, updated string
 
 	err := s.DB.QueryRow(
-		`SELECT id, name, created_at, updated_at FROM vendors WHERE id = ?`, vendorID,
+		`SELECT id, name, created_at, updated_at FROM carriers WHERE id = ?`, carrierID,
 	).Scan(&v.ID, &v.Name, &created, &updated)
 	if err != nil {
 		return nil, err
@@ -85,18 +85,18 @@ func (s *Service) fetchVendorDetail(vendorID, userID int) (*VendorDetail, error)
 	// Assigned ports with preference flag, ordered by port type and name.
 	pRows, err := s.DB.Query(`
 		SELECT vp.id, vp.port_id, p.name, p.type,
-			(SELECT COUNT(*) FROM vendor_preferences pref
-			 WHERE pref.vendor_id = ? AND pref.user_id = ? AND pref.port_id = vp.port_id) > 0
-		FROM vendor_ports vp
+			(SELECT COUNT(*) FROM carrier_preferences pref
+			 WHERE pref.carrier_id = ? AND pref.user_id = ? AND pref.port_id = vp.port_id) > 0
+		FROM carrier_ports vp
 		JOIN ports p ON p.id = vp.port_id
-		WHERE vp.vendor_id = ?
+		WHERE vp.carrier_id = ?
 		ORDER BY p.type, p.name
-	`, vendorID, userID, vendorID)
+	`, carrierID, userID, carrierID)
 	if err != nil {
 		return nil, err
 	}
 	for pRows.Next() {
-		var vp VendorPort
+		var vp CarrierPort
 		var preferred int
 		if err := pRows.Scan(&vp.ID, &vp.PortID, &vp.Name, &vp.Type, &preferred); err != nil {
 			pRows.Close()
@@ -113,7 +113,7 @@ func (s *Service) fetchVendorDetail(vendorID, userID int) (*VendorDetail, error)
 
 		cRows, err := s.DB.Query(
 			`SELECT id, COALESCE(name,''), email
-			 FROM vendor_contacts WHERE vendor_ports_id = ? ORDER BY id`,
+			 FROM carrier_contacts WHERE carrier_ports_id = ? ORDER BY id`,
 			vpID,
 		)
 		if err != nil {
@@ -131,9 +131,9 @@ func (s *Service) fetchVendorDetail(vendorID, userID int) (*VendorDetail, error)
 
 		nRows, err := s.DB.Query(`
 			SELECT n.id, u.name, n.content, n.created_at
-			FROM vendor_notes n
+			FROM carrier_notes n
 			JOIN users u ON n.author_id = u.id
-			WHERE n.vendor_ports_id = ? ORDER BY n.created_at DESC
+			WHERE n.carrier_ports_id = ? ORDER BY n.created_at DESC
 		`, vpID)
 		if err != nil {
 			return nil, err
@@ -151,12 +151,12 @@ func (s *Service) fetchVendorDetail(vendorID, userID int) (*VendorDetail, error)
 		nRows.Close()
 	}
 
-	// Available ports: those not yet assigned to this vendor.
+	// Available ports: those not yet assigned to this carrier.
 	avRows, err := s.DB.Query(`
 		SELECT id, name FROM ports
-		WHERE id NOT IN (SELECT port_id FROM vendor_ports WHERE vendor_id = ?)
+		WHERE id NOT IN (SELECT port_id FROM carrier_ports WHERE carrier_id = ?)
 		ORDER BY type, name
-	`, vendorID)
+	`, carrierID)
 	if err != nil {
 		return nil, err
 	}
@@ -173,7 +173,7 @@ func (s *Service) fetchVendorDetail(vendorID, userID int) (*VendorDetail, error)
 	return &v, nil
 }
 
-// fetchPorts returns all ports ordered by type, name (for the new-vendor form dropdown).
+// fetchPorts returns all ports ordered by type, name (for the new-carrier form dropdown).
 func (s *Service) fetchPorts() ([]PortRef, error) {
 	rows, err := s.DB.Query(`SELECT id, name FROM ports ORDER BY type, name`)
 	if err != nil {
@@ -208,18 +208,18 @@ func nullableStr(s string) interface{} {
 	return s
 }
 
-// vendorIDFromPath extracts and validates the {id} path segment.
-func vendorIDFromPath(r *http.Request) (int, bool) {
+// carrierIDFromPath extracts and validates the {id} path segment.
+func carrierIDFromPath(r *http.Request) (int, bool) {
 	id, err := strconv.Atoi(r.PathValue("id"))
 	return id, err == nil && id > 0
 }
 
-// HandleSearch returns a vendor-name autocomplete fragment (min 2 chars).
+// HandleSearch returns a carrier-name autocomplete fragment (min 2 chars).
 func (s *Service) HandleSearch() http.HandlerFunc {
 	suggTmpl := template.Must(template.New("vsearch").Parse(
 		`{{range .}}<button type="button" class="suggestion-item" ` +
 			`data-id="{{.ID}}" data-name="{{.Name}}" ` +
-			`onclick="selectVendor(this)">{{.Name}}</button>{{end}}`,
+			`onclick="selectCarrier(this)">{{.Name}}</button>{{end}}`,
 	))
 	return func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query().Get("name")
@@ -228,11 +228,11 @@ func (s *Service) HandleSearch() http.HandlerFunc {
 			return
 		}
 		rows, err := s.DB.Query(
-			`SELECT id, name FROM vendors WHERE name LIKE ? ORDER BY name LIMIT 8`,
+			`SELECT id, name FROM carriers WHERE name LIKE ? ORDER BY name LIMIT 8`,
 			"%"+q+"%",
 		)
 		if err != nil {
-			http.Error(w, "Query vendors failed", http.StatusInternalServerError)
+			http.Error(w, "Query carriers failed", http.StatusInternalServerError)
 			return
 		}
 		defer rows.Close()
@@ -252,7 +252,7 @@ func (s *Service) HandleSearch() http.HandlerFunc {
 	}
 }
 
-// HandleList renders the vendor list with optional port and name filters.
+// HandleList renders the carrier list with optional port and name filters.
 func (s *Service) HandleList(tmpl *template.Template) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user := auth.UserFromContext(r.Context())
@@ -260,24 +260,24 @@ func (s *Service) HandleList(tmpl *template.Template) http.HandlerFunc {
 		portID, _ := strconv.Atoi(r.URL.Query().Get("port"))
 
 		// Preferred subquery: scoped to the filtered port when active, otherwise any port.
-		preferredSubq := `EXISTS(SELECT 1 FROM vendor_preferences pref
-			WHERE pref.vendor_id = v.id AND pref.user_id = ?)`
+		preferredSubq := `EXISTS(SELECT 1 FROM carrier_preferences pref
+			WHERE pref.carrier_id = v.id AND pref.user_id = ?)`
 		args := []interface{}{user.ID}
 		if portID > 0 {
-			preferredSubq = `EXISTS(SELECT 1 FROM vendor_preferences pref
-				WHERE pref.vendor_id = v.id AND pref.user_id = ? AND pref.port_id = ?)`
+			preferredSubq = `EXISTS(SELECT 1 FROM carrier_preferences pref
+				WHERE pref.carrier_id = v.id AND pref.user_id = ? AND pref.port_id = ?)`
 			args = []interface{}{user.ID, portID}
 		}
 
 		query := `
 			SELECT v.id, v.name,
-				(SELECT COUNT(*) FROM vendor_contacts vc
-				 JOIN vendor_ports vp ON vc.vendor_ports_id = vp.id
-				 WHERE vp.vendor_id = v.id),
+				(SELECT COUNT(*) FROM carrier_contacts vc
+				 JOIN carrier_ports vp ON vc.carrier_ports_id = vp.id
+				 WHERE vp.carrier_id = v.id),
 				COALESCE(GROUP_CONCAT(p.name, ', '),''),
 				` + preferredSubq + `
-			FROM vendors v
-			LEFT JOIN vendor_ports vp ON vp.vendor_id = v.id
+			FROM carriers v
+			LEFT JOIN carrier_ports vp ON vp.carrier_id = v.id
 			LEFT JOIN ports p ON p.id = vp.port_id
 			WHERE 1=1`
 
@@ -286,28 +286,28 @@ func (s *Service) HandleList(tmpl *template.Template) http.HandlerFunc {
 			args = append(args, "%"+q+"%")
 		}
 		if portID > 0 {
-			query += ` AND v.id IN (SELECT vendor_id FROM vendor_ports WHERE port_id = ?)`
+			query += ` AND v.id IN (SELECT carrier_id FROM carrier_ports WHERE port_id = ?)`
 			args = append(args, portID)
 		}
 		query += ` GROUP BY v.id ORDER BY v.name`
 
 		rows, err := s.DB.Query(query, args...)
 		if err != nil {
-			http.Error(w, "Query vendors failed", http.StatusInternalServerError)
+			http.Error(w, "Query carriers failed", http.StatusInternalServerError)
 			return
 		}
 		defer rows.Close()
 
-		var vendors []VendorRow
+		var carriers []CarrierRow
 		for rows.Next() {
-			var v VendorRow
+			var v CarrierRow
 			var preferred int
 			if err := rows.Scan(&v.ID, &v.Name, &v.ContactCount, &v.Ports, &preferred); err != nil {
-				http.Error(w, "Scan vendor row failed", http.StatusInternalServerError)
+				http.Error(w, "Scan carrier row failed", http.StatusInternalServerError)
 				return
 			}
 			v.IsPreferred = preferred != 0
-			vendors = append(vendors, v)
+			carriers = append(carriers, v)
 		}
 
 		ports, err := s.fetchPorts()
@@ -318,7 +318,7 @@ func (s *Service) HandleList(tmpl *template.Template) http.HandlerFunc {
 
 		tmpl.ExecuteTemplate(w, "layout.html", map[string]any{
 			"User":    user,
-			"Vendors": vendors,
+			"Carriers": carriers,
 			"Ports":   ports,
 			"Query":   q,
 			"PortID":  portID,
@@ -326,7 +326,7 @@ func (s *Service) HandleList(tmpl *template.Template) http.HandlerFunc {
 	}
 }
 
-// HandleNewForm renders the new vendor form.
+// HandleNewForm renders the new carrier form.
 func (s *Service) HandleNewForm(tmpl *template.Template) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user := auth.UserFromContext(r.Context())
@@ -342,95 +342,95 @@ func (s *Service) HandleNewForm(tmpl *template.Template) http.HandlerFunc {
 	}
 }
 
-// HandleCreate creates a vendor (or finds an existing one by name), adds a port assignment,
+// HandleCreate creates a carrier (or finds an existing one by name), adds a port assignment,
 // and inserts any provided contacts for that port.
 func (s *Service) HandleCreate() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		name := strings.TrimSpace(r.FormValue("name"))
 
 		if name == "" {
-			http.Error(w, "Vendor name is required", http.StatusBadRequest)
+			http.Error(w, "Carrier name is required", http.StatusBadRequest)
 			return
 		}
 
-		// Resolve vendor: use autocomplete selection if available, else find/create by name.
-		var vendorID int64
-		if idStr := r.FormValue("vendor_id"); idStr != "" {
-			vendorID, _ = strconv.ParseInt(idStr, 10, 64)
+		// Resolve carrier: use autocomplete selection if available, else find/create by name.
+		var carrierID int64
+		if idStr := r.FormValue("carrier_id"); idStr != "" {
+			carrierID, _ = strconv.ParseInt(idStr, 10, 64)
 		}
-		if vendorID == 0 {
-			err := s.DB.QueryRow(`SELECT id FROM vendors WHERE LOWER(name) = LOWER(?)`, name).Scan(&vendorID)
+		if carrierID == 0 {
+			err := s.DB.QueryRow(`SELECT id FROM carriers WHERE LOWER(name) = LOWER(?)`, name).Scan(&carrierID)
 			if err == sql.ErrNoRows {
-				res, err := s.DB.Exec(`INSERT INTO vendors (name) VALUES (?)`, name)
+				res, err := s.DB.Exec(`INSERT INTO carriers (name) VALUES (?)`, name)
 				if err != nil {
-					http.Error(w, "Insert vendor failed", http.StatusInternalServerError)
+					http.Error(w, "Insert carrier failed", http.StatusInternalServerError)
 					return
 				}
-				vendorID, _ = res.LastInsertId()
+				carrierID, _ = res.LastInsertId()
 			} else if err != nil {
-				http.Error(w, "Lookup vendor failed", http.StatusInternalServerError)
+				http.Error(w, "Lookup carrier failed", http.StatusInternalServerError)
 				return
 			}
 		}
 
-		http.Redirect(w, r, fmt.Sprintf("/vendors/%d", vendorID), http.StatusSeeOther)
+		http.Redirect(w, r, fmt.Sprintf("/carriers/%d", carrierID), http.StatusSeeOther)
 	}
 }
 
-// HandleDetail renders the vendor detail view.
+// HandleDetail renders the carrier detail view.
 func (s *Service) HandleDetail(tmpl *template.Template) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user := auth.UserFromContext(r.Context())
-		id, ok := vendorIDFromPath(r)
+		id, ok := carrierIDFromPath(r)
 		if !ok {
 			http.Error(w, "Not found", http.StatusNotFound)
 			return
 		}
-		vendor, err := s.fetchVendorDetail(id, user.ID)
+		carrier, err := s.fetchCarrierDetail(id, user.ID)
 		if err == sql.ErrNoRows {
 			http.Error(w, "Not found", http.StatusNotFound)
 			return
 		}
 		if err != nil {
-			http.Error(w, "Load vendor failed", http.StatusInternalServerError)
+			http.Error(w, "Load carrier failed", http.StatusInternalServerError)
 			return
 		}
 		tmpl.ExecuteTemplate(w, "layout.html", map[string]any{
 			"User":   user,
-			"Vendor": vendor,
+			"Carrier": carrier,
 		})
 	}
 }
 
-// HandleEditForm renders the vendor edit form (name only).
+// HandleEditForm renders the carrier edit form (name only).
 func (s *Service) HandleEditForm(tmpl *template.Template) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user := auth.UserFromContext(r.Context())
-		id, ok := vendorIDFromPath(r)
+		id, ok := carrierIDFromPath(r)
 		if !ok {
 			http.Error(w, "Not found", http.StatusNotFound)
 			return
 		}
 		var name string
-		if err := s.DB.QueryRow(`SELECT name FROM vendors WHERE id = ?`, id).Scan(&name); err == sql.ErrNoRows {
+		if err := s.DB.QueryRow(`SELECT name FROM carriers WHERE id = ?`, id).Scan(&name); err == sql.ErrNoRows {
 			http.Error(w, "Not found", http.StatusNotFound)
 			return
 		} else if err != nil {
-			http.Error(w, "Load vendor failed", http.StatusInternalServerError)
+			http.Error(w, "Load carrier failed", http.StatusInternalServerError)
 			return
 		}
 		tmpl.ExecuteTemplate(w, "layout.html", map[string]any{
 			"User":     user,
-			"VendorID": id,
+			"CarrierID": id,
 			"Name":     name,
 		})
 	}
 }
 
-// HandleUpdate processes the vendor name edit form.
+// HandleUpdate processes the carrier name edit form.
 func (s *Service) HandleUpdate() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		id, ok := vendorIDFromPath(r)
+		id, ok := carrierIDFromPath(r)
 		if !ok {
 			http.Error(w, "Not found", http.StatusNotFound)
 			return
@@ -441,41 +441,41 @@ func (s *Service) HandleUpdate() http.HandlerFunc {
 			return
 		}
 		res, err := s.DB.Exec(
-			`UPDATE vendors SET name = ?, updated_at = ? WHERE id = ?`,
+			`UPDATE carriers SET name = ?, updated_at = ? WHERE id = ?`,
 			name, time.Now().UTC().Format("2006-01-02 15:04:05"), id,
 		)
 		if err != nil {
-			http.Error(w, "Update vendor failed", http.StatusInternalServerError)
+			http.Error(w, "Update carrier failed", http.StatusInternalServerError)
 			return
 		}
 		if n, _ := res.RowsAffected(); n == 0 {
 			http.Error(w, "Not found", http.StatusNotFound)
 			return
 		}
-		http.Redirect(w, r, fmt.Sprintf("/vendors/%d", id), http.StatusSeeOther)
+		http.Redirect(w, r, fmt.Sprintf("/carriers/%d", id), http.StatusSeeOther)
 	}
 }
 
-// HandleDelete deletes a vendor; cascade removes ports, contacts, notes, and preferences.
+// HandleDelete deletes a carrier; cascade removes ports, contacts, notes, and preferences.
 func (s *Service) HandleDelete() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		id, ok := vendorIDFromPath(r)
+		id, ok := carrierIDFromPath(r)
 		if !ok {
 			http.Error(w, "Not found", http.StatusNotFound)
 			return
 		}
-		if _, err := s.DB.Exec(`DELETE FROM vendors WHERE id = ?`, id); err != nil {
-			http.Error(w, "Delete vendor failed", http.StatusInternalServerError)
+		if _, err := s.DB.Exec(`DELETE FROM carriers WHERE id = ?`, id); err != nil {
+			http.Error(w, "Delete carrier failed", http.StatusInternalServerError)
 			return
 		}
-		http.Redirect(w, r, "/vendors", http.StatusSeeOther)
+		http.Redirect(w, r, "/carriers", http.StatusSeeOther)
 	}
 }
 
-// HandleAddPort assigns a new port to a vendor (creates a vendor_ports row).
+// HandleAddPort assigns a new port to a carrier (creates a carrier_ports row).
 func (s *Service) HandleAddPort() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		id, ok := vendorIDFromPath(r)
+		id, ok := carrierIDFromPath(r)
 		if !ok {
 			http.Error(w, "Not found", http.StatusNotFound)
 			return
@@ -485,15 +485,15 @@ func (s *Service) HandleAddPort() http.HandlerFunc {
 			http.Error(w, "Invalid port", http.StatusBadRequest)
 			return
 		}
-		s.DB.Exec(`INSERT OR IGNORE INTO vendor_ports (vendor_id, port_id) VALUES (?, ?)`, id, portID)
-		http.Redirect(w, r, fmt.Sprintf("/vendors/%d", id), http.StatusSeeOther)
+		s.DB.Exec(`INSERT OR IGNORE INTO carrier_ports (carrier_id, port_id) VALUES (?, ?)`, id, portID)
+		http.Redirect(w, r, fmt.Sprintf("/carriers/%d", id), http.StatusSeeOther)
 	}
 }
 
 // HandleRemovePort removes a port assignment; cascade deletes its contacts and clears preferences.
 func (s *Service) HandleRemovePort() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		id, ok := vendorIDFromPath(r)
+		id, ok := carrierIDFromPath(r)
 		if !ok {
 			http.Error(w, "Not found", http.StatusNotFound)
 			return
@@ -503,26 +503,26 @@ func (s *Service) HandleRemovePort() http.HandlerFunc {
 			http.Error(w, "Not found", http.StatusNotFound)
 			return
 		}
-		// Verify this vendor_ports row belongs to this vendor.
+		// Verify this carrier_ports row belongs to this carrier.
 		var portID int
 		if err := s.DB.QueryRow(
-			`SELECT port_id FROM vendor_ports WHERE id = ? AND vendor_id = ?`, vpid, id,
+			`SELECT port_id FROM carrier_ports WHERE id = ? AND carrier_id = ?`, vpid, id,
 		).Scan(&portID); err != nil {
 			http.Error(w, "Not found", http.StatusNotFound)
 			return
 		}
-		// Clear preferences at this port before removing (no FK link between preferences and vendor_ports).
-		s.DB.Exec(`DELETE FROM vendor_preferences WHERE vendor_id = ? AND port_id = ?`, id, portID)
-		// Contacts cascade-delete via vendor_contacts.vendor_ports_id FK.
-		s.DB.Exec(`DELETE FROM vendor_ports WHERE id = ?`, vpid)
-		http.Redirect(w, r, fmt.Sprintf("/vendors/%d", id), http.StatusSeeOther)
+		// Clear preferences at this port before removing (no FK link between preferences and carrier_ports).
+		s.DB.Exec(`DELETE FROM carrier_preferences WHERE carrier_id = ? AND port_id = ?`, id, portID)
+		// Contacts cascade-delete via carrier_contacts.carrier_ports_id FK.
+		s.DB.Exec(`DELETE FROM carrier_ports WHERE id = ?`, vpid)
+		http.Redirect(w, r, fmt.Sprintf("/carriers/%d", id), http.StatusSeeOther)
 	}
 }
 
-// HandleAddContact adds a contact to a specific vendor port.
+// HandleAddContact adds a contact to a specific carrier port.
 func (s *Service) HandleAddContact() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		id, ok := vendorIDFromPath(r)
+		id, ok := carrierIDFromPath(r)
 		if !ok {
 			http.Error(w, "Not found", http.StatusNotFound)
 			return
@@ -532,9 +532,9 @@ func (s *Service) HandleAddContact() http.HandlerFunc {
 			http.Error(w, "Not found", http.StatusNotFound)
 			return
 		}
-		// Verify the vendor_ports row belongs to this vendor.
+		// Verify the carrier_ports row belongs to this carrier.
 		var exists int
-		s.DB.QueryRow(`SELECT COUNT(*) FROM vendor_ports WHERE id = ? AND vendor_id = ?`, vpid, id).Scan(&exists)
+		s.DB.QueryRow(`SELECT COUNT(*) FROM carrier_ports WHERE id = ? AND carrier_id = ?`, vpid, id).Scan(&exists)
 		if exists == 0 {
 			http.Error(w, "Not found", http.StatusNotFound)
 			return
@@ -545,19 +545,19 @@ func (s *Service) HandleAddContact() http.HandlerFunc {
 			return
 		}
 		s.DB.Exec(
-			`INSERT INTO vendor_contacts (vendor_ports_id, name, email) VALUES (?, ?, ?)`,
+			`INSERT INTO carrier_contacts (carrier_ports_id, name, email) VALUES (?, ?, ?)`,
 			vpid,
 			nullableStr(strings.TrimSpace(r.FormValue("name"))),
 			email,
 		)
-		http.Redirect(w, r, fmt.Sprintf("/vendors/%d", id), http.StatusSeeOther)
+		http.Redirect(w, r, fmt.Sprintf("/carriers/%d", id), http.StatusSeeOther)
 	}
 }
 
-// HandleDeleteContact removes a contact, scoped to a vendor_ports row to prevent cross-vendor deletion.
+// HandleDeleteContact removes a contact, scoped to a carrier_ports row to prevent cross-carrier deletion.
 func (s *Service) HandleDeleteContact() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		id, ok := vendorIDFromPath(r)
+		id, ok := carrierIDFromPath(r)
 		if !ok {
 			http.Error(w, "Not found", http.StatusNotFound)
 			return
@@ -572,24 +572,24 @@ func (s *Service) HandleDeleteContact() http.HandlerFunc {
 			http.Error(w, "Not found", http.StatusNotFound)
 			return
 		}
-		// Verify the vendor_ports row belongs to this vendor before deleting the contact.
-		var ownerVendorID int
+		// Verify the carrier_ports row belongs to this carrier before deleting the contact.
+		var ownerCarrierID int
 		if err := s.DB.QueryRow(
-			`SELECT vendor_id FROM vendor_ports WHERE id = ?`, vpid,
-		).Scan(&ownerVendorID); err != nil || ownerVendorID != id {
+			`SELECT carrier_id FROM carrier_ports WHERE id = ?`, vpid,
+		).Scan(&ownerCarrierID); err != nil || ownerCarrierID != id {
 			http.Error(w, "Not found", http.StatusNotFound)
 			return
 		}
-		s.DB.Exec(`DELETE FROM vendor_contacts WHERE id = ? AND vendor_ports_id = ?`, cid, vpid)
-		http.Redirect(w, r, fmt.Sprintf("/vendors/%d", id), http.StatusSeeOther)
+		s.DB.Exec(`DELETE FROM carrier_contacts WHERE id = ? AND carrier_ports_id = ?`, cid, vpid)
+		http.Redirect(w, r, fmt.Sprintf("/carriers/%d", id), http.StatusSeeOther)
 	}
 }
 
-// HandleAddNote appends a shared note to a vendor_port (author = current user).
+// HandleAddNote appends a shared note to a carrier_port (author = current user).
 func (s *Service) HandleAddNote() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user := auth.UserFromContext(r.Context())
-		id, ok := vendorIDFromPath(r)
+		id, ok := carrierIDFromPath(r)
 		if !ok {
 			http.Error(w, "Not found", http.StatusNotFound)
 			return
@@ -599,10 +599,10 @@ func (s *Service) HandleAddNote() http.HandlerFunc {
 			http.Error(w, "Not found", http.StatusNotFound)
 			return
 		}
-		// Verify the vendor_ports row belongs to this vendor.
+		// Verify the carrier_ports row belongs to this carrier.
 		var exists int
 		s.DB.QueryRow(
-			`SELECT COUNT(*) FROM vendor_ports WHERE id = ? AND vendor_id = ?`, vpid, id,
+			`SELECT COUNT(*) FROM carrier_ports WHERE id = ? AND carrier_id = ?`, vpid, id,
 		).Scan(&exists)
 		if exists == 0 {
 			http.Error(w, "Not found", http.StatusNotFound)
@@ -611,20 +611,20 @@ func (s *Service) HandleAddNote() http.HandlerFunc {
 		content := strings.TrimSpace(r.FormValue("content"))
 		if content != "" {
 			s.DB.Exec(
-				`INSERT INTO vendor_notes (vendor_ports_id, author_id, content) VALUES (?, ?, ?)`,
+				`INSERT INTO carrier_notes (carrier_ports_id, author_id, content) VALUES (?, ?, ?)`,
 				vpid, user.ID, content,
 			)
 		}
-		http.Redirect(w, r, fmt.Sprintf("/vendors/%d", id), http.StatusSeeOther)
+		http.Redirect(w, r, fmt.Sprintf("/carriers/%d", id), http.StatusSeeOther)
 	}
 }
 
-// HandleTogglePreference toggles the current user's preferred-vendor flag for a vendor at a port.
-// pid is ports.id (not vendor_ports.id). Only permitted when the vendor services that port.
+// HandleTogglePreference toggles the current user's preferred-carrier flag for a carrier at a port.
+// pid is ports.id (not carrier_ports.id). Only permitted when the carrier services that port.
 func (s *Service) HandleTogglePreference() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user := auth.UserFromContext(r.Context())
-		id, ok := vendorIDFromPath(r)
+		id, ok := carrierIDFromPath(r)
 		if !ok {
 			http.Error(w, "Not found", http.StatusNotFound)
 			return
@@ -635,33 +635,33 @@ func (s *Service) HandleTogglePreference() http.HandlerFunc {
 			return
 		}
 
-		// Guard: vendor must service this port.
+		// Guard: carrier must service this port.
 		var serviced int
 		s.DB.QueryRow(
-			`SELECT COUNT(*) FROM vendor_ports WHERE vendor_id = ? AND port_id = ?`, id, pid,
+			`SELECT COUNT(*) FROM carrier_ports WHERE carrier_id = ? AND port_id = ?`, id, pid,
 		).Scan(&serviced)
 		if serviced == 0 {
-			http.Error(w, "Vendor does not service this port", http.StatusBadRequest)
+			http.Error(w, "Carrier does not service this port", http.StatusBadRequest)
 			return
 		}
 
 		// Toggle: remove if already preferred, add if not.
 		var exists int
 		s.DB.QueryRow(
-			`SELECT COUNT(*) FROM vendor_preferences WHERE user_id = ? AND vendor_id = ? AND port_id = ?`,
+			`SELECT COUNT(*) FROM carrier_preferences WHERE user_id = ? AND carrier_id = ? AND port_id = ?`,
 			user.ID, id, pid,
 		).Scan(&exists)
 		if exists > 0 {
 			s.DB.Exec(
-				`DELETE FROM vendor_preferences WHERE user_id = ? AND vendor_id = ? AND port_id = ?`,
+				`DELETE FROM carrier_preferences WHERE user_id = ? AND carrier_id = ? AND port_id = ?`,
 				user.ID, id, pid,
 			)
 		} else {
 			s.DB.Exec(
-				`INSERT INTO vendor_preferences (user_id, vendor_id, port_id) VALUES (?, ?, ?)`,
+				`INSERT INTO carrier_preferences (user_id, carrier_id, port_id) VALUES (?, ?, ?)`,
 				user.ID, id, pid,
 			)
 		}
-		http.Redirect(w, r, fmt.Sprintf("/vendors/%d", id), http.StatusSeeOther)
+		http.Redirect(w, r, fmt.Sprintf("/carriers/%d", id), http.StatusSeeOther)
 	}
 }

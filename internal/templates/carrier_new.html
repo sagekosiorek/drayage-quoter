@@ -1,0 +1,46 @@
+{{ define "content" }}
+<p class="back-link"><a href="/carriers">← Back to carriers</a></p>
+<h1 class="page-title">Add Carrier</h1>
+
+<form method="POST" action="/carriers" class="form-narrow">
+
+    <input type="hidden" id="carrier_id" name="carrier_id" value="">
+    <label for="carrier_name">Company Name*</label>
+    <input type="text" id="carrier_name" name="name" placeholder="Acme Drayage Co." required
+           autocomplete="off"
+           hx-get="/carriers/search"
+           hx-trigger="input changed delay:300ms"
+           hx-target="#carrier-suggestions"
+           hx-params="name"
+           hx-include="this">
+    <div id="carrier-suggestions" class="suggestions"></div>
+        <p class="text-muted" style="font-size:.9rem; margin:.5rem 0 1rem;">You'll be able to add ports this carrier services + contacts once they're created.</p>
+
+    <div class="form-actions">
+        <button class="primary" type="submit">Save</button>
+        <a href="/carriers">Cancel</a>
+    </div>
+</form>
+
+<script>
+function selectCarrier(el) {
+    document.getElementById('carrier_id').value = el.dataset.id;
+    document.getElementById('carrier_name').value = el.dataset.name;
+    document.getElementById('carrier-suggestions').innerHTML = '';
+}
+
+function addContact() {
+    const list = document.getElementById('contacts-list');
+    const tmpl = list.querySelector('.contact-group');
+    const group = tmpl.cloneNode(true);
+    group.querySelectorAll('input').forEach(i => { i.value = ''; i.required = false; });
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = '× Remove';
+    btn.className = 'btn-remove';
+    btn.onclick = () => group.remove();
+    group.appendChild(btn);
+    list.appendChild(group);
+}
+</script>
+{{ end }}

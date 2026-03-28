@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-// RateItem represents a single parsed charge from a vendor rate email.
+// RateItem represents a single parsed charge from a carrier rate email.
 type RateItem struct {
 	ChargeType string
 	Amount     float64

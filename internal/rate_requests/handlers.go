@@ -46,25 +46,25 @@ type LaneSnippet struct {
 	StatusLabel    string
 }
 
-// ContactInfo holds minimal vendor contact data.
+// ContactInfo holds minimal carrier contact data.
 type ContactInfo struct {
 	Name  string
 	Email string
 }
 
-// VendorSelectRow holds per-vendor checklist data for the new rate request form.
-type VendorSelectRow struct {
-	VendorID     int
-	VendorPortID int
-	VendorName   string
+// CarrierSelectRow holds per-carrier checklist data for the new rate request form.
+type CarrierSelectRow struct {
+	CarrierID     int
+	CarrierPortID int
+	CarrierName   string
 	Contacts     []ContactInfo
 	Preferred    bool
 }
 
-// VendorBlastRow holds per-vendor blast status for the rate request detail view.
-type VendorBlastRow struct {
-	VendorID     int
-	VendorName   string
+// CarrierBlastRow holds per-carrier blast status for the rate request detail view.
+type CarrierBlastRow struct {
+	CarrierID     int
+	CarrierName   string
 	Contacts     []ContactInfo
 	Responded    bool
 	MailtoHref   string // pre-built mailto: link (emails, subject, body all pre-filled)
@@ -84,7 +84,7 @@ type RateRequestDetail struct {
 	Notified          bool
 	CreatedAt         string
 	Lane              LaneSnippet
-	Vendors           []VendorBlastRow
+	Carriers           []CarrierBlastRow
 }
 
 // ctLabel converts a snake_case charge type key to a human-readable label with unit hint.
@@ -233,7 +233,7 @@ func buildSubjectBase(lane *LaneSnippet) string {
 }
 
 // buildBody generates the rate request email body using the user's saved template.
-// The [First Name] placeholder is replaced per-vendor at mailto generation time.
+// The [First Name] placeholder is replaced per-carrier at mailto generation time.
 func buildBody(lane *LaneSnippet, refID string, tmpl settings.EmailTemplate) string {
 	var sb strings.Builder
 
@@ -412,17 +412,17 @@ func (s *Service) fetchLane(laneID int) (*LaneSnippet, error) {
 	return &lane, nil
 }
 
-// fetchVendorsForPort loads all vendors servicing a port with contacts and preference flag.
-// Preferred vendors appear first; within groups, sorted by name.
-func (s *Service) fetchVendorsForPort(portID, userID int) ([]VendorSelectRow, error) {
+// fetchCarriersForPort loads all carriers servicing a port with contacts and preference flag.
+// Preferred carriers appear first; within groups, sorted by name.
+func (s *Service) fetchCarriersForPort(portID, userID int) ([]CarrierSelectRow, error) {
 	rows, err := s.DB.Query(`
 		SELECT vp.id, v.id, v.name,
 			EXISTS(
-				SELECT 1 FROM vendor_preferences pref
-				WHERE pref.vendor_id = v.id AND pref.user_id = ? AND pref.port_id = ?
+				SELECT 1 FROM carrier_preferences pref
+				WHERE pref.carrier_id = v.id AND pref.user_id = ? AND pref.port_id = ?
 			) as preferred
-		FROM vendor_ports vp
-		JOIN vendors v ON v.id = vp.vendor_id
+		FROM carrier_ports vp
+		JOIN carriers v ON v.id = vp.carrier_id
 		WHERE vp.port_id = ?
 		ORDER BY preferred DESC, v.name
 	`, userID, portID, portID)
@@ -430,23 +430,23 @@ func (s *Service) fetchVendorsForPort(portID, userID int) ([]VendorSelectRow, er
 		return nil, err
 	}
 
-	var vendors []VendorSelectRow
+	var carriers []CarrierSelectRow
 	for rows.Next() {
-		var vsr VendorSelectRow
+		var vsr CarrierSelectRow
 		var preferred int
-		if err := rows.Scan(&vsr.VendorPortID, &vsr.VendorID, &vsr.VendorName, &preferred); err != nil {
+		if err := rows.Scan(&vsr.CarrierPortID, &vsr.CarrierID, &vsr.CarrierName, &preferred); err != nil {
 			rows.Close()
 			return nil, err
 		}
 		vsr.Preferred = preferred != 0
-		vendors = append(vendors, vsr)
+		carriers = append(carriers, vsr)
 	}
 	rows.Close()
 
-	for i := range vendors {
+	for i := range carriers {
 		cRows, err := s.DB.Query(
-			`SELECT COALESCE(name,''), email FROM vendor_contacts WHERE vendor_ports_id = ? ORDER BY id`,
-			vendors[i].VendorPortID,
+			`SELECT COALESCE(name,''), email FROM carrier_contacts WHERE carrier_ports_id = ? ORDER BY id`,
+			carriers[i].CarrierPortID,
 		)
 		if err != nil {
 			return nil, err
@@ -457,14 +457,14 @@ func (s *Service) fetchVendorsForPort(portID, userID int) ([]VendorSelectRow, er
 				cRows.Close()
 				return nil, err
 			}
-			vendors[i].Contacts = append(vendors[i].Contacts, c)
+			carriers[i].Contacts = append(carriers[i].Contacts, c)
 		}
 		cRows.Close()
 	}
-	return vendors, nil
+	return carriers, nil
 }
 
-// fetchRateRequestDetail loads the full rate request record with lane snippet and vendor blast rows.
+// fetchRateRequestDetail loads the full rate request record with lane snippet and carrier blast rows.
 func (s *Service) fetchRateRequestDetail(id int) (*RateRequestDetail, error) {
 	var rr RateRequestDetail
 	var threshold sql.NullInt64
@@ -502,8 +502,8 @@ func (s *Service) fetchRateRequestDetail(id int) (*RateRequestDetail, error) {
 
 	vRows, err := s.DB.Query(`
 		SELECT v.id, v.name, rrv.responded
-		FROM rate_request_vendors rrv
-		JOIN vendors v ON v.id = rrv.vendor_id
+		FROM rate_request_carriers rrv
+		JOIN carriers v ON v.id = rrv.carrier_id
 		WHERE rrv.rate_request_id = ?
 		ORDER BY v.name
 	`, id)
@@ -511,27 +511,27 @@ func (s *Service) fetchRateRequestDetail(id int) (*RateRequestDetail, error) {
 		return nil, err
 	}
 
-	var vendorList []VendorBlastRow
+	var carrierList []CarrierBlastRow
 	for vRows.Next() {
-		var vbr VendorBlastRow
+		var vbr CarrierBlastRow
 		var responded int
-		if err := vRows.Scan(&vbr.VendorID, &vbr.VendorName, &responded); err != nil {
+		if err := vRows.Scan(&vbr.CarrierID, &vbr.CarrierName, &responded); err != nil {
 			vRows.Close()
 			return nil, err
 		}
 		vbr.Responded = responded != 0
-		vendorList = append(vendorList, vbr)
+		carrierList = append(carrierList, vbr)
 	}
 	vRows.Close()
 
-	for i := range vendorList {
+	for i := range carrierList {
 		cRows, err := s.DB.Query(`
 			SELECT COALESCE(vc.name,''), vc.email
-			FROM vendor_contacts vc
-			JOIN vendor_ports vp ON vc.vendor_ports_id = vp.id
-			WHERE vp.vendor_id = ? AND vp.port_id = ?
+			FROM carrier_contacts vc
+			JOIN carrier_ports vp ON vc.carrier_ports_id = vp.id
+			WHERE vp.carrier_id = ? AND vp.port_id = ?
 			ORDER BY vc.id
-		`, vendorList[i].VendorID, rr.Lane.OriginPortID)
+		`, carrierList[i].CarrierID, rr.Lane.OriginPortID)
 		if err != nil {
 			return nil, err
 		}
@@ -541,26 +541,26 @@ func (s *Service) fetchRateRequestDetail(id int) (*RateRequestDetail, error) {
 				cRows.Close()
 				return nil, err
 			}
-			vendorList[i].Contacts = append(vendorList[i].Contacts, c)
+			carrierList[i].Contacts = append(carrierList[i].Contacts, c)
 		}
 		cRows.Close()
 
 		var emails []string
-		for _, c := range vendorList[i].Contacts {
+		for _, c := range carrierList[i].Contacts {
 			if c.Email != "" {
 				emails = append(emails, c.Email)
 			}
 		}
-		vendorList[i].GreetingName = buildGreetingName(vendorList[i].Contacts)
+		carrierList[i].GreetingName = buildGreetingName(carrierList[i].Contacts)
 		if len(emails) > 0 {
-			bodyFilled := strings.ReplaceAll(rr.Body, "[First Name]", vendorList[i].GreetingName)
-			vendorList[i].MailtoHref = "mailto:" + strings.Join(emails, "; ") +
+			bodyFilled := strings.ReplaceAll(rr.Body, "[First Name]", carrierList[i].GreetingName)
+			carrierList[i].MailtoHref = "mailto:" + strings.Join(emails, "; ") +
 				"?subject=" + encodeMailtoParam(rr.Subject) +
 				"&body=" + encodeMailtoBody(bodyFilled)
 		}
 	}
 
-	rr.Vendors = vendorList
+	rr.Carriers = carrierList
 	return &rr, nil
 }
 
@@ -592,9 +592,9 @@ func (s *Service) HandleNewForm(tmpl *template.Template) http.HandlerFunc {
 			return
 		}
 
-		vendors, err := s.fetchVendorsForPort(lane.OriginPortID, user.ID)
+		carriers, err := s.fetchCarriersForPort(lane.OriginPortID, user.ID)
 		if err != nil {
-			http.Error(w, fmt.Sprintf("Failed to load vendors: %v", err), http.StatusInternalServerError)
+			http.Error(w, fmt.Sprintf("Failed to load carriers: %v", err), http.StatusInternalServerError)
 			return
 		}
 
@@ -606,12 +606,12 @@ func (s *Service) HandleNewForm(tmpl *template.Template) http.HandlerFunc {
 			"RefID":   refID,
 			"Subject": buildSubjectBase(lane),
 			"Body":    buildBody(lane, refID, emailTmpl),
-			"Vendors": vendors,
+			"Carriers": carriers,
 		})
 	}
 }
 
-// HandleCreate saves a new rate request, links vendors, advances lane status, and redirects to the detail view.
+// HandleCreate saves a new rate request, links carriers, advances lane status, and redirects to the detail view.
 // POST /lanes/{id}/rate-request
 func (s *Service) HandleCreate() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -629,7 +629,7 @@ func (s *Service) HandleCreate() http.HandlerFunc {
 		body := strings.TrimSpace(r.FormValue("body"))
 		thresholdStr := r.FormValue("response_threshold")
 		deadlineHoursStr := r.FormValue("deadline_hours")
-		vendorIDStrs := r.Form["vendor_ids"]
+		carrierIDStrs := r.Form["carrier_ids"]
 
 		if subject == "" || body == "" {
 			http.Error(w, "Subject and body are required", http.StatusBadRequest)
@@ -648,8 +648,8 @@ func (s *Service) HandleCreate() http.HandlerFunc {
 
 		var threshold interface{}
 		if t, err := strconv.Atoi(thresholdStr); err == nil && t > 0 {
-			if n := len(vendorIDStrs); t > n {
-				t = n // clamp: threshold cannot exceed vendors blasted
+			if n := len(carrierIDStrs); t > n {
+				t = n // clamp: threshold cannot exceed carriers blasted
 			}
 			threshold = t
 		}
@@ -671,13 +671,13 @@ func (s *Service) HandleCreate() http.HandlerFunc {
 
 		rrID, _ := res.LastInsertId()
 
-		for _, vidStr := range vendorIDStrs {
+		for _, vidStr := range carrierIDStrs {
 			vid, err := strconv.Atoi(vidStr)
 			if err != nil || vid <= 0 {
 				continue
 			}
 			s.DB.Exec(
-				`INSERT OR IGNORE INTO rate_request_vendors (rate_request_id, vendor_id) VALUES (?, ?)`,
+				`INSERT OR IGNORE INTO rate_request_carriers (rate_request_id, carrier_id) VALUES (?, ?)`,
 				rrID, vid,
 			)
 		}
@@ -717,10 +717,10 @@ type RateItemCell struct {
 	Display        string // pre-formatted for display, e.g. "$1,200.00" or "35%"
 }
 
-// VendorColumn holds one vendor's column in the comparison table.
-type VendorColumn struct {
-	VendorRateID int
-	VendorName   string
+// CarrierColumn holds one carrier's column in the comparison table.
+type CarrierColumn struct {
+	CarrierRateID int
+	CarrierName   string
 	Total        float64                 // linehaul + (linehaul * fuel / 100)
 	TotalDisplay string                  // pre-formatted total for display
 	Items        map[string]RateItemCell // keyed by charge_type
@@ -730,11 +730,11 @@ type VendorColumn struct {
 type ComparisonData struct {
 	RateRequest          RateRequestSnippet
 	Lane                 LaneSnippet
-	ChargeRows           []ChargeTypeRow   // ordered; only types present in ≥1 vendor
-	Vendors              []VendorColumn    // sorted ascending by Total
+	ChargeRows           []ChargeTypeRow   // ordered; only types present in ≥1 carrier
+	Carriers              []CarrierColumn    // sorted ascending by Total
 	Averages             map[string]string // pre-formatted average per charge_type
-	AvgTotal             string            // pre-formatted average of vendor totals
-	Lineups              map[int]int       // vendor_rate_id → current rank (0 = unranked)
+	AvgTotal             string            // pre-formatted average of carrier totals
+	Lineups              map[int]int       // carrier_rate_id → current rank (0 = unranked)
 	AvailableChargeTypes []ChargeTypeRow   // FieldOrder types not yet in ChargeRows
 }
 
@@ -776,25 +776,25 @@ func (s *Service) HandleBlastStatus() http.HandlerFunc {
 <span id="responses-count" hx-swap-oob="true"><strong>Responses:</strong> {{.Received}} / {{.Total}}</span>
 {{- end -}}
 <p class="detail-section">Blast Status</p>
-{{if .Vendors}}
+{{if .Carriers}}
 <table>
-<thead><tr><th>Vendor</th><th>Status</th><th>Actions</th></tr></thead>
+<thead><tr><th>Carrier</th><th>Status</th><th>Actions</th></tr></thead>
 <tbody>
-{{range .Vendors}}<tr class="{{if .Responded}}rr-responded{{end}}">
+{{range .Carriers}}<tr class="{{if .Responded}}rr-responded{{end}}">
 <td>
-<div style="font-weight:500;">{{.VendorName}}</div>
-{{range .Contacts}}<div class="rr-vendor-item-meta">{{.Name}}{{if and .Name .Email}} · {{end}}<a href="mailto:{{.Email}}">{{.Email}}</a></div>{{end}}
-{{if not .Contacts}}<div class="rr-vendor-item-warn">(no contact on file)</div>{{end}}
+<div style="font-weight:500;">{{.CarrierName}}</div>
+{{range .Contacts}}<div class="rr-carrier-item-meta">{{.Name}}{{if and .Name .Email}} · {{end}}<a href="mailto:{{.Email}}">{{.Email}}</a></div>{{end}}
+{{if not .Contacts}}<div class="rr-carrier-item-warn">(no contact on file)</div>{{end}}
 </td>
 <td>{{if .Responded}}<span class="text-success">Responded</span>{{else}}<span class="text-muted">Pending</span>{{end}}</td>
 <td><div class="flex-wrap-sm">
 {{if .MailtoHref}}<a href="{{.MailtoHref}}"><button class="primary">Open Email Draft</button></a>{{end}}
-<a href="/rate-requests/{{$.RRID}}/ingest?vendor_id={{.VendorID}}"><button type="button">Paste Response</button></a>
+<a href="/rate-requests/{{$.RRID}}/ingest?carrier_id={{.CarrierID}}"><button type="button">Paste Response</button></a>
 </div></td>
 </tr>{{end}}
 </tbody>
 </table>
-{{else}}<p class="empty-state">No vendors on this rate request.</p>{{end}}`))
+{{else}}<p class="empty-state">No carriers on this rate request.</p>{{end}}`))
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		id, err := strconv.Atoi(r.PathValue("id"))
@@ -816,8 +816,8 @@ func (s *Service) HandleBlastStatus() http.HandlerFunc {
 		tmpl.Execute(w, map[string]any{
 			"RRID":     rr.ID,
 			"Received": rr.ResponsesReceived,
-			"Total":    len(rr.Vendors),
-			"Vendors":  rr.Vendors,
+			"Total":    len(rr.Carriers),
+			"Carriers":  rr.Carriers,
 			"Polling":  polling,
 		})
 	}
@@ -903,7 +903,7 @@ func (s *Service) HandleResponsesCount() http.HandlerFunc {
 	}
 }
 
-// HandleComparison renders the side-by-side vendor rate comparison and lineup builder.
+// HandleComparison renders the side-by-side carrier rate comparison and lineup builder.
 // GET /rate-requests/{id}/comparison
 func (s *Service) HandleComparison(tmpl *template.Template) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -936,13 +936,13 @@ func (s *Service) HandleComparison(tmpl *template.Template) http.HandlerFunc {
 			return
 		}
 
-		// Load all rate items for this rate request, grouped by vendor_rate.
+		// Load all rate items for this rate request, grouped by carrier_rate.
 		itemRows, err := s.DB.Query(`
 			SELECT vr.id, v.name,
 			       vri.id, vri.charge_type, vri.amount, vri.unit, vri.manually_edited, vr.parsed_by
-			FROM vendor_rates vr
-			JOIN vendors v ON vr.vendor_id = v.id
-			JOIN vendor_rate_items vri ON vri.vendor_rate_id = vr.id
+			FROM carrier_rates vr
+			JOIN carriers v ON vr.carrier_id = v.id
+			JOIN carrier_rate_items vri ON vri.carrier_rate_id = vr.id
 			WHERE vr.rate_request_id = ?
 			ORDER BY vr.id, vri.charge_type
 		`, rrID)
@@ -952,8 +952,8 @@ func (s *Service) HandleComparison(tmpl *template.Template) http.HandlerFunc {
 			return
 		}
 
-		vendorMap := make(map[int]*VendorColumn)
-		var vendorOrder []int
+		carrierMap := make(map[int]*CarrierColumn)
+		var carrierOrder []int
 
 		for itemRows.Next() {
 			var vrID int
@@ -968,15 +968,15 @@ func (s *Service) HandleComparison(tmpl *template.Template) http.HandlerFunc {
 				http.Error(w, "Scan rate item failed", http.StatusInternalServerError)
 				return
 			}
-			if _, ok := vendorMap[vrID]; !ok {
-				vendorMap[vrID] = &VendorColumn{
-					VendorRateID: vrID,
-					VendorName:   vName,
+			if _, ok := carrierMap[vrID]; !ok {
+				carrierMap[vrID] = &CarrierColumn{
+					CarrierRateID: vrID,
+					CarrierName:   vName,
 					Items:        make(map[string]RateItemCell),
 				}
-				vendorOrder = append(vendorOrder, vrID)
+				carrierOrder = append(carrierOrder, vrID)
 			}
-			vendorMap[vrID].Items[ct] = RateItemCell{
+			carrierMap[vrID].Items[ct] = RateItemCell{
 				ID:             itemID,
 				Amount:         amount,
 				Unit:           unit,
@@ -987,23 +987,23 @@ func (s *Service) HandleComparison(tmpl *template.Template) http.HandlerFunc {
 		}
 		itemRows.Close()
 
-		// Build vendor slice with computed totals, then sort by total ascending.
-		vendors := make([]VendorColumn, 0, len(vendorOrder))
-		for _, vrID := range vendorOrder {
-			vc := *vendorMap[vrID]
+		// Build carrier slice with computed totals, then sort by total ascending.
+		carriers := make([]CarrierColumn, 0, len(carrierOrder))
+		for _, vrID := range carrierOrder {
+			vc := *carrierMap[vrID]
 			lh := vc.Items["linehaul"].Amount
 			fuel := vc.Items["fuel"].Amount
 			vc.Total = lh + lh*fuel/100
 			vc.TotalDisplay = rates.FmtCellAmount(vc.Total, "$")
-			vendors = append(vendors, vc)
+			carriers = append(carriers, vc)
 		}
-		sort.Slice(vendors, func(i, j int) bool {
-			return vendors[i].Total < vendors[j].Total
+		sort.Slice(carriers, func(i, j int) bool {
+			return carriers[i].Total < carriers[j].Total
 		})
 
-		// Collect charge types present in any vendor, in canonical FieldOrder.
+		// Collect charge types present in any carrier, in canonical FieldOrder.
 		presentTypes := make(map[string]bool)
-		for _, vc := range vendors {
+		for _, vc := range carriers {
 			for ct := range vc.Items {
 				presentTypes[ct] = true
 			}
@@ -1018,11 +1018,11 @@ func (s *Service) HandleComparison(tmpl *template.Template) http.HandlerFunc {
 			}
 		}
 
-		// Compute per-charge-type averages (formatted) across vendors that have that type.
+		// Compute per-charge-type averages (formatted) across carriers that have that type.
 		rawAvgAmounts := make(map[string]float64)
 		rawAvgUnits := make(map[string]string)
 		counts := make(map[string]int)
-		for _, vc := range vendors {
+		for _, vc := range carriers {
 			for ct, cell := range vc.Items {
 				rawAvgAmounts[ct] += cell.Amount
 				rawAvgUnits[ct] = cell.Unit
@@ -1037,19 +1037,19 @@ func (s *Service) HandleComparison(tmpl *template.Template) http.HandlerFunc {
 			}
 		}
 
-		// Compute average of vendor totals.
+		// Compute average of carrier totals.
 		var totalSum float64
-		for _, vc := range vendors {
+		for _, vc := range carriers {
 			totalSum += vc.Total
 		}
 		var avgTotal string
-		if len(vendors) > 0 {
-			avgTotal = rates.FmtCellAmount(totalSum/float64(len(vendors)), "$")
+		if len(carriers) > 0 {
+			avgTotal = rates.FmtCellAmount(totalSum/float64(len(carriers)), "$")
 		}
 
-		// Load existing lineups for this lane (vendor_rate_id → rank).
+		// Load existing lineups for this lane (carrier_rate_id → rank).
 		lineups := make(map[int]int)
-		lRows, err := s.DB.Query(`SELECT vendor_rate_id, rank FROM vendor_lineups WHERE lane_id = ?`, rr.LaneID)
+		lRows, err := s.DB.Query(`SELECT carrier_rate_id, rank FROM carrier_lineups WHERE lane_id = ?`, rr.LaneID)
 		if err != nil {
 			log.Printf("HandleComparison: query lineups lane=%d: %v", rr.LaneID, err)
 			http.Error(w, "Load lineups failed", http.StatusInternalServerError)
@@ -1068,7 +1068,7 @@ func (s *Service) HandleComparison(tmpl *template.Template) http.HandlerFunc {
 				RateRequest:          rr,
 				Lane:                 *lane,
 				ChargeRows:           chargeRows,
-				Vendors:              vendors,
+				Carriers:              carriers,
 				Averages:             averages,
 				AvgTotal:             avgTotal,
 				Lineups:              lineups,
@@ -1080,7 +1080,7 @@ func (s *Service) HandleComparison(tmpl *template.Template) http.HandlerFunc {
 	}
 }
 
-// HandleSaveLineup saves the vendor ranking for a lane and advances its status to "quoting".
+// HandleSaveLineup saves the carrier ranking for a lane and advances its status to "quoting".
 // POST /rate-requests/{id}/lineup
 func (s *Service) HandleSaveLineup() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -1101,7 +1101,7 @@ func (s *Service) HandleSaveLineup() http.HandlerFunc {
 			return
 		}
 
-		// Collect (vendor_rate_id → rank) from form fields named "rank_{vrID}".
+		// Collect (carrier_rate_id → rank) from form fields named "rank_{vrID}".
 		type lineupEntry struct {
 			vrID int
 			rank int
@@ -1138,13 +1138,13 @@ func (s *Service) HandleSaveLineup() http.HandlerFunc {
 		}
 		defer tx.Rollback()
 
-		if _, err := tx.Exec(`DELETE FROM vendor_lineups WHERE lane_id = ?`, laneID); err != nil {
+		if _, err := tx.Exec(`DELETE FROM carrier_lineups WHERE lane_id = ?`, laneID); err != nil {
 			http.Error(w, "Clear lineup failed", http.StatusInternalServerError)
 			return
 		}
 		for _, l := range selected {
 			if _, err := tx.Exec(
-				`INSERT INTO vendor_lineups (lane_id, vendor_rate_id, rank) VALUES (?, ?, ?)`,
+				`INSERT INTO carrier_lineups (lane_id, carrier_rate_id, rank) VALUES (?, ?, ?)`,
 				laneID, l.vrID, l.rank,
 			); err != nil {
 				http.Error(w, "Insert lineup failed", http.StatusInternalServerError)
@@ -1168,10 +1168,10 @@ func (s *Service) HandleSaveLineup() http.HandlerFunc {
 
 // --- Saved comparison + CSV generation types ---
 
-// SavedVendorColumn holds one lineup vendor for the saved comparison view (rank is plain text).
-type SavedVendorColumn struct {
-	VendorRateID int
-	VendorName   string
+// SavedCarrierColumn holds one lineup carrier for the saved comparison view (rank is plain text).
+type SavedCarrierColumn struct {
+	CarrierRateID int
+	CarrierName   string
 	Rank         int
 	Items        map[string]RateItemCell
 	Total        float64
@@ -1190,7 +1190,7 @@ type SavedComparisonData struct {
 	RateRequest        RateRequestSnippet
 	Lane               LaneSnippet
 	ChargeRows         []ChargeTypeRow
-	Vendors            []SavedVendorColumn // sorted by rank asc
+	Carriers            []SavedCarrierColumn // sorted by rank asc
 	Averages           map[string]string
 	AvgTotal           string
 	Markups            map[string]MarkupItemRow // keyed by charge_type; pre-fills inputs if exists
@@ -1233,7 +1233,7 @@ func (s *Service) HandleSavedComparison(tmpl *template.Template) http.HandlerFun
 			return
 		}
 
-		// Load lineup: rank-ordered vendor_rate_ids with vendor names.
+		// Load lineup: rank-ordered carrier_rate_ids with carrier names.
 		type lineupRow struct {
 			rank   int
 			vrID   int
@@ -1241,9 +1241,9 @@ func (s *Service) HandleSavedComparison(tmpl *template.Template) http.HandlerFun
 		}
 		lRows, err := s.DB.Query(`
 			SELECT vl.rank, vr.id, v.name
-			FROM vendor_lineups vl
-			JOIN vendor_rates vr ON vr.id = vl.vendor_rate_id
-			JOIN vendors v ON v.id = vr.vendor_id
+			FROM carrier_lineups vl
+			JOIN carrier_rates vr ON vr.id = vl.carrier_rate_id
+			JOIN carriers v ON v.id = vr.carrier_id
 			WHERE vl.lane_id = ?
 			ORDER BY vl.rank
 		`, rr.LaneID)
@@ -1270,7 +1270,7 @@ func (s *Service) HandleSavedComparison(tmpl *template.Template) http.HandlerFun
 			return
 		}
 
-		// Collect lineup vendor_rate_ids for the item query.
+		// Collect lineup carrier_rate_ids for the item query.
 		vrIDs := make([]int, len(lineupRows))
 		for i, lr := range lineupRows {
 			vrIDs[i] = lr.vrID
@@ -1288,8 +1288,8 @@ func (s *Service) HandleSavedComparison(tmpl *template.Template) http.HandlerFun
 
 		itemRows, err := s.DB.Query(fmt.Sprintf(`
 			SELECT vr.id, vri.id, vri.charge_type, vri.amount, vri.unit, vri.manually_edited, vr.parsed_by
-			FROM vendor_rates vr
-			JOIN vendor_rate_items vri ON vri.vendor_rate_id = vr.id
+			FROM carrier_rates vr
+			JOIN carrier_rate_items vri ON vri.carrier_rate_id = vr.id
 			WHERE vr.rate_request_id = ? AND vr.id IN (%s)
 			ORDER BY vr.id, vri.charge_type
 		`, placeholders), args...)
@@ -1299,7 +1299,7 @@ func (s *Service) HandleSavedComparison(tmpl *template.Template) http.HandlerFun
 			return
 		}
 
-		vendorItemMap := make(map[int]map[string]RateItemCell)
+		carrierItemMap := make(map[int]map[string]RateItemCell)
 		for itemRows.Next() {
 			var vrID, itemID, manuallyEdited int
 			var ct, unit, parsedBy string
@@ -1310,10 +1310,10 @@ func (s *Service) HandleSavedComparison(tmpl *template.Template) http.HandlerFun
 				http.Error(w, "Failed to load rate items", http.StatusInternalServerError)
 				return
 			}
-			if vendorItemMap[vrID] == nil {
-				vendorItemMap[vrID] = make(map[string]RateItemCell)
+			if carrierItemMap[vrID] == nil {
+				carrierItemMap[vrID] = make(map[string]RateItemCell)
 			}
-			vendorItemMap[vrID][ct] = RateItemCell{
+			carrierItemMap[vrID][ct] = RateItemCell{
 				ID:             itemID,
 				Amount:         amount,
 				Unit:           unit,
@@ -1324,19 +1324,19 @@ func (s *Service) HandleSavedComparison(tmpl *template.Template) http.HandlerFun
 		}
 		itemRows.Close()
 
-		// Build SavedVendorColumn slice in rank order.
-		vendors := make([]SavedVendorColumn, len(lineupRows))
+		// Build SavedCarrierColumn slice in rank order.
+		carriers := make([]SavedCarrierColumn, len(lineupRows))
 		for i, lr := range lineupRows {
-			items := vendorItemMap[lr.vrID]
+			items := carrierItemMap[lr.vrID]
 			if items == nil {
 				items = make(map[string]RateItemCell)
 			}
 			lh := items["linehaul"].Amount
 			fuel := items["fuel"].Amount
 			total := lh + lh*fuel/100
-			vendors[i] = SavedVendorColumn{
-				VendorRateID: lr.vrID,
-				VendorName:   lr.vName,
+			carriers[i] = SavedCarrierColumn{
+				CarrierRateID: lr.vrID,
+				CarrierName:   lr.vName,
 				Rank:         lr.rank,
 				Items:        items,
 				Total:        total,
@@ -1344,9 +1344,9 @@ func (s *Service) HandleSavedComparison(tmpl *template.Template) http.HandlerFun
 			}
 		}
 
-		// Collect charge types present in lineup vendors, in canonical order.
+		// Collect charge types present in lineup carriers, in canonical order.
 		presentTypes := make(map[string]bool)
-		for _, vc := range vendors {
+		for _, vc := range carriers {
 			for ct := range vc.Items {
 				presentTypes[ct] = true
 			}
@@ -1365,7 +1365,7 @@ func (s *Service) HandleSavedComparison(tmpl *template.Template) http.HandlerFun
 		rawSums := make(map[string]float64)
 		rawUnits := make(map[string]string)
 		counts := make(map[string]int)
-		for _, vc := range vendors {
+		for _, vc := range carriers {
 			for ct, cell := range vc.Items {
 				rawSums[ct] += cell.Amount
 				rawUnits[ct] = cell.Unit
@@ -1382,22 +1382,22 @@ func (s *Service) HandleSavedComparison(tmpl *template.Template) http.HandlerFun
 			}
 		}
 		var totalSum float64
-		for _, vc := range vendors {
+		for _, vc := range carriers {
 			totalSum += vc.Total
 		}
 		var avgTotal string
-		if len(vendors) > 0 {
-			avgTotal = rates.FmtCellAmount(totalSum/float64(len(vendors)), "$")
+		if len(carriers) > 0 {
+			avgTotal = rates.FmtCellAmount(totalSum/float64(len(carriers)), "$")
 		}
 
-		// Build lineupBases JSON: index 0 = averages (raw floats), 1..N = vendor amounts.
+		// Build lineupBases JSON: index 0 = averages (raw floats), 1..N = carrier amounts.
 		// linehaul_fuel is pre-computed as the actual total (not re-derived from avgLH × avgFuel%).
-		basesList := make([]map[string]float64, 1+len(vendors))
+		basesList := make([]map[string]float64, 1+len(carriers))
 		basesList[0] = rawAvgFloats
-		if len(vendors) > 0 {
-			basesList[0]["linehaul_fuel"] = totalSum / float64(len(vendors))
+		if len(carriers) > 0 {
+			basesList[0]["linehaul_fuel"] = totalSum / float64(len(carriers))
 		}
-		for i, vc := range vendors {
+		for i, vc := range carriers {
 			m := make(map[string]float64, len(vc.Items))
 			for ct, cell := range vc.Items {
 				m[ct] = cell.Amount
@@ -1461,7 +1461,7 @@ func (s *Service) HandleSavedComparison(tmpl *template.Template) http.HandlerFun
 				RateRequest:        rr,
 				Lane:               *lane,
 				ChargeRows:         chargeRows,
-				Vendors:            vendors,
+				Carriers:            carriers,
 				Averages:           averages,
 				AvgTotal:           avgTotal,
 				Markups:            markupsMap,
@@ -1625,7 +1625,7 @@ func (s *Service) HandleToggleLock() http.HandlerFunc {
 }
 
 // computeCarouselBase loads the base LH+Fuel total and avg fuel% for a given rate request and
-// carousel index. carouselIdx=0 uses the average of all lineup vendors; N uses the vendor at rank N.
+// carousel index. carouselIdx=0 uses the average of all lineup carriers; N uses the carrier at rank N.
 // Mirrors the lineupBases construction in HandleSavedComparison exactly.
 func (s *Service) computeCarouselBase(rrID, laneID, carouselIdx int) (baseLHFuel, baseFuelPct float64, err error) {
 	type lineupItem struct {
@@ -1633,8 +1633,8 @@ func (s *Service) computeCarouselBase(rrID, laneID, carouselIdx int) (baseLHFuel
 		vrID int
 	}
 	liRows, err := s.DB.Query(`
-		SELECT vl.rank, vl.vendor_rate_id
-		FROM vendor_lineups vl
+		SELECT vl.rank, vl.carrier_rate_id
+		FROM carrier_lineups vl
 		WHERE vl.lane_id = ?
 		ORDER BY vl.rank
 	`, laneID)
@@ -1666,36 +1666,36 @@ func (s *Service) computeCarouselBase(rrID, laneID, carouselIdx int) (baseLHFuel
 	for i, id := range targetVRIDs {
 		args[i+1] = id
 	}
-	vendorLHFuel := make(map[int][2]float64) // vrID → [lh, fuel%]
+	carrierLHFuel := make(map[int][2]float64) // vrID → [lh, fuel%]
 	iRows, err := s.DB.Query(fmt.Sprintf(`
-		SELECT vri.vendor_rate_id, vri.charge_type, vri.amount
-		FROM vendor_rates vr
-		JOIN vendor_rate_items vri ON vri.vendor_rate_id = vr.id
+		SELECT vri.carrier_rate_id, vri.charge_type, vri.amount
+		FROM carrier_rates vr
+		JOIN carrier_rate_items vri ON vri.carrier_rate_id = vr.id
 		WHERE vr.rate_request_id = ? AND vr.id IN (%s)
 		  AND vri.charge_type IN ('linehaul', 'fuel')
 	`, placeholders), args...)
 	if err != nil {
-		return 0, 0, fmt.Errorf("query vendor items rr=%d: %w", rrID, err)
+		return 0, 0, fmt.Errorf("query carrier items rr=%d: %w", rrID, err)
 	}
 	for iRows.Next() {
 		var vrID int
 		var ct string
 		var amount float64
 		iRows.Scan(&vrID, &ct, &amount)
-		pair := vendorLHFuel[vrID]
+		pair := carrierLHFuel[vrID]
 		if ct == "linehaul" {
 			pair[0] = amount
 		} else {
 			pair[1] = amount
 		}
-		vendorLHFuel[vrID] = pair
+		carrierLHFuel[vrID] = pair
 	}
 	iRows.Close()
 
 	var totalSum, fuelSum float64
 	var fuelCount int
 	for _, vrID := range targetVRIDs {
-		pair := vendorLHFuel[vrID]
+		pair := carrierLHFuel[vrID]
 		lh, fuel := pair[0], pair[1]
 		totalSum += lh + lh*fuel/100
 		if fuel > 0 {
@@ -1913,13 +1913,13 @@ func (s *Service) HandleGenerateCSV() http.HandlerFunc {
 			markupLookup[e.chargeType] = e
 		}
 
-		// Determine which vendor's base rates to use: carousel index 0 = average, N = rank-N vendor.
+		// Determine which carrier's base rates to use: carousel index 0 = average, N = rank-N carrier.
 		carouselIdx, _ := strconv.Atoi(r.FormValue("base_carousel_idx"))
 
 		baseLHFuel, baseFuelPct, err := s.computeCarouselBase(rrID, laneID, carouselIdx)
 		if err != nil {
 			log.Printf("HandleGenerateCSV: computeCarouselBase rr=%d: %v", rrID, err)
-			http.Error(w, "Failed to load vendor rates", http.StatusInternalServerError)
+			http.Error(w, "Failed to load carrier rates", http.StatusInternalServerError)
 			return
 		}
 
@@ -2078,8 +2078,8 @@ func (s *Service) HandleGenerateCSV() http.HandlerFunc {
 func (s *Service) availableChargeTypesAfterAdd(rrID int, newCT string) []ChargeTypeRow {
 	rows, err := s.DB.Query(`
 		SELECT DISTINCT vri.charge_type
-		FROM vendor_rate_items vri
-		JOIN vendor_rates vr ON vr.id = vri.vendor_rate_id
+		FROM carrier_rate_items vri
+		JOIN carrier_rates vr ON vr.id = vri.carrier_rate_id
 		WHERE vr.rate_request_id = ?
 	`, rrID)
 	present := map[string]bool{newCT: true}
@@ -2123,42 +2123,42 @@ func (s *Service) HandleAddComparisonRow() http.HandlerFunc {
 			return
 		}
 
-		// Load all vendor_rates for this rate request.
+		// Load all carrier_rates for this rate request.
 		vRows, err := s.DB.Query(`
 			SELECT vr.id, v.name
-			FROM vendor_rates vr
-			JOIN vendors v ON v.id = vr.vendor_id
+			FROM carrier_rates vr
+			JOIN carriers v ON v.id = vr.carrier_id
 			WHERE vr.rate_request_id = ?
 			ORDER BY v.name
 		`, rrID)
 		if err != nil {
-			log.Printf("HandleAddComparisonRow: query vendors rr=%d: %v", rrID, err)
-			http.Error(w, "Failed to load vendors", http.StatusInternalServerError)
+			log.Printf("HandleAddComparisonRow: query carriers rr=%d: %v", rrID, err)
+			http.Error(w, "Failed to load carriers", http.StatusInternalServerError)
 			return
 		}
-		type vendorRow struct {
+		type carrierRow struct {
 			vrID int
 			name string
 		}
-		var vendors []vendorRow
+		var carriers []carrierRow
 		for vRows.Next() {
-			var vr vendorRow
+			var vr carrierRow
 			vRows.Scan(&vr.vrID, &vr.name)
-			vendors = append(vendors, vr)
+			carriers = append(carriers, vr)
 		}
 		vRows.Close()
 
-		// Check which vendors already have this charge type.
+		// Check which carriers already have this charge type.
 		existingCells := make(map[int]RateItemCell)
-		for _, vr := range vendors {
+		for _, vr := range carriers {
 			var itemID, manuallyEdited int
 			var amount float64
 			var unit, parsedBy string
 			err := s.DB.QueryRow(`
 				SELECT vri.id, vri.amount, vri.unit, vri.manually_edited, vr.parsed_by
-				FROM vendor_rate_items vri
-				JOIN vendor_rates vr ON vr.id = vri.vendor_rate_id
-				WHERE vri.vendor_rate_id = ? AND vri.charge_type = ?
+				FROM carrier_rate_items vri
+				JOIN carrier_rates vr ON vr.id = vri.carrier_rate_id
+				WHERE vri.carrier_rate_id = ? AND vri.charge_type = ?
 			`, vr.vrID, ct).Scan(&itemID, &amount, &unit, &manuallyEdited, &parsedBy)
 			if err == nil {
 				existingCells[vr.vrID] = RateItemCell{
@@ -2171,7 +2171,7 @@ func (s *Service) HandleAddComparisonRow() http.HandlerFunc {
 
 		var sb strings.Builder
 		fmt.Fprintf(&sb, "<tr>\n<td>%s</td>\n", ctLabel(ct))
-		for _, vr := range vendors {
+		for _, vr := range carriers {
 			if cell, ok := existingCells[vr.vrID]; ok {
 				cssClass := ""
 				if cell.ManuallyEdited {
@@ -2180,11 +2180,11 @@ func (s *Service) HandleAddComparisonRow() http.HandlerFunc {
 					cssClass = "cell-llm"
 				}
 				fmt.Fprintf(&sb,
-					`<td class="cell-center-click %s" hx-get="/vendor-rate-items/%d/edit" hx-trigger="click" hx-target="this" hx-swap="outerHTML" title="Click to edit">%s</td>`,
+					`<td class="cell-center-click %s" hx-get="/carrier-rate-items/%d/edit" hx-trigger="click" hx-target="this" hx-swap="outerHTML" title="Click to edit">%s</td>`,
 					cssClass, cell.ID, cell.Display)
 			} else {
 				fmt.Fprintf(&sb,
-					`<td class="cell-center-empty" hx-get="/vendor-rates/%d/items/new?charge_type=%s" hx-trigger="click" hx-target="this" hx-swap="outerHTML" title="Click to add">—</td>`,
+					`<td class="cell-center-empty" hx-get="/carrier-rates/%d/items/new?charge_type=%s" hx-trigger="click" hx-target="this" hx-swap="outerHTML" title="Click to add">—</td>`,
 					vr.vrID, ct)
 			}
 		}

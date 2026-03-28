@@ -111,8 +111,8 @@
     <div class="detail-grid">
         <span class="detail-label">Reference</span>
         <span class="detail-value"><a href="/rate-requests/{{ .RateRequest.ID }}">{{ .RateRequest.ReferenceID }}</a></span>
-        <span class="detail-label">Vendors</span>
-        <span class="detail-value">{{ .RateRequest.VendorCount }}</span>
+        <span class="detail-label">Carriers</span>
+        <span class="detail-value">{{ .RateRequest.CarrierCount }}</span>
         <span class="detail-label">Responses</span>
         {{ if or (eq .Lane.Status "rates_requested") (eq .Lane.Status "rates_received") }}
         <span id="responses-received" class="detail-value"

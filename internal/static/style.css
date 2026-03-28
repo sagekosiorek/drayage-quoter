@@ -294,7 +294,7 @@ a.btn-secondary:hover { background: #eee; color: var(--color-text); }
     margin: 0; font-family: inherit; word-break: break-word; flex: 1;
 }
 
-/* Collapsible sections (vendor detail add-contact / add-notes) */
+/* Collapsible sections (carrier detail add-contact / add-notes) */
 .collapse-section  { margin-top: .75rem; }
 .collapse-section + .collapse-section { margin-top: .5rem; }
 .collapse-summary  { cursor: pointer; font-size: .875rem; color: #444; user-select: none; }
@@ -320,12 +320,12 @@ a.btn-secondary:hover { background: #eee; color: var(--color-text); }
 .req-tag { padding: 2px 9px; border-radius: var(--radius-sm); font-size: .8rem; background: #fee2e2; color: var(--color-danger); font-weight: 500; }
 
 /* -------------------------------------------------------
-   Vendor views
+   Carrier views
 ------------------------------------------------------- */
-/* Preferred star indicator in the vendor list */
+/* Preferred star indicator in the carrier list */
 .pref-star { color: #ca8a04; margin-left: .3rem; font-size: .9em; }
 
-/* Preference toggle button in vendor detail */
+/* Preference toggle button in carrier detail */
 .pref-toggle {
     font-size: .8rem; padding: 2px 8px;
     border: 1px solid #d1d5db; border-radius: var(--radius-pill);
@@ -349,7 +349,7 @@ a.btn-secondary:hover { background: #eee; color: var(--color-text); }
 }
 .btn-link-danger:hover { color: #7f1d1d; }
 
-/* Vendor notes */
+/* Carrier notes */
 .note-item { padding: .6rem 0; border-bottom: 1px solid var(--color-border-light); }
 .note-item:last-child { border-bottom: none; }
 .note-content { margin: 0 0 .2rem; font-size: .9rem; white-space: pre-wrap; }
@@ -360,18 +360,18 @@ a.btn-secondary:hover { background: #eee; color: var(--color-text); }
 ------------------------------------------------------- */
 .rr-layout { display: grid; grid-template-columns: 1fr 500px; gap: 1.5rem; align-items: start; }
 
-/* Vendor checklist */
-.rr-vendor-list { border: 1px solid var(--color-border); border-radius: var(--radius-md); max-height: 380px; overflow-y: auto; }
-.rr-vendor-item { display: flex; align-items: flex-start; gap: .6rem; padding: .5rem .75rem; border-bottom: 1px solid var(--color-border-light); }
-.rr-vendor-item:last-child { border-bottom: none; }
-.rr-vendor-item input[type="checkbox"] { margin-top: 3px; flex-shrink: 0; }
-.rr-vendor-item-meta { font-size: .78rem; color: var(--color-muted); }
-.rr-vendor-item-warn { font-size: .78rem; color: #b45309; }
+/* Carrier checklist */
+.rr-carrier-list { border: 1px solid var(--color-border); border-radius: var(--radius-md); max-height: 380px; overflow-y: auto; }
+.rr-carrier-item { display: flex; align-items: flex-start; gap: .6rem; padding: .5rem .75rem; border-bottom: 1px solid var(--color-border-light); }
+.rr-carrier-item:last-child { border-bottom: none; }
+.rr-carrier-item input[type="checkbox"] { margin-top: 3px; flex-shrink: 0; }
+.rr-carrier-item-meta { font-size: .78rem; color: var(--color-muted); }
+.rr-carrier-item-warn { font-size: .78rem; color: #b45309; }
 
 /* Rate request detail responded row */
 .rr-responded { background: #f0fdf4; }
 
-/* Vendor port blocks */
+/* Carrier port blocks */
 .port-block { margin: .75rem 0 1.25rem; border: 1px solid var(--color-border); border-radius: var(--radius-md); }
 .port-block-header {
     display: flex; align-items: center; gap: .75rem;
@@ -421,9 +421,9 @@ td.cell-llm:hover, td.cell-edited:hover { opacity: .85; }
 .carousel-label  { font-size: .72rem; font-weight: 600; color: var(--color-brand); display: inline-block; width: 90px; text-align: center; word-break: break-word; line-height: 1.2; }
 .carousel-sub    { font-size: .7rem; color: var(--color-muted); margin-top: .2rem; }
 
-/* Vendor column sub-header */
-.col-vendor-name { font-weight: 600; }
-.col-vendor-rank { font-size: .7rem; color: var(--color-muted); }
+/* Carrier column sub-header */
+.col-carrier-name { font-weight: 600; }
+.col-carrier-rank { font-size: .7rem; color: var(--color-muted); }
 
 /* -------------------------------------------------------
    Legend swatches (comparison page)

@@ -2,9 +2,9 @@
 // config. One file maps to one or more tables; parent tables must appear before
 // children in the config.
 //
-//	go run ./cmd/import --file vendors.xlsx --config import-configs/vendors.yaml
-//	go run ./cmd/import --file vendors.csv  --config import-configs/vendors.yaml --dry-run
-//	go run ./cmd/import --file vendors.csv  --config import-configs/vendors.yaml --db /data/drayage.db
+//	go run ./cmd/import --file carriers.xlsx --config import-configs/carriers.yaml
+//	go run ./cmd/import --file carriers.csv  --config import-configs/carriers.yaml --dry-run
+//	go run ./cmd/import --file carriers.csv  --config import-configs/carriers.yaml --db /data/drayage.db
 package main
 
 import (
