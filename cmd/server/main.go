@@ -103,6 +103,18 @@ func main() {
 		BaseURL: baseURL,
 	}
 
+	// Wire LLM corrector when ANTHROPIC_API_KEY is present; fall back to no-op in dev.
+	if key := os.Getenv("ANTHROPIC_API_KEY"); key != "" {
+		model := os.Getenv("ANTHROPIC_MODEL")
+		if model == "" {
+			model = "claude-haiku-4-5-20251001"
+		}
+		ratesSvc.LLM = &rates.ClaudeCorrector{APIKey: key, Model: model}
+		log.Printf("rates: LLM correction enabled (model: %s)", model)
+	} else {
+		log.Println("rates: ANTHROPIC_API_KEY not set — LLM correction disabled (regex only)")
+	}
+
 	// Deadline poller: check for expired rate request deadlines every 5 minutes.
 	go func() {
 		ticker := time.NewTicker(5 * time.Minute)

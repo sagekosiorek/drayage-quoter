@@ -27,7 +27,12 @@
 
     <!-- Left: comparison table + lineup save -->
     <div>
-        <span class="label-caps">Set ranks: 1 = primary carrier, 2 = secondary, etc. Set to 0 or blank to exclude.</span>
+        <p class="label-caps">
+            <span>Set ranks: 1 = primary carrier, 2 = secondary, etc. Set to 0 or blank to exclude.</span>
+            <span class="legend-swatch legend-swatch-llm"></span> LLM-corrected &nbsp;
+            <span class="legend-swatch legend-swatch-edited"></span> Manually edited &nbsp;
+            Click any cell to edit its value.
+        </p>
 
         <form id="lineup-form" method="POST" action="/rate-requests/{{ .Data.RateRequest.ID }}/lineup">
 
@@ -122,14 +127,7 @@
                         hx-swap="beforeend">Add Row</button>
             </div>
             {{ end }}
-
         </form>
-
-        <p class="legend-row">
-            <span class="legend-swatch legend-swatch-llm"></span> LLM-corrected &nbsp;
-            <span class="legend-swatch legend-swatch-edited"></span> Manually edited &nbsp;
-            Click any cell to edit its value.
-        </p>
     </div>
 
     <!-- Right: lane details / email side panel -->
