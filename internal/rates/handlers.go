@@ -334,6 +334,7 @@ func (s *Service) HandleIngestConfirm() http.HandlerFunc {
 		amountStrs := r.Form["amount[]"]
 		units := r.Form["unit[]"]
 		origAmountStrs := r.Form["original_amount[]"]
+		sources := r.Form["source[]"]
 
 		// Build items; detect edits by comparing amount vs original_amount.
 		anyEdited := false
@@ -349,11 +350,15 @@ func (s *Service) HandleIngestConfirm() http.HandlerFunc {
 			if edited {
 				manuallyEdited = 1
 			}
+			src := safeIdx(sources, i)
+			if src != "regex" && src != "llm" {
+				src = "regex"
+			}
 			items = append(items, RateItem{
 				ChargeType: safeIdx(chargeTypes, i),
 				Amount:     amt,
 				Unit:       safeIdx(units, i),
-				Source:     "manual",
+				Source:     src,
 				Note:       strconv.Itoa(manuallyEdited), // reuse Note to carry flag into saveCarrierRate
 			})
 		}
@@ -383,8 +388,8 @@ func (s *Service) HandleIngestConfirm() http.HandlerFunc {
 		for _, item := range items {
 			manuallyEdited, _ := strconv.Atoi(item.Note)
 			_, err := tx.Exec(
-				`INSERT INTO carrier_rate_items (carrier_rate_id, charge_type, amount, unit, manually_edited) VALUES (?, ?, ?, ?, ?)`,
-				vrID, item.ChargeType, item.Amount, item.Unit, manuallyEdited,
+				`INSERT INTO carrier_rate_items (carrier_rate_id, charge_type, amount, unit, manually_edited, parsed_by) VALUES (?, ?, ?, ?, ?, ?)`,
+				vrID, item.ChargeType, item.Amount, item.Unit, manuallyEdited, item.Source,
 			)
 			if err != nil {
 				http.Error(w, "Insert rate items failed", http.StatusInternalServerError)
@@ -456,8 +461,8 @@ func (s *Service) saveCarrierRate(rrID, carrierID int, rawEmail, parsedBy string
 
 	for _, item := range items {
 		if _, err := tx.Exec(
-			`INSERT INTO carrier_rate_items (carrier_rate_id, charge_type, amount, unit) VALUES (?, ?, ?, ?)`,
-			vrID, item.ChargeType, item.Amount, item.Unit,
+			`INSERT INTO carrier_rate_items (carrier_rate_id, charge_type, amount, unit, parsed_by) VALUES (?, ?, ?, ?, ?)`,
+			vrID, item.ChargeType, item.Amount, item.Unit, item.Source,
 		); err != nil {
 			return err
 		}
@@ -913,7 +918,7 @@ func (s *Service) HandleCreateRateItem() http.HandlerFunc {
 		}
 
 		res, err := s.DB.Exec(
-			`INSERT INTO carrier_rate_items (carrier_rate_id, charge_type, amount, unit, manually_edited) VALUES (?, ?, ?, ?, 1)`,
+			`INSERT INTO carrier_rate_items (carrier_rate_id, charge_type, amount, unit, manually_edited, parsed_by) VALUES (?, ?, ?, ?, 1, 'manual')`,
 			vrID, ct, amount, unit,
 		)
 		if err != nil {

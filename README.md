@@ -82,3 +82,11 @@ fly ssh console -C "/seed --db /data/drayage.db" --reset
 3. Set Fly.io secrets: fly secrets set MAILGUN_API_KEY=... MAILGUN_DOMAIN=... MAILGUN_WEBHOOK_SIGNING_KEY=...
 
 \*If email is not set up, the app will default to logging the magic login link to terminal output. However, outbound notifications nor rate ingests will work without email configured.
+
+### LLM Setup
+Modular model setup. Comes with a port built for Claude, but any other model can be plugged in with small scaffolding additions to `internal/rates/llm.go`. See `ClaudeCorrector` for example.
+
+Wire up by adding these to your .env file:
+`ANTHROPIC_API_KEY=` -> ClaudeCorrector
+`ANTRHOPIC_MODEL=`   -> optional model override (defaults to Haiku)
+(unset)              -> NoopCorrector, logs "LLM correction disabled"

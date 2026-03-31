@@ -1055,7 +1055,7 @@ func (s *Service) HandleComparison(tmpl *template.Template) http.HandlerFunc {
 		// Load all rate items for this rate request, grouped by carrier_rate.
 		itemRows, err := s.DB.Query(`
 			SELECT vr.id, v.name,
-			       vri.id, vri.charge_type, vri.amount, vri.unit, vri.manually_edited, vr.parsed_by
+			       vri.id, vri.charge_type, vri.amount, vri.unit, vri.manually_edited, vri.parsed_by
 			FROM carrier_rates vr
 			JOIN carriers v ON vr.carrier_id = v.id
 			JOIN carrier_rate_items vri ON vri.carrier_rate_id = vr.id
