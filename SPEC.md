@@ -561,4 +561,4 @@ Styling, last-min changes, stress-testing.
 ### Milestone 8: Final refinements (Sprint 3)
 - [x] Delete a lane function
 - [x] Add a carrier to a rate request after-the-fact
-- [ ] Wire up LLM for rate parsing
+- [x] Wire up LLM for rate parsing
