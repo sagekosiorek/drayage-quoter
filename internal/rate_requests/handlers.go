@@ -823,6 +823,122 @@ func (s *Service) HandleBlastStatus() http.HandlerFunc {
 	}
 }
 
+// HandleAddCarriersForm returns an inline form fragment listing carriers for the lane's port that
+// are not already part of the blast. Intended for HTMX swap into #add-carrier-section.
+// GET /rate-requests/{id}/add-carriers-form
+func (s *Service) HandleAddCarriersForm() http.HandlerFunc {
+	tmpl := template.Must(template.New("add-carriers-form").Parse(`
+<form method="POST" action="/rate-requests/{{.RRID}}/add-carriers">
+<p class="detail-section" style="margin-top:.25rem;">Add Carriers</p>
+{{if .Carriers}}
+<div class="rr-carrier-list">
+{{range .Carriers}}<div class="rr-carrier-item">
+<input type="checkbox" class="carrier-checkbox" name="carrier_ids" value="{{.CarrierID}}" {{if .Preferred}}checked{{end}} data-preferred="{{.Preferred}}">
+<div>
+<div style="font-size:.9rem;font-weight:500;">{{.CarrierName}}{{if .Preferred}} <span class="pref-star">★</span>{{end}}</div>
+{{range .Contacts}}<div class="rr-carrier-item-meta">{{.Name}}{{if and .Name .Email}} · {{end}}{{.Email}}</div>{{end}}
+{{if not .Contacts}}<div class="rr-carrier-item-warn">(no contact on file)</div>{{end}}
+</div>
+</div>{{end}}
+</div>
+<div class="form-actions">
+<button type="submit" class="primary">Save &amp; Send →</button>
+</div>
+{{else}}
+<p class="empty-state">All carriers for this port are already on this blast.</p>
+{{end}}
+</form>`))
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		user := auth.UserFromContext(r.Context())
+
+		id, err := strconv.Atoi(r.PathValue("id"))
+		if err != nil || id <= 0 {
+			http.Error(w, "Not found", http.StatusNotFound)
+			return
+		}
+
+		// Load lane ID and origin port ID for this rate request.
+		var laneID int
+		if err := s.DB.QueryRow(`SELECT lane_id FROM rate_requests WHERE id = ?`, id).Scan(&laneID); err != nil {
+			http.Error(w, fmt.Sprintf("rate request %d not found", id), http.StatusNotFound)
+			return
+		}
+		lane, err := s.fetchLane(laneID)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("load lane for rate request %d: %v", id, err), http.StatusInternalServerError)
+			return
+		}
+
+		// Collect carrier IDs already in the blast.
+		existing := map[int]struct{}{}
+		rows, err := s.DB.Query(`SELECT carrier_id FROM rate_request_carriers WHERE rate_request_id = ?`, id)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("load existing carriers for rate request %d: %v", id, err), http.StatusInternalServerError)
+			return
+		}
+		for rows.Next() {
+			var cid int
+			if err := rows.Scan(&cid); err != nil {
+				rows.Close()
+				http.Error(w, fmt.Sprintf("scan carrier id: %v", err), http.StatusInternalServerError)
+				return
+			}
+			existing[cid] = struct{}{}
+		}
+		rows.Close()
+
+		all, err := s.fetchCarriersForPort(lane.OriginPortID, user.ID)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("load carriers for port %d: %v", lane.OriginPortID, err), http.StatusInternalServerError)
+			return
+		}
+
+		var available []CarrierSelectRow
+		for _, c := range all {
+			if _, found := existing[c.CarrierID]; !found {
+				available = append(available, c)
+			}
+		}
+
+		w.Header().Set("Content-Type", "text/html")
+		tmpl.Execute(w, map[string]any{
+			"RRID":     id,
+			"Carriers": available,
+		})
+	}
+}
+
+// HandleAddCarriersSave appends newly selected carriers to an existing blast and redirects back.
+// POST /rate-requests/{id}/add-carriers
+func (s *Service) HandleAddCarriersSave() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id, err := strconv.Atoi(r.PathValue("id"))
+		if err != nil || id <= 0 {
+			http.Error(w, "Not found", http.StatusNotFound)
+			return
+		}
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "Bad request", http.StatusBadRequest)
+			return
+		}
+		for _, cidStr := range r.Form["carrier_ids"] {
+			cid, err := strconv.Atoi(cidStr)
+			if err != nil || cid <= 0 {
+				continue
+			}
+			if _, err := s.DB.Exec(
+				`INSERT OR IGNORE INTO rate_request_carriers (rate_request_id, carrier_id) VALUES (?, ?)`,
+				id, cid,
+			); err != nil {
+				http.Error(w, fmt.Sprintf("add carrier %d to rate request %d: %v", cid, id, err), http.StatusInternalServerError)
+				return
+			}
+		}
+		http.Redirect(w, r, fmt.Sprintf("/rate-requests/%d", id), http.StatusSeeOther)
+	}
+}
+
 // HandleLineupCTA returns an HTML fragment for the "Build Carrier Lineup" CTA button.
 // Polls until lane status is rates_received, then returns the static button (polling stops).
 // GET /rate-requests/{id}/lineup-cta
@@ -939,7 +1055,7 @@ func (s *Service) HandleComparison(tmpl *template.Template) http.HandlerFunc {
 		// Load all rate items for this rate request, grouped by carrier_rate.
 		itemRows, err := s.DB.Query(`
 			SELECT vr.id, v.name,
-			       vri.id, vri.charge_type, vri.amount, vri.unit, vri.manually_edited, vr.parsed_by
+			       vri.id, vri.charge_type, vri.amount, vri.unit, vri.manually_edited, vri.parsed_by
 			FROM carrier_rates vr
 			JOIN carriers v ON vr.carrier_id = v.id
 			JOIN carrier_rate_items vri ON vri.carrier_rate_id = vr.id
@@ -1200,6 +1316,7 @@ type SavedComparisonData struct {
 	LockedCustomerLHFuel float64 // frozen customer LH+Fuel total at lock time (0 when unlocked)
 	LockedCustomerFuelPct float64 // frozen fuel% at lock time (0 when unlocked)
 	BaseCarouselIdx      int     // carousel index active when locked; 0 when unlocked
+	ReadOnly             bool    // true for non-owners: hides edit controls, disables all inputs
 }
 
 // HandleSavedComparison renders the markup entry + CSV generation page for a lineup.
@@ -1232,6 +1349,14 @@ func (s *Service) HandleSavedComparison(tmpl *template.Template) http.HandlerFun
 			http.Error(w, "Failed to load lane", http.StatusInternalServerError)
 			return
 		}
+
+		var ownerID int
+		if err := s.DB.QueryRowContext(r.Context(), `SELECT owner_id FROM lanes WHERE id = ?`, rr.LaneID).Scan(&ownerID); err != nil {
+			log.Printf("HandleSavedComparison: fetch owner lane=%d: %v", rr.LaneID, err)
+			http.Error(w, "Failed to load lane owner", http.StatusInternalServerError)
+			return
+		}
+		readOnly := user.ID != ownerID
 
 		// Load lineup: rank-ordered carrier_rate_ids with carrier names.
 		type lineupRow struct {
@@ -1471,6 +1596,7 @@ func (s *Service) HandleSavedComparison(tmpl *template.Template) http.HandlerFun
 				LockedCustomerLHFuel:  custLHFuel.Float64,
 				LockedCustomerFuelPct: custFuelPct.Float64,
 				BaseCarouselIdx:       baseCarouselIdx,
+				ReadOnly:              readOnly,
 			},
 		}); err != nil {
 			log.Printf("HandleSavedComparison: template execution rr=%d: %v", rrID, err)
@@ -1799,6 +1925,16 @@ func (s *Service) HandleSaveMarkups() http.HandlerFunc {
 		} else if err != nil {
 			log.Printf("HandleSaveMarkups: fetch rr=%d: %v", rrID, err)
 			http.Error(w, "Failed to load rate request", http.StatusInternalServerError)
+			return
+		}
+		// Guard: autosave must not modify a locked markup row. The HTMX debounce can fire
+		// after the CSV auto-lock runs (race: user types a value then clicks Save within 300ms),
+		// which would DELETE the markups row and recreate it without customer_lhfuel — corrupting
+		// the frozen customer rate and producing a false negative P&L on reload.
+		var isLocked bool
+		s.DB.QueryRow(`SELECT locked FROM markups WHERE lane_id = ?`, laneID).Scan(&isLocked)
+		if isLocked {
+			fmt.Fprint(w, `<span class="text-muted">Saved ✓</span>`)
 			return
 		}
 		tx, err := s.DB.Begin()
