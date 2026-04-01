@@ -2,9 +2,11 @@
 <div class="page-header">
     <p class="back-link"><a href="/lanes/{{ .Data.Lane.ID }}">← Back to lane</a></p>
     <div class="flex-row">
+        {{ if not .Data.ReadOnly }}
         <div class="flex-row" style="margin-top:1rem;">
             <a href="/rate-requests/{{ .Data.RateRequest.ID }}/comparison" class="btn-secondary">Edit Carrier Lineup and Rates</a>
         </div>
+        {{ end }}
     </div>
 </div>
 
@@ -53,14 +55,16 @@ window.chargeTypeUnits = { {{- range .Data.ChargeRows }}"{{ .Key }}":"{{ .Unit }
 
         <form method="POST" action="/rate-requests/{{ .Data.RateRequest.ID }}/csv" id="csv-form">
             <div class="flex-row" style="margin-top:1rem;gap:1rem;">
+                {{ if not .Data.ReadOnly }}
                 <button type="submit" class="primary">Save Quote and Generate CSV →</button>
+                {{ end }}
                 {{ if gt (len .Data.Carriers) 1 }}
                 <button type="button" id="toggle-avg-btn" class="btn-secondary">Show average</button>
                 {{ end }}
                 <span id="autosave-indicator" class="label-caps text-muted"></span>
             </div>
 
-            {{ if not .Data.Locked }}
+            {{ if and (not .Data.Locked) (not .Data.ReadOnly) }}
             <!-- Auto-save trigger: fires on any form field change, debounced 300ms -->
             <div hx-post="/rate-requests/{{ .Data.RateRequest.ID }}/markups"
                  hx-trigger="change delay:300ms from:#csv-form"
@@ -89,6 +93,7 @@ window.chargeTypeUnits = { {{- range .Data.ChargeRows }}"{{ .Key }}":"{{ .Unit }
                             </th>
                             <th class="col-min-sm cell-center">
                                 <div>Customer Rate</div>
+                                {{ if not .Data.ReadOnly }}
                                 <div style="margin-top:.35rem;">
                                     <button type="submit"
                                             formaction="/rate-requests/{{ .Data.RateRequest.ID }}/lock"
@@ -97,6 +102,7 @@ window.chargeTypeUnits = { {{- range .Data.ChargeRows }}"{{ .Key }}":"{{ .Unit }
                                         {{ if .Data.Locked }}Unlock{{ else }}Lock{{ end }}
                                     </button>
                                 </div>
+                                {{ end }}
                             </th>
                             <th id="col-header-0" class="cell-avg" style="min-width:110px;">Average</th>
                             {{ range .Data.Carriers }}
@@ -113,7 +119,7 @@ window.chargeTypeUnits = { {{- range .Data.ChargeRows }}"{{ .Key }}":"{{ .Unit }
                             <td></td>
                             <td></td>
                             <td class="cell-center">
-                                <select id="lhfuel-mode" name="linehaul_fuel_mode" class="input-amount-lg"{{ if .Data.Locked }} disabled{{ end }}>
+                                <select id="lhfuel-mode" name="linehaul_fuel_mode" class="input-amount-lg"{{ if or .Data.Locked .Data.ReadOnly }} disabled{{ end }}>
                                     <option value="flat"{{ if eq .Data.LHFuelMarkupMethod "flat" }} selected{{ end }}>Flat Markup</option>
                                     <option value="flat_rate"{{ if eq .Data.LHFuelMarkupMethod "flat_rate" }} selected{{ end }}>Flat Rate</option>
                                     <option value="percent"{{ if eq .Data.LHFuelMarkupMethod "percent" }} selected{{ end }}>% Markup</option>
@@ -133,7 +139,7 @@ window.chargeTypeUnits = { {{- range .Data.ChargeRows }}"{{ .Key }}":"{{ .Unit }
                                 <div style="margin-top:.25rem;">
                                     <input type="text" inputmode="decimal" name="linehaul_fuel" id="input-linehaul-markup"
                                            class="input-amount"
-                                           {{ with index $.Data.Markups "linehaul_fuel" }}{{ if ne .Value 0.0 }}value="{{ .Value }}"{{ end }}{{ end }}{{ if $.Data.Locked }} disabled{{ end }}>
+                                           {{ with index $.Data.Markups "linehaul_fuel" }}{{ if ne .Value 0.0 }}value="{{ .Value }}"{{ end }}{{ end }}{{ if or $.Data.Locked $.Data.ReadOnly }} disabled{{ end }}>
                                     <div id="lhfuel-input-label" class="text-2xs text-secondary" style="margin-top:.25rem;"></div>
                                 </div>
                             </td>
@@ -180,7 +186,7 @@ window.chargeTypeUnits = { {{- range .Data.ChargeRows }}"{{ .Key }}":"{{ .Unit }
                             <td class="cell-center">
                                 <input type="text" inputmode="decimal" name="{{ $ct }}" id="input-{{ $ct }}"
                                        class="input-amount"
-                                       {{ with index $.Data.Markups $ct }}{{ if ne .Value 0.0 }}value="{{ .Value }}"{{ end }}{{ end }}{{ if $.Data.Locked }} disabled{{ end }}>
+                                       {{ with index $.Data.Markups $ct }}{{ if ne .Value 0.0 }}value="{{ .Value }}"{{ end }}{{ end }}{{ if or $.Data.Locked $.Data.ReadOnly }} disabled{{ end }}>
                             </td>
                             <td id="avg-{{ $ct }}" class="cell-avg">{{ index $.Data.Averages $ct }}</td>
                             {{ range $.Data.Carriers }}
@@ -278,8 +284,13 @@ window.chargeTypeUnits = { {{- range .Data.ChargeRows }}"{{ .Key }}":"{{ .Unit }
             var mode     = getMode();
             cFuelPct = getBase("fuel");
             if (mode === "flat_rate") {
-                cLHFuel = inputVal;
-                markup  = inputVal - baseLHFuel;
+                if (inputVal === 0) {
+                    cLHFuel = 0;
+                    markup  = 0;
+                } else {
+                    cLHFuel = inputVal;
+                    markup  = inputVal - baseLHFuel;
+                }
             } else if (mode === "percent") {
                 cLHFuel = baseLHFuel * (1 + inputVal / 100);
                 markup  = cLHFuel - baseLHFuel;

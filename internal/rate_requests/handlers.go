@@ -1316,6 +1316,7 @@ type SavedComparisonData struct {
 	LockedCustomerLHFuel float64 // frozen customer LH+Fuel total at lock time (0 when unlocked)
 	LockedCustomerFuelPct float64 // frozen fuel% at lock time (0 when unlocked)
 	BaseCarouselIdx      int     // carousel index active when locked; 0 when unlocked
+	ReadOnly             bool    // true for non-owners: hides edit controls, disables all inputs
 }
 
 // HandleSavedComparison renders the markup entry + CSV generation page for a lineup.
@@ -1348,6 +1349,14 @@ func (s *Service) HandleSavedComparison(tmpl *template.Template) http.HandlerFun
 			http.Error(w, "Failed to load lane", http.StatusInternalServerError)
 			return
 		}
+
+		var ownerID int
+		if err := s.DB.QueryRowContext(r.Context(), `SELECT owner_id FROM lanes WHERE id = ?`, rr.LaneID).Scan(&ownerID); err != nil {
+			log.Printf("HandleSavedComparison: fetch owner lane=%d: %v", rr.LaneID, err)
+			http.Error(w, "Failed to load lane owner", http.StatusInternalServerError)
+			return
+		}
+		readOnly := user.ID != ownerID
 
 		// Load lineup: rank-ordered carrier_rate_ids with carrier names.
 		type lineupRow struct {
@@ -1587,6 +1596,7 @@ func (s *Service) HandleSavedComparison(tmpl *template.Template) http.HandlerFun
 				LockedCustomerLHFuel:  custLHFuel.Float64,
 				LockedCustomerFuelPct: custFuelPct.Float64,
 				BaseCarouselIdx:       baseCarouselIdx,
+				ReadOnly:              readOnly,
 			},
 		}); err != nil {
 			log.Printf("HandleSavedComparison: template execution rr=%d: %v", rrID, err)
@@ -1915,6 +1925,16 @@ func (s *Service) HandleSaveMarkups() http.HandlerFunc {
 		} else if err != nil {
 			log.Printf("HandleSaveMarkups: fetch rr=%d: %v", rrID, err)
 			http.Error(w, "Failed to load rate request", http.StatusInternalServerError)
+			return
+		}
+		// Guard: autosave must not modify a locked markup row. The HTMX debounce can fire
+		// after the CSV auto-lock runs (race: user types a value then clicks Save within 300ms),
+		// which would DELETE the markups row and recreate it without customer_lhfuel — corrupting
+		// the frozen customer rate and producing a false negative P&L on reload.
+		var isLocked bool
+		s.DB.QueryRow(`SELECT locked FROM markups WHERE lane_id = ?`, laneID).Scan(&isLocked)
+		if isLocked {
+			fmt.Fprint(w, `<span class="text-muted">Saved ✓</span>`)
 			return
 		}
 		tx, err := s.DB.Begin()
