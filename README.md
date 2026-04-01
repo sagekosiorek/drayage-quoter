@@ -35,36 +35,30 @@ dbs:
 for MinIO
 ```
 
-Then run Litestream as a wrapper around your
-server:
+Then run Litestream as a wrapper around your server:
 ```
 litestream replicate -config litestream.yml
 ```
 
-Or to run it as a sidecar that also starts
-your app:
+Or to run it as a sidecar that also starts your app:
 ```
 litestream replicate -config litestream.yml
 -exec "go run ./cmd/server"
 ```
 
-The -exec flag is the recommended pattern -
-Litestream starts replication, then launches
-your app as a child process. If your app
-dies, Litestream stops too. Test a restore
-with:
+The -exec flag is the recommended pattern - Litestream starts replication, then launches your app as a child process. If your app dies, Litestream stops too. Test a restore with:
 ```
 litestream restore -config litestream.yml -o
 ./restored.db /data/drayage.db
 ```
 
-### Seed with dummy data
+### Seed Drayage Quoter with dummy data
 There's a separate `/cmd/seed` binary that can be used to inject dummy data into an instance for testing purposes. These are the commands it accepts:
 ```
-go run ./cmd/seed # seeds if the DB is empty, skips otherwise
-go run ./cmd/seed --reset # wipes all non-port/user data and re-seeds
-go run ./cmd/seed --wipe # deletes all data leaving the instance empty
-go run ./cmd/seed --db <path> # targets a specific DB file
+go run ./cmd/seed               # seeds if the DB is empty, skips otherwise
+go run ./cmd/seed --reset       # wipes all non-port/user data and re-seeds
+go run ./cmd/seed --wipe        # deletes all data leaving the instance empty
+go run ./cmd/seed --db <path>   # targets a specific DB file
 ```
 
 To seed the production instance, ensure the `/cmd/seed` binary is added to the Docker image and built upon deployment. Then run via SSH:
@@ -81,12 +75,12 @@ fly ssh console -C "/seed --db /data/drayage.db" --reset
 2. Create an Inbound Route: match recipient = rates@<domain> → forward to https://<app>.fly.dev/webhooks/email/inbound
 3. Set Fly.io secrets: fly secrets set MAILGUN_API_KEY=... MAILGUN_DOMAIN=... MAILGUN_WEBHOOK_SIGNING_KEY=...
 
-\*If email is not set up, the app will default to logging the magic login link to terminal output. However, outbound notifications nor rate ingests will work without email configured.
+\*If email is not set up, the app will default to logging the login code to terminal output. However, outbound notifications nor rate ingests will work without email configured.
 
 ### LLM Setup
-Modular model setup. Comes with a port built for Claude, but any other model can be plugged in with small scaffolding additions to `internal/rates/llm.go`. See `ClaudeCorrector` for example.
+Modular model setup. Comes with scaffolding built for Claude, but any other model can be plugged in with small additions to `internal/rates/llm.go`. See `ClaudeCorrector` for example.
 
-Wire up by adding these to your .env file:
+To configure Cladue, wire it up by adding these to your .env file:
 `ANTHROPIC_API_KEY=` -> ClaudeCorrector
 `ANTRHOPIC_MODEL=`   -> optional model override (defaults to Haiku)
 (unset)              -> NoopCorrector, logs "LLM correction disabled"
