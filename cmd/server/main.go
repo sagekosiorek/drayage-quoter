@@ -103,6 +103,18 @@ func main() {
 		BaseURL: baseURL,
 	}
 
+	// Wire LLM corrector when ANTHROPIC_API_KEY is present; fall back to no-op in dev.
+	if key := os.Getenv("ANTHROPIC_API_KEY"); key != "" {
+		model := os.Getenv("ANTHROPIC_MODEL")
+		if model == "" {
+			model = "claude-haiku-4-5-20251001"
+		}
+		ratesSvc.LLM = &rates.ClaudeCorrector{APIKey: key, Model: model}
+		log.Printf("rates: LLM correction enabled (model: %s)", model)
+	} else {
+		log.Println("rates: ANTHROPIC_API_KEY not set — LLM correction disabled (regex only)")
+	}
+
 	// Deadline poller: check for expired rate request deadlines every 5 minutes.
 	go func() {
 		ticker := time.NewTicker(5 * time.Minute)
@@ -219,7 +231,9 @@ func main() {
 	mux.HandleFunc("GET /lanes/{id}/rate-request/new", authService.RequireAuth(rrSvc.HandleNewForm(rrNewTmpl)))
 	mux.HandleFunc("POST /lanes/{id}/rate-request", authService.RequireAuth(rrSvc.HandleCreate()))
 	mux.HandleFunc("GET /rate-requests/{id}", authService.RequireAuth(rrSvc.HandleDetail(rrDetailTmpl)))
-	mux.HandleFunc("GET /rate-requests/{id}/blast-status", authService.RequireAuth(rrSvc.HandleBlastStatus()))
+	mux.HandleFunc("GET /rate-requests/{id}/blast-status",      authService.RequireAuth(rrSvc.HandleBlastStatus()))
+	mux.HandleFunc("GET /rate-requests/{id}/add-carriers-form", authService.RequireAuth(rrSvc.HandleAddCarriersForm()))
+	mux.HandleFunc("POST /rate-requests/{id}/add-carriers",     authService.RequireAuth(rrSvc.HandleAddCarriersSave()))
 	mux.HandleFunc("GET /rate-requests/{id}/lineup-cta", authService.RequireAuth(rrSvc.HandleLineupCTA()))
 	mux.HandleFunc("GET /rate-requests/{id}/responses-count", authService.RequireAuth(rrSvc.HandleResponsesCount()))
 	mux.HandleFunc("GET /rate-requests/{id}/comparison", authService.RequireAuth(rrSvc.HandleComparison(rrComparisonLineupTmpl)))

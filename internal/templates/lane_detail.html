@@ -31,6 +31,9 @@
         {{ end }}
         {{ end }}
         {{ end }}
+        {{ if and (not .Lane.IsOwner) .RateRequest (or (eq .Lane.Status "quoting") (eq .Lane.Status "quoted")) }}
+        <a href="/rate-requests/{{ .RateRequest.ID }}/comparison/saved"><button>View Quote</button></a>
+        {{ end }}
     </div>
 </div>
 
@@ -110,7 +113,7 @@
     <p class="detail-section">Rate Request</p>
     <div class="detail-grid">
         <span class="detail-label">Reference</span>
-        <span class="detail-value"><a href="/rate-requests/{{ .RateRequest.ID }}">{{ .RateRequest.ReferenceID }}</a></span>
+        <span class="detail-value">{{ .RateRequest.ReferenceID }}</span>
         <span class="detail-label">Carriers</span>
         <span class="detail-value">{{ .RateRequest.CarrierCount }}</span>
         <span class="detail-label">Responses</span>

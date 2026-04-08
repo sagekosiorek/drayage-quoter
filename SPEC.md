@@ -559,9 +559,6 @@ Styling, last-min changes, stress-testing.
 - [x] Upload real data
 
 ### Milestone 8: Final refinements (Sprint 3)
-- [ ] Add a carrier to a rate request after-the-fact
-- [ ] Set default accessorial rates by user.
-- [ ] Edit lane details that won't affect the rate: direction, load type, container, weight, etc.
 - [x] Delete a lane function
-- [ ] File-parsing support for rate ingestion
-- [ ] Wire up LLM for rate parsing
+- [x] Add a carrier to a rate request after-the-fact
+- [x] Wire up LLM for rate parsing

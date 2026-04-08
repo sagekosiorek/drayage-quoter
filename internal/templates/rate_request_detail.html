@@ -61,60 +61,72 @@
         </div>
     </div>
 
-    <!-- Right: Blast status table -->
-    <div id="blast-status-panel"
-         {{ if or (eq .RateRequest.Lane.Status "rates_requested") (eq .RateRequest.Lane.Status "rates_received") }}
-         hx-get="/rate-requests/{{ .RateRequest.ID }}/blast-status"
-         hx-trigger="every 30s"
-         hx-swap="innerHTML"
-         {{ end }}>
-        <p class="detail-section">Blast Status</p>
+    <!-- Right: Blast status table + add carrier -->
+    <div>
+        <div id="blast-status-panel"
+             {{ if or (eq .RateRequest.Lane.Status "rates_requested") (eq .RateRequest.Lane.Status "rates_received") }}
+             hx-get="/rate-requests/{{ .RateRequest.ID }}/blast-status"
+             hx-trigger="every 30s"
+             hx-swap="innerHTML"
+             {{ end }}>
+            <p class="detail-section">Blast Status</p>
 
-        {{ if .RateRequest.Carriers }}
-        <table>
-            <thead>
-                <tr>
-                    <th>Carrier</th>
-                    <th>Status</th>
-                    <th>Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                {{ range .RateRequest.Carriers }}
-                <tr class="{{ if .Responded }}rr-responded{{ end }}">
-                    <td>
-                        <div style="font-weight:500;">{{ .CarrierName }}</div>
-                        {{ range .Contacts }}
-                        <div class="text-secondary" style="font-size:.78rem;">
-                            {{ .Name }}{{ if and .Name .Email }} · {{ end }}<a href="mailto:{{ .Email }}">{{ .Email }}</a>
-                        </div>
-                        {{ end }}
-                        {{ if not .Contacts }}
-                        <div class="rr-carrier-item-warn">(no contact on file)</div>
-                        {{ end }}
-                    </td>
-                    <td>
-                        {{ if .Responded }}
-                        <span class="text-success">Responded</span>
-                        {{ else }}
-                        <span class="text-muted">Pending</span>
-                        {{ end }}
-                    </td>
-                    <td>
-                        <div class="flex-wrap-sm">
-                            {{ if .MailtoHref }}
-                            <a href="{{ .MailtoHref }}"><button class="primary">Open Email Draft</button></a>
+            {{ if .RateRequest.Carriers }}
+            <table>
+                <thead>
+                    <tr>
+                        <th>Carrier</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{ range .RateRequest.Carriers }}
+                    <tr class="{{ if .Responded }}rr-responded{{ end }}">
+                        <td>
+                            <div style="font-weight:500;">{{ .CarrierName }}</div>
+                            {{ range .Contacts }}
+                            <div class="text-secondary" style="font-size:.78rem;">
+                                {{ .Name }}{{ if and .Name .Email }} · {{ end }}<a href="mailto:{{ .Email }}">{{ .Email }}</a>
+                            </div>
                             {{ end }}
-                            <a href="/rate-requests/{{ $.RateRequest.ID }}/ingest?carrier_id={{ .CarrierID }}"><button type="button">Paste Response</button></a>
-                        </div>
-                    </td>
-                </tr>
-                {{ end }}
-            </tbody>
-        </table>
-        {{ else }}
-        <p class="empty-state">No carriers on this rate request.</p>
-        {{ end }}
+                            {{ if not .Contacts }}
+                            <div class="rr-carrier-item-warn">(no contact on file)</div>
+                            {{ end }}
+                        </td>
+                        <td>
+                            {{ if .Responded }}
+                            <span class="text-success">Responded</span>
+                            {{ else }}
+                            <span class="text-muted">Pending</span>
+                            {{ end }}
+                        </td>
+                        <td>
+                            <div class="flex-wrap-sm">
+                                {{ if .MailtoHref }}
+                                <a href="{{ .MailtoHref }}"><button class="primary">Open Email Draft</button></a>
+                                {{ end }}
+                                <a href="/rate-requests/{{ $.RateRequest.ID }}/ingest?carrier_id={{ .CarrierID }}"><button type="button">Paste Response</button></a>
+                            </div>
+                        </td>
+                    </tr>
+                    {{ end }}
+                </tbody>
+            </table>
+            {{ else }}
+            <p class="empty-state">No carriers on this rate request.</p>
+            {{ end }}
+        </div>
+        <div style="margin-top:.75rem;">
+            <button id="add-carrier-btn" type="button"
+                    hx-get="/rate-requests/{{ .RateRequest.ID }}/add-carriers-form"
+                    hx-target="#add-carrier-section"
+                    hx-swap="innerHTML"
+                    onclick="this.style.display='none';document.getElementById('cancel-add-carrier-btn').style.display=''">+ Add Carrier</button>
+            <button id="cancel-add-carrier-btn" type="button" style="display:none;"
+                    onclick="document.getElementById('add-carrier-section').innerHTML='';this.style.display='none';document.getElementById('add-carrier-btn').style.display=''">Cancel</button>
+        </div>
+        <div id="add-carrier-section"></div>
     </div>
 
 </div>
