@@ -1583,7 +1583,12 @@ func (s *Service) HandleToggleLock() http.HandlerFunc {
 				return
 			}
 		} else {
-			// Locking: compute and freeze the current customer LH+Fuel values.
+			// Locking: save current form values first, then freeze customer rates.
+			if _, _, err2 := s.persistMarkups(tx, laneID, r); err2 != nil {
+				log.Printf("HandleToggleLock: persist markups lane=%d: %v", laneID, err2)
+				http.Error(w, "Failed to save markups", http.StatusInternalServerError)
+				return
+			}
 			baseLHFuel, baseFuelPct, err2 := s.computeCarouselBase(rrID, laneID, carouselIdx)
 			if err2 != nil {
 				log.Printf("HandleToggleLock: computeCarouselBase lane=%d: %v", laneID, err2)
@@ -1607,8 +1612,8 @@ func (s *Service) HandleToggleLock() http.HandlerFunc {
 				custLHFuel = baseLHFuel + markupVal
 			}
 			if _, err2 := tx.Exec(
-				`UPDATE markups SET locked=1, customer_lhfuel=?, customer_fuel_pct=?, base_carousel_idx=? WHERE id=?`,
-				custLHFuel, baseFuelPct, carouselIdx, markupID,
+				`UPDATE markups SET locked=1, customer_lhfuel=?, customer_fuel_pct=?, base_carousel_idx=? WHERE lane_id=?`,
+				custLHFuel, baseFuelPct, carouselIdx, laneID,
 			); err2 != nil {
 				log.Printf("HandleToggleLock: lock lane=%d: %v", laneID, err2)
 				http.Error(w, "Failed to lock", http.StatusInternalServerError)
