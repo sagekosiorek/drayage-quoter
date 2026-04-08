@@ -562,3 +562,37 @@ Styling, last-min changes, stress-testing.
 - [x] Delete a lane function
 - [x] Add a carrier to a rate request after-the-fact
 - [x] Wire up LLM for rate parsing
+
+- [x] Name input on new lane fails.
+- [x] SSE on quote page for when the CSV is downloaded.
+- [x] Get rid of decimal points on quote. Format the output with borders and text-align the Port Destination and Direction as Right.
+- [x] Yard pull = pre pull, Drop = Bobtail
+- [x] Inbound emails aren't parsing? So fail to upload.
+- [x] Delete a lane
+- [x] 'insert rate request failed' when clicking 'Save and send' on rate_request_new page.
+- [x] Change Seaport to Port
+- [x] The customer rate input cells should be a lot smaller
+- [x] Option to quote by fuel percentage. Subject to change weekly.
+- [x] All forwarded rate responses are being orphaned. RefIDs are associating with the correct assigned_to_rate_request_id so there must be a problem with the vendor email matching. My guess is it's related to the lowercase enforcement change - perhaps the parser is not forcing the collected addresses to lower case before comparing them with the vendor emails associated with the rate request?
+- [x] LH+fuel markup should just work like the accessorials. Just enter the customer rate and the rest will auto-calc.
+- [x] Lock/Unlock customer rate
+- [x] The Avg column on saved should be hidden by default. Toggle it to show. And only show if there are > 1 vendor in lineup.
+- [x] Remove default zeros from quoting page.
+- [x] non-dollar unit charge type should not have $ included
+- [x] Sometimes after saving the quote and generating CSV the Linehaul+fuel P&L seems to revert the markup to 0, indicating a negative amount.
+- [x] When clicking a cell to edit a rate, can we have cursor default to it? So the user can type immediately.
+- [x] Rename the edit and saved templates to lineup and quote
+- [x] Also accept emails that come directly from the sender - to account for redirecting.
+- [x] Add Reefers as special reqs
+- [x] Email redirect is not working. Are they even arriving? Orphaned?
+- [x] Build lineup button should auto-show once status changes to Rates Received.
+- [x] Clicking the lock causes the underlying linehaul fuel to change, and it's not right. Seems to be using the Average as base despite being on index 1. Wiping the Customer Rate inputs and locking it also retains the previous saved input for some reason.
+- [x] Vendors -> Carriers
+- [x] Execute M8 to close out project
+    - [x] Create a separate branch to work on
+    - [x] Read-only view for the quote page, for non-owners. Also get rid of link reference on the lane detail page.
+    - [x] Negative P&L shows on flat markup quotes. Only happens on quotes with 2+ carriers in the lineup. 1 is fine.
+    - [x] Merge into main + close
+- [x] If the lock is used to toggle the customer rate open to mark it up, the markup is not saved when it's locked again. However , clicking the save and gen CSV button saves it properly.
+- [x] Change port header color on carrier profile for visual distinction
+
