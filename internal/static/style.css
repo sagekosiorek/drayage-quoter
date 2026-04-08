@@ -375,7 +375,7 @@ a.btn-secondary:hover { background: #eee; color: var(--color-text); }
 .port-block { margin: .75rem 0 1.25rem; border: 1px solid var(--color-border); border-radius: var(--radius-md); }
 .port-block-header {
     display: flex; align-items: center; gap: .75rem;
-    padding: .4rem .75rem; background: var(--color-surface);
+    padding: .4rem .75rem; background: var(--color-brand);
     border-bottom: 1px solid var(--color-border);
 }
 .port-block-name { font-weight: 600; font-size: .9rem; }
