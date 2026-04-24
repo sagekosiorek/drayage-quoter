@@ -9,10 +9,26 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 SPEC_FILE="$REPO_ROOT/SPEC.md"
 STATE_FILE="$REPO_ROOT/.gitlab-sync.json"
-LOCK_FILE="/tmp/sync-spec-to-gitlab.lock"
-GITLAB_API="https://gitlab.com/api/v4"
-PROJECT_PATH="perenne/clients/schneider/drayage-quoter"
-LABEL="spec-sync"
+GITLAB_API="${GITLAB_API:-https://gitlab.com/api/v4}"
+LABEL="${GITLAB_LABEL:-spec-sync}"
+
+# Derive a short, repo-specific suffix for the lockfile so concurrent runs
+# against different repos don't block each other.
+_repo_hash=$(printf '%s' "$REPO_ROOT" | md5sum | cut -c1-8)
+LOCK_FILE="/tmp/sync-spec-to-gitlab-${_repo_hash}.lock"
+
+# Resolve project path: explicit env var wins; otherwise infer from git remote.
+if [[ -n "${GITLAB_PROJECT_PATH:-}" ]]; then
+  PROJECT_PATH="$GITLAB_PROJECT_PATH"
+else
+  _remote=$(git -C "$REPO_ROOT" remote get-url origin 2>/dev/null) \
+    || die "No git remote 'origin' found. Set GITLAB_PROJECT_PATH env var."
+  # Strip leading host (SSH or HTTPS) and trailing .git
+  PROJECT_PATH=$(printf '%s' "$_remote" \
+    | sed -E 's#^(https?://|git@|ssh://git@)[^/:]+[/:]##; s#\.git$##')
+  [[ -n "$PROJECT_PATH" ]] \
+    || die "Could not parse project path from remote '$_remote'. Set GITLAB_PROJECT_PATH env var."
+fi
 
 # ---------------------------------------------------------------------------
 # Helpers
