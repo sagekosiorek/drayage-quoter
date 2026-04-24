@@ -160,11 +160,16 @@ window.chargeTypeUnits = { {{- range .Data.ChargeRows }}"{{ .Key }}":"{{ .Unit }
                             {{ else }}<td class="cell-center-empty">—</td>{{ end }}
                             {{ end }}
                         </tr>
-                        <!-- Fuel row — read-only, mirrors base carrier fuel % -->
+                        <!-- Fuel row — editable; what's entered is what the customer receives -->
                         <tr>
                             <td>Fuel</td>
                             <td></td>
-                            <td id="customer-fuel" class="cell-center text-secondary"></td>
+                            <td class="cell-center">
+                                <input type="text" inputmode="decimal" name="fuel_pct_override" id="input-fuel-pct"
+                                       class="input-amount"
+                                       {{ if .Data.FuelPctInput.Valid }}value="{{ printf "%.2f" .Data.FuelPctInput.Float64 }}"{{ end }}
+                                       {{ if or .Data.Locked .Data.ReadOnly }} disabled{{ end }}>
+                            </td>
                             <td id="avg-fuel" class="cell-avg">{{ index .Data.Averages "fuel" }}</td>
                             {{ range .Data.Carriers }}
                             {{ $cell := index .Items "fuel" }}
@@ -282,7 +287,9 @@ window.chargeTypeUnits = { {{- range .Data.ChargeRows }}"{{ .Key }}":"{{ .Unit }
         } else {
             var inputVal = parseFloat(document.getElementById("input-linehaul-markup").value) || 0;
             var mode     = getMode();
-            cFuelPct = getBase("fuel");
+            var fuelInput = document.getElementById("input-fuel-pct");
+            var fuelOverride = fuelInput ? parseFloat(fuelInput.value) : NaN;
+            cFuelPct = isNaN(fuelOverride) ? getBase("fuel") : fuelOverride;
             if (mode === "flat_rate") {
                 if (inputVal === 0) {
                     cLHFuel = 0;
@@ -329,8 +336,11 @@ window.chargeTypeUnits = { {{- range .Data.ChargeRows }}"{{ .Key }}":"{{ .Unit }
         var lhEl = document.getElementById("customer-linehaul");
         if (lhEl) lhEl.textContent = lh.cLH > 0 ? fmtAmount(lh.cLH) : "";
 
-        var fuelEl = document.getElementById("customer-fuel");
-        if (fuelEl) fuelEl.textContent = lh.cFuelPct > 0 ? lh.cFuelPct.toFixed(2) + "%" : "";
+        // Show carrier-average fuel % as placeholder when the input is blank.
+        var fuelPctInput = document.getElementById("input-fuel-pct");
+        if (fuelPctInput && !fuelPctInput.value) {
+            fuelPctInput.placeholder = getBase("fuel").toFixed(2) + "%";
+        }
 
         // Markup (P&L) cell on Linehaul+Fuel row shows the derived markup amount.
         setMarkupCell("linehaul_fuel", lh.markup !== 0 ? lh.markup : null);
@@ -339,7 +349,7 @@ window.chargeTypeUnits = { {{- range .Data.ChargeRows }}"{{ .Key }}":"{{ .Unit }
         var allInputs = document.querySelectorAll("#csv-form input[type=text]");
         allInputs.forEach(function(input) {
             var ct = input.name;
-            if (ct === "linehaul_fuel") return; // handled above
+            if (ct === "linehaul_fuel" || ct === "fuel_pct_override") return; // handled separately
             var customerCharge = parseFloat(input.value);
             var pl = (customerCharge > 0) ? customerCharge - getBase(ct) : null;
             if (pl !== null) totalMarkup += pl;

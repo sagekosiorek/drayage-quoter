@@ -1317,6 +1317,7 @@ type SavedComparisonData struct {
 	LockedCustomerFuelPct float64 // frozen fuel% at lock time (0 when unlocked)
 	BaseCarouselIdx      int     // carousel index active when locked; 0 when unlocked
 	ReadOnly             bool    // true for non-owners: hides edit controls, disables all inputs
+	FuelPctInput         sql.NullFloat64 // effective fuel % to pre-fill input; invalid = blank (use carrier avg)
 }
 
 // HandleSavedComparison renders the markup entry + CSV generation page for a lineup.
@@ -1569,6 +1570,14 @@ func (s *Service) HandleSavedComparison(tmpl *template.Template) http.HandlerFun
 		s.DB.QueryRow(`SELECT locked, customer_lhfuel, customer_fuel_pct, base_carousel_idx FROM markups WHERE lane_id = ?`, rr.LaneID).
 			Scan(&locked, &custLHFuel, &custFuelPct, &baseCarouselIdx)
 
+		// Resolve effective fuel % to pre-fill the input: frozen value when locked, override when unlocked.
+		var fuelPctInput sql.NullFloat64
+		if locked && custFuelPct.Valid {
+			fuelPctInput = custFuelPct
+		} else {
+			s.DB.QueryRow(`SELECT fuel_pct_override FROM markups WHERE lane_id = ?`, rr.LaneID).Scan(&fuelPctInput)
+		}
+
 		// Determine effective markup method: saved value → user preference → default.
 		lfMarkupMethod := "flat"
 		if saved, ok := markupsMap["linehaul_fuel"]; ok {
@@ -1597,6 +1606,7 @@ func (s *Service) HandleSavedComparison(tmpl *template.Template) http.HandlerFun
 				LockedCustomerFuelPct: custFuelPct.Float64,
 				BaseCarouselIdx:       baseCarouselIdx,
 				ReadOnly:              readOnly,
+				FuelPctInput:          fuelPctInput,
 			},
 		}); err != nil {
 			log.Printf("HandleSavedComparison: template execution rr=%d: %v", rrID, err)
@@ -1737,9 +1747,16 @@ func (s *Service) HandleToggleLock() http.HandlerFunc {
 			default: // "flat"
 				custLHFuel = baseLHFuel + markupVal
 			}
+			// Use user-entered fuel % override if present; otherwise fall back to carrier average.
+			var savedFuelPctOverride sql.NullFloat64
+			tx.QueryRow(`SELECT fuel_pct_override FROM markups WHERE lane_id = ?`, laneID).Scan(&savedFuelPctOverride)
+			fuelPctForLock := baseFuelPct
+			if savedFuelPctOverride.Valid {
+				fuelPctForLock = savedFuelPctOverride.Float64
+			}
 			if _, err2 := tx.Exec(
 				`UPDATE markups SET locked=1, customer_lhfuel=?, customer_fuel_pct=?, base_carousel_idx=? WHERE lane_id=?`,
-				custLHFuel, baseFuelPct, carouselIdx, laneID,
+				custLHFuel, fuelPctForLock, carouselIdx, laneID,
 			); err2 != nil {
 				log.Printf("HandleToggleLock: lock lane=%d: %v", laneID, err2)
 				http.Error(w, "Failed to lock", http.StatusInternalServerError)
@@ -1878,6 +1895,14 @@ func (s *Service) persistMarkups(tx *sql.Tx, laneID int, r *http.Request) (int64
 		}
 	}
 
+	// fuel_pct_override: user-entered fuel % that overrides the carrier average.
+	var fuelPctOverride *float64
+	if fpStr := r.FormValue("fuel_pct_override"); fpStr != "" {
+		if fpVal, err := strconv.ParseFloat(fpStr, 64); err == nil {
+			fuelPctOverride = &fpVal
+		}
+	}
+
 	quoteID, err := s.resolveOrCreateQuote(tx, laneID)
 	if err != nil {
 		return 0, nil, err
@@ -1891,8 +1916,11 @@ func (s *Service) persistMarkups(tx *sql.Tx, laneID int, r *http.Request) (int64
 	if _, err := tx.Exec(`DELETE FROM markups WHERE lane_id = ?`, laneID); err != nil {
 		return 0, nil, fmt.Errorf("delete markups lane=%d: %w", laneID, err)
 	}
-	if len(entries) > 0 {
-		res, err := tx.Exec(`INSERT INTO markups (quote_id, lane_id, locked) VALUES (?, ?, ?)`, quoteID, laneID, existingLocked)
+	if len(entries) > 0 || fuelPctOverride != nil {
+		res, err := tx.Exec(
+			`INSERT INTO markups (quote_id, lane_id, locked, fuel_pct_override) VALUES (?, ?, ?, ?)`,
+			quoteID, laneID, existingLocked, fuelPctOverride,
+		)
 		if err != nil {
 			return 0, nil, fmt.Errorf("insert markup: %w", err)
 		}
@@ -2085,7 +2113,14 @@ func (s *Service) HandleGenerateCSV() http.HandlerFunc {
 			default: // "flat"
 				customerLHFuel = baseLHFuel + markupVal
 			}
-			customerFuelPct = baseFuelPct
+			// Use user-entered fuel % override if present; otherwise use carrier average.
+			var fuelPctOverride sql.NullFloat64
+			s.DB.QueryRow(`SELECT fuel_pct_override FROM markups WHERE lane_id = ?`, laneID).Scan(&fuelPctOverride)
+			if fuelPctOverride.Valid {
+				customerFuelPct = fuelPctOverride.Float64
+			} else {
+				customerFuelPct = baseFuelPct
+			}
 		}
 		var customerLH float64
 		if divisor := 1 + customerFuelPct/100; divisor > 0 {
@@ -2138,29 +2173,36 @@ func (s *Service) HandleGenerateCSV() http.HandlerFunc {
 		row++
 
 
-		// Section header: "Applicable charges" | "Notes" | "LH + Fuel" — all orange.
+		// Section header: "Applicable charges" | "Notes" | "LH + Fuel" (omitted when fuel is 0).
 		f.SetCellValue(sheet, xlCell(1, row), "Applicable charges")
 		f.SetCellValue(sheet, xlCell(3, row), "Notes")
-		f.SetCellValue(sheet, xlCell(4, row), "LH + Fuel")
+		if customerFuelPct > 0 {
+			f.SetCellValue(sheet, xlCell(4, row), "LH + Fuel")
+		}
 		f.SetCellStyle(sheet, xlCell(1, row), xlCell(1, row), orangeStyle)
 		f.SetCellStyle(sheet, xlCell(2, row), xlCell(2, row), orangeStyle)
 		f.SetCellStyle(sheet, xlCell(3, row), xlCell(3, row), orangeStyle)
 		f.SetCellStyle(sheet, xlCell(4, row), xlCell(4, row), orangeStyle)
 		row++
 
-		// Linehaul and Fuel rows: col D holds the LH+Fuel total merged across both rows.
-		// Linehaul row: label | $customerLH | $customerLHFuel (merged with fuel row below)
-		lhRow := row
-		f.SetCellValue(sheet, xlCell(1, row), "Linehaul")
-		f.SetCellValue(sheet, xlCell(2, row), csvValue("linehaul_fuel", customerLH))
-		f.SetCellValue(sheet, xlCell(4, row), csvValue("linehaul_fuel", customerLHFuel))
-		row++
-		// Fuel row: label | fuel% | (merged cell — no value set)
-		f.SetCellValue(sheet, xlCell(1, row), "Fuel (subject to change weekly)")
-		f.SetCellValue(sheet, xlCell(2, row), fmt.Sprintf("%.2f%%", customerFuelPct))
-		row++
-		// Merge col D across the Linehaul and Fuel rows so the total spans both.
-		f.MergeCell(sheet, xlCell(4, lhRow), xlCell(4, lhRow+1))
+		// Linehaul and Fuel rows.
+		// When fuel % is 0, fuel is absorbed into linehaul — single row, no merge.
+		// Otherwise, standard two-row structure with col D (LH+Fuel total) merged across both.
+		if customerFuelPct == 0 {
+			f.SetCellValue(sheet, xlCell(1, row), "Linehaul (fuel included)")
+			f.SetCellValue(sheet, xlCell(2, row), csvValue("linehaul_fuel", customerLHFuel))
+			row++
+		} else {
+			lhRow := row
+			f.SetCellValue(sheet, xlCell(1, row), "Linehaul")
+			f.SetCellValue(sheet, xlCell(2, row), csvValue("linehaul_fuel", customerLH))
+			f.SetCellValue(sheet, xlCell(4, row), csvValue("linehaul_fuel", customerLHFuel))
+			row++
+			f.SetCellValue(sheet, xlCell(1, row), "Fuel (subject to change weekly)")
+			f.SetCellValue(sheet, xlCell(2, row), fmt.Sprintf("%.2f%%", customerFuelPct))
+			row++
+			f.MergeCell(sheet, xlCell(4, lhRow), xlCell(4, lhRow+1))
+		}
 
 		// Partition other entered charges into applicable vs. accessorials (preserving FieldOrder).
 		type quoteRow struct{ label, value, notes string }

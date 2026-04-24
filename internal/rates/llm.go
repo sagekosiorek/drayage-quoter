@@ -54,7 +54,7 @@ Rules:
 - Set "source": "regex" for items you are keeping unchanged from the regex output.
 - Set "source": "llm" for items you corrected or newly extracted.
 - Amounts must be positive numbers.
-- fuel is always a percentage (e.g. 20, not 0.20).
+- The output for fuel should always a percentage (e.g. 20, not 0.20). If the input for fuel is showing as a dollar amount (e.g. $117) it means the percentage was already calculated off the linehaul rate. Please reverse calculate this to determine what the percentage is.
 
 Respond with a JSON array only — no explanation, no markdown fences:
 [{"charge_type":"linehaul","amount":850.00,"unit":"$","source":"regex"}, ...]
