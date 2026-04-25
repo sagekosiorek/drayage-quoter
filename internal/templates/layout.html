@@ -13,6 +13,7 @@
     <script src="https://unpkg.com/htmx-ext-sse@2.2.2/sse.js" defer></script>
 </head>
 <body>
+<div id="loading-bar"></div>
     {{ if .User }}
     <nav class="app-nav">
         <a href="/" class="app-nav-brand">Drayage Quoter</a>
@@ -38,6 +39,22 @@
     </div>
     {{ end }}
 <script>
+  (function () {
+    var bar = document.getElementById('loading-bar');
+    var timer;
+    document.addEventListener('htmx:beforeRequest', function () {
+      clearTimeout(timer);
+      bar.className = '';
+      void bar.offsetWidth;
+      bar.classList.add('is-loading');
+    });
+    document.addEventListener('htmx:afterRequest', function () {
+      bar.classList.remove('is-loading');
+      bar.classList.add('is-done');
+      timer = setTimeout(function () { bar.className = ''; }, 500);
+    });
+  })();
+
   // Reformat all <time datetime="..."> elements into "March 11, 2026 2:30pm" in the user's local timezone.
   document.addEventListener('DOMContentLoaded', function () {
     var months = ['January','February','March','April','May','June',
