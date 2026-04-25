@@ -44,7 +44,7 @@
             <th>Created</th>
         </tr>
     </thead>
-    <tbody>
+    <tbody id="lane-rows">
         {{- if .Lanes }}
         {{- range .Lanes }}
         <tr>
@@ -71,4 +71,9 @@
         {{- end }}
     </tbody>
 </table>
+{{- if .HasMore }}
+<div id="show-more-container" class="show-more">
+    <button class="primary" hx-get="{{ .ShowMoreURL }}" hx-target="#lane-rows" hx-swap="beforeend">Show more</button>
+</div>
+{{- end }}
 {{ end }}

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
+	"net/url"
 	"strconv"
 	"time"
 
@@ -223,6 +224,29 @@ func (s *Service) fetchUsers() ([]userOption, error) {
 	return users, nil
 }
 
+// dashboardRowsPartial appends new lane rows to #lane-rows and updates the show-more button via OOB swap.
+// Rows are the main swap target (beforeend on #lane-rows); the button container is updated out-of-band.
+const dashboardRowsPartial = `
+{{- range .Lanes }}
+<tr>
+    <td><a href="/lanes/{{ .ID }}">{{ .CustomerName }}</a></td>
+    <td>{{ .OriginPort }}</td>
+    <td>{{ .Destination }}</td>
+    <td>{{ .Direction }}</td>
+    <td>{{ if eq .Status "rates_requested" }}<span class="status-badge status-{{ .Status }}"
+              hx-get="/lanes/{{ .ID }}/status" hx-trigger="every 30s" hx-swap="outerHTML">{{ .StatusLabel }}</span>{{ else }}<span class="status-badge status-{{ .Status }}">{{ .StatusLabel }}</span>{{ end }}</td>
+    <td>{{ .OwnerName }}</td>
+    <td><time datetime="{{ .CreatedAt }}">{{ .CreatedAt }}</time></td>
+</tr>
+{{- end }}
+{{- if .HasMore }}
+<div id="show-more-container" hx-swap-oob="outerHTML" class="show-more">
+    <button class="primary" hx-get="{{ .ShowMoreURL }}" hx-target="#lane-rows" hx-swap="beforeend">Show more</button>
+</div>
+{{- else }}
+<div id="show-more-container" hx-swap-oob="outerHTML"></div>
+{{- end }}`
+
 // HandleDashboard renders the opportunity list with optional filtering.
 func (s *Service) HandleDashboard(tmpl *template.Template) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -231,6 +255,7 @@ func (s *Service) HandleDashboard(tmpl *template.Template) http.HandlerFunc {
 		q := r.URL.Query().Get("q")
 		status := r.URL.Query().Get("status")
 		portID, _ := strconv.Atoi(r.URL.Query().Get("port"))
+		offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
 
 		// owner param: absent → default to current user; "0" → all reps; positive int → specific rep.
 		ownerStr := r.URL.Query().Get("owner")
@@ -267,7 +292,9 @@ func (s *Service) HandleDashboard(tmpl *template.Template) http.HandlerFunc {
 			query += ` AND l.owner_id = ?`
 			args = append(args, ownerID)
 		}
-		query += ` ORDER BY l.created_at DESC`
+		// Fetch one extra row to detect whether more pages exist.
+		query += ` ORDER BY l.created_at DESC LIMIT 31 OFFSET ?`
+		args = append(args, offset)
 
 		rows, err := s.DB.Query(query, args...)
 		if err != nil {
@@ -300,6 +327,24 @@ func (s *Service) HandleDashboard(tmpl *template.Template) http.HandlerFunc {
 			laneRows = append(laneRows, l)
 		}
 
+		hasMore := len(laneRows) == 31
+		if hasMore {
+			laneRows = laneRows[:30]
+		}
+		showMoreURL := fmt.Sprintf("/?q=%s&status=%s&port=%d&owner=%d&offset=%d",
+			url.QueryEscape(q), url.QueryEscape(status), portID, ownerID, offset+30)
+
+		// HTMX "show more" requests return just the new rows, not the full page.
+		if r.Header.Get("HX-Request") == "true" && offset > 0 {
+			t := template.Must(template.New("rows").Parse(dashboardRowsPartial))
+			t.Execute(w, map[string]any{
+				"Lanes":       laneRows,
+				"HasMore":     hasMore,
+				"ShowMoreURL": showMoreURL,
+			})
+			return
+		}
+
 		ports, err := s.fetchPorts()
 		if err != nil {
 			http.Error(w, "Query ports failed", http.StatusInternalServerError)
@@ -312,14 +357,16 @@ func (s *Service) HandleDashboard(tmpl *template.Template) http.HandlerFunc {
 		}
 
 		tmpl.ExecuteTemplate(w, "layout.html", map[string]any{
-			"User":     user,
-			"Lanes":    laneRows,
-			"Query":    q,
-			"Status":   status,
-			"PortID":   portID,
-			"OwnerID":  ownerID,
-			"Ports":    ports,
-			"AllUsers": users,
+			"User":        user,
+			"Lanes":       laneRows,
+			"Query":       q,
+			"Status":      status,
+			"PortID":      portID,
+			"OwnerID":     ownerID,
+			"Ports":       ports,
+			"AllUsers":    users,
+			"HasMore":     hasMore,
+			"ShowMoreURL": showMoreURL,
 		})
 	}
 }

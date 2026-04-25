@@ -114,6 +114,7 @@ th { text-align: left; padding: 7px 10px; background: var(--color-surface-alt); 
 td { padding: 7px 10px; border-bottom: 1px solid var(--color-border-light); }
 tr:last-child td { border-bottom: none; }
 .empty-state { text-align: center; color: var(--color-muted); padding: 2rem; }
+.show-more   { text-align: center; padding: 1rem 0; }
 
 /* Cell alignment / interaction */
 .cell-center        { text-align: center; max-width: 70px; }
