@@ -62,10 +62,11 @@
   })();
 
   // Reformat all <time datetime="..."> elements into "March 11, 2026 2:30pm" in the user's local timezone.
-  document.addEventListener('DOMContentLoaded', function () {
+  // root defaults to document; pass a narrower element after HTMX swaps.
+  function fmtTimes(root) {
     var months = ['January','February','March','April','May','June',
                   'July','August','September','October','November','December'];
-    document.querySelectorAll('time[datetime]').forEach(function (el) {
+    (root || document).querySelectorAll('time[datetime]').forEach(function (el) {
       var d = new Date(el.getAttribute('datetime'));
       if (isNaN(d.getTime())) return;
       var h = d.getHours(), m = String(d.getMinutes()).padStart(2, '0');
@@ -74,7 +75,9 @@
       el.textContent = months[d.getMonth()] + ' ' + d.getDate() + ', ' +
                        d.getFullYear() + ' ' + h + ':' + m + ampm;
     });
-  });
+  }
+  document.addEventListener('DOMContentLoaded', function () { fmtTimes(); });
+  document.body.addEventListener('htmx:afterSwap', function (e) { fmtTimes(e.detail.elt); });
 </script>
 </body>
 </html>

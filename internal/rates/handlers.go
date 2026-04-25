@@ -847,6 +847,88 @@ func (s *Service) HandleViewOriginalEmail() http.HandlerFunc {
 	}
 }
 
+// HandleViewCarrierNotes returns port-scoped carrier notes for the side pane on the lineup page.
+// Notes are scoped to the carrier + port matching the rate request's lane origin port.
+// GET /carrier-rates/{id}/notes
+func (s *Service) HandleViewCarrierNotes() http.HandlerFunc {
+	tmpl := template.Must(template.New("carrier-notes").Parse(`
+<p class="label-caps" style="margin:0 0 .75rem;">Carrier Notes — {{.CarrierName}}</p>
+{{- if .Notes}}
+{{range .Notes}}<div class="note-item">
+  <p class="note-content">{{.Content}}</p>
+	<p class="note-meta">{{ .AuthorName }} &middot; <time datetime="{{ .CreatedAt }}">{{ .CreatedAt }}</time></p>
+</div>{{end}}
+{{- else}}
+<p class="text-muted" style="font-size:.85rem;margin:0;">No notes on file for this carrier at this port.</p>
+{{- end}}`))
+
+	type noteRow struct {
+		Content    string
+		AuthorName string
+		CreatedAt  string
+	}
+	type data struct {
+		CarrierName string
+		Notes       []noteRow
+	}
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		id, err := strconv.Atoi(r.PathValue("id"))
+		if err != nil || id <= 0 {
+			http.Error(w, "Not found", http.StatusNotFound)
+			return
+		}
+
+		var carrierName string
+		err = s.DB.QueryRow(`
+			SELECT c.name FROM carriers c
+			JOIN carrier_rates cr ON cr.carrier_id = c.id
+			WHERE cr.id = ?`, id).Scan(&carrierName)
+		if err == sql.ErrNoRows {
+			http.Error(w, "Not found", http.StatusNotFound)
+			return
+		}
+		if err != nil {
+			http.Error(w, "Load carrier failed", http.StatusInternalServerError)
+			return
+		}
+
+		rows, err := s.DB.Query(`
+			SELECT n.content, u.name, n.created_at
+			FROM carrier_notes n
+			JOIN users u ON u.id = n.author_id
+			JOIN carrier_ports cp ON cp.id = n.carrier_ports_id
+			JOIN carrier_rates cr ON cr.carrier_id = cp.carrier_id
+			JOIN rate_requests rr ON rr.id = cr.rate_request_id
+			JOIN lanes l ON l.id = rr.lane_id AND l.origin_port_id = cp.port_id
+			WHERE cr.id = ?
+			ORDER BY n.created_at DESC`, id)
+		if err != nil {
+			http.Error(w, "Load carrier notes failed", http.StatusInternalServerError)
+			return
+		}
+		defer rows.Close()
+
+		d := data{CarrierName: carrierName}
+		for rows.Next() {
+			var n noteRow
+			var ts string
+			if err := rows.Scan(&n.Content, &n.AuthorName, &ts); err != nil {
+				http.Error(w, "Load carrier notes failed", http.StatusInternalServerError)
+				return
+			}
+			if t, err := time.Parse("2006-01-02 15:04:05", ts); err == nil {
+				n.CreatedAt = t.UTC().Format(time.RFC3339)
+			} else {
+				n.CreatedAt = ts
+			}
+			d.Notes = append(d.Notes, n)
+		}
+
+		tmpl.Execute(w, d)
+	}
+}
+
 // HandleNewRateItem returns an inline create form for an empty cell (no existing item).
 // GET /carrier-rates/{id}/items/new?charge_type=
 func (s *Service) HandleNewRateItem() http.HandlerFunc {

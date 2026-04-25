@@ -255,6 +255,7 @@ func main() {
 	mux.HandleFunc("GET /carrier-rate-items/{id}/edit", authService.RequireAuth(ratesSvc.HandleEditRateItem()))
 	mux.HandleFunc("POST /carrier-rate-items/{id}", authService.RequireAuth(ratesSvc.HandleUpdateRateItem()))
 	mux.HandleFunc("GET /carrier-rates/{id}/email", authService.RequireAuth(ratesSvc.HandleViewOriginalEmail()))
+	mux.HandleFunc("GET /carrier-rates/{id}/notes", authService.RequireAuth(ratesSvc.HandleViewCarrierNotes()))
 	mux.HandleFunc("GET /carrier-rates/{id}/items/new", authService.RequireAuth(ratesSvc.HandleNewRateItem()))
 	mux.HandleFunc("POST /carrier-rates/{id}/items", authService.RequireAuth(ratesSvc.HandleCreateRateItem()))
 	mux.HandleFunc("GET /carrier-rates/{id}/items/empty", authService.RequireAuth(ratesSvc.HandleEmptyRateItem()))

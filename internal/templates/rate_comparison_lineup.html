@@ -62,13 +62,20 @@
                                            placeholder="—"
                                            title="1 = primary carrier, 2 = secondary, etc. Leave blank to exclude.">
                                 </div>
-                                <div style="margin-top:.3rem;">
+                                <div class="flex-row-lg" style="justify-content:center;margin-top:.3rem;">
                                     <button type="button"
                                             hx-get="/carrier-rates/{{ .CarrierRateID }}/email"
                                             hx-target="#email-panel"
                                             hx-swap="innerHTML"
                                             style="font-size:.72rem;padding:2px 7px;">
                                         View Email
+                                    </button>
+                                    <button type="button"
+                                            hx-get="/carrier-rates/{{ .CarrierRateID }}/notes"
+                                            hx-target="#email-panel"
+                                            hx-swap="innerHTML"
+                                            style="font-size:.72rem;padding:2px 7px;">
+                                        View Notes
                                     </button>
                                 </div>
                             </th>
@@ -138,7 +145,7 @@
                 hx-swap="innerHTML"
                 style="font-size:.72rem;padding:2px 7px;margin-bottom:.5rem;">Lane Details</button>
         <p class="detail-section">Lane Details</p>
-        <p class="label-caps text-muted" style="margin:.25rem 0 .75rem;">Click "View Email" on a carrier column to display their rate response here.</p>
+        <p class="label-caps text-muted" style="margin:.25rem 0 .75rem;">Click "View Email" on a carrier column to display their rate response , or "View Notes" to see internal carrier reviews here.</p>
         <div id="email-panel" class="email-panel">
             {{ template "lane-detail-panel" .Data.Lane }}
         </div>
