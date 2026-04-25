@@ -41,17 +41,23 @@
 <script>
   (function () {
     var bar = document.getElementById('loading-bar');
-    var timer;
+    var timer, startTime;
+    var MIN_MS = 400;
     document.addEventListener('htmx:beforeRequest', function () {
       clearTimeout(timer);
       bar.className = '';
       void bar.offsetWidth;
       bar.classList.add('is-loading');
+      startTime = Date.now();
     });
     document.addEventListener('htmx:afterRequest', function () {
-      bar.classList.remove('is-loading');
-      bar.classList.add('is-done');
-      timer = setTimeout(function () { bar.className = ''; }, 500);
+      var remaining = Math.max(0, MIN_MS - (Date.now() - startTime));
+      clearTimeout(timer);
+      timer = setTimeout(function () {
+        bar.classList.remove('is-loading');
+        bar.classList.add('is-done');
+        timer = setTimeout(function () { bar.className = ''; }, 500);
+      }, remaining);
     });
   })();
 
