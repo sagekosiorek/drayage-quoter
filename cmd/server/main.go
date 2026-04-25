@@ -96,6 +96,7 @@ func main() {
 	lanesSvc := &lanes.Service{DB: database}
 	carriersSvc := &carriers.Service{DB: database}
 	rrSvc := &rate_requests.Service{DB: database}
+	lanesSvc.OnLaneUpdated = rrSvc.RebuildEmailContent
 	ratesSvc := &rates.Service{
 		DB:      database,
 		LLM:     nil,

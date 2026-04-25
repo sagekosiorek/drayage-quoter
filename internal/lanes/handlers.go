@@ -13,7 +13,8 @@ import (
 
 // Service handles lane operations.
 type Service struct {
-	DB *sql.DB
+	DB            *sql.DB
+	OnLaneUpdated func(laneID, ownerID int) // optional hook called after a successful non-draft update
 }
 
 // RateRequestSnippet holds the minimal rate request data shown on the lane detail page.
@@ -601,12 +602,15 @@ func (s *Service) HandleUpdate() http.HandlerFunc {
 			return
 		}
 
-		var ownerID int
-		if err := s.DB.QueryRow("SELECT owner_id FROM lanes WHERE id = ?", id).Scan(&ownerID); err == sql.ErrNoRows {
+		var ownerID, currentCustomerID, currentOriginPortID int
+		var laneStatus, currentDestination string
+		if err := s.DB.QueryRow(
+			`SELECT owner_id, status, customer_id, origin_port_id, destination FROM lanes WHERE id = ?`, id,
+		).Scan(&ownerID, &laneStatus, &currentCustomerID, &currentOriginPortID, &currentDestination); err == sql.ErrNoRows {
 			http.Error(w, "Not found", http.StatusNotFound)
 			return
 		} else if err != nil {
-			http.Error(w, "Query lane owner failed", http.StatusInternalServerError)
+			http.Error(w, "Query lane failed", http.StatusInternalServerError)
 			return
 		}
 		if ownerID != user.ID {
@@ -614,10 +618,6 @@ func (s *Service) HandleUpdate() http.HandlerFunc {
 			return
 		}
 
-		customerName := r.FormValue("customer_name")
-		customerIDStr := r.FormValue("customer_id")
-		originPortIDStr := r.FormValue("origin_port_id")
-		destination := r.FormValue("destination")
 		containerSize := r.FormValue("container_size")
 		weightStr := r.FormValue("weight")
 		direction := r.FormValue("direction")
@@ -630,50 +630,70 @@ func (s *Service) HandleUpdate() http.HandlerFunc {
 		outOfGauge := r.FormValue("out_of_gauge") == "1"
 		reefer := r.FormValue("reefer") == "1"
 
-		if customerName == "" || originPortIDStr == "" || destination == "" || containerSize == "" {
+		if containerSize == "" {
 			http.Error(w, "Required fields missing", http.StatusBadRequest)
 			return
 		}
 
-		originPortID, err := strconv.Atoi(originPortIDStr)
-		if err != nil || originPortID <= 0 {
-			http.Error(w, "Invalid port", http.StatusBadRequest)
-			return
-		}
-		var portExists int
-		if err := s.DB.QueryRow("SELECT COUNT(*) FROM ports WHERE id = ?", originPortID).Scan(&portExists); err != nil || portExists == 0 {
-			http.Error(w, "Port not found", http.StatusBadRequest)
-			return
-		}
+		var customerID, originPortID int
+		var destination string
 
-		var customerID int
-		if customerIDStr != "" {
-			customerID, _ = strconv.Atoi(customerIDStr)
-		}
-		if customerID == 0 {
-			err = s.DB.QueryRow(
-				"SELECT id FROM customers WHERE LOWER(name) = LOWER(?)", customerName,
-			).Scan(&customerID)
-			if err == sql.ErrNoRows {
-				res, err := s.DB.Exec(
-					"INSERT INTO customers (name) VALUES (?)",
-					customerName,
-				)
-				if err != nil {
-					// Race condition: another request may have inserted the same name concurrently.
-					// Try a re-fetch before giving up.
-					if err2 := s.DB.QueryRow("SELECT id FROM customers WHERE LOWER(name) = LOWER(?)", customerName).Scan(&customerID); err2 != nil {
-						http.Error(w, fmt.Sprintf("insert customer %q: %v", customerName, err), http.StatusInternalServerError)
-						return
-					}
-				} else {
-					id, _ := res.LastInsertId()
-					customerID = int(id)
-				}
-			} else if err != nil {
-				http.Error(w, fmt.Sprintf("lookup customer %q: %v", customerName, err), http.StatusInternalServerError)
+		if laneStatus == "draft" {
+			customerName := r.FormValue("customer_name")
+			customerIDStr := r.FormValue("customer_id")
+			originPortIDStr := r.FormValue("origin_port_id")
+			destination = r.FormValue("destination")
+
+			if customerName == "" || originPortIDStr == "" || destination == "" {
+				http.Error(w, "Required fields missing", http.StatusBadRequest)
 				return
 			}
+
+			var err error
+			originPortID, err = strconv.Atoi(originPortIDStr)
+			if err != nil || originPortID <= 0 {
+				http.Error(w, "Invalid port", http.StatusBadRequest)
+				return
+			}
+			var portExists int
+			if err := s.DB.QueryRow("SELECT COUNT(*) FROM ports WHERE id = ?", originPortID).Scan(&portExists); err != nil || portExists == 0 {
+				http.Error(w, "Port not found", http.StatusBadRequest)
+				return
+			}
+
+			if customerIDStr != "" {
+				customerID, _ = strconv.Atoi(customerIDStr)
+			}
+			if customerID == 0 {
+				err = s.DB.QueryRow(
+					"SELECT id FROM customers WHERE LOWER(name) = LOWER(?)", customerName,
+				).Scan(&customerID)
+				if err == sql.ErrNoRows {
+					res, err := s.DB.Exec(
+						"INSERT INTO customers (name) VALUES (?)",
+						customerName,
+					)
+					if err != nil {
+						// Race condition: another request may have inserted the same name concurrently.
+						// Try a re-fetch before giving up.
+						if err2 := s.DB.QueryRow("SELECT id FROM customers WHERE LOWER(name) = LOWER(?)", customerName).Scan(&customerID); err2 != nil {
+							http.Error(w, fmt.Sprintf("insert customer %q: %v", customerName, err), http.StatusInternalServerError)
+							return
+						}
+					} else {
+						id, _ := res.LastInsertId()
+						customerID = int(id)
+					}
+				} else if err != nil {
+					http.Error(w, fmt.Sprintf("lookup customer %q: %v", customerName, err), http.StatusInternalServerError)
+					return
+				}
+			}
+		} else {
+			// Locked fields preserved from DB; form values for these are ignored.
+			customerID = currentCustomerID
+			originPortID = currentOriginPortID
+			destination = currentDestination
 		}
 
 		var weight interface{}
@@ -714,6 +734,10 @@ func (s *Service) HandleUpdate() http.HandlerFunc {
 		if err != nil {
 			http.Error(w, "Update lane failed", http.StatusInternalServerError)
 			return
+		}
+
+		if laneStatus != "draft" && s.OnLaneUpdated != nil {
+			s.OnLaneUpdated(id, user.ID)
 		}
 
 		http.Redirect(w, r, fmt.Sprintf("/lanes/%d", id), http.StatusSeeOther)

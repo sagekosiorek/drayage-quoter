@@ -290,6 +290,34 @@ func buildBody(lane *LaneSnippet, refID string, tmpl settings.EmailTemplate) str
 	return sb.String()
 }
 
+// RebuildEmailContent regenerates and persists the stored subject and body for the rate
+// request associated with laneID, using current lane details and the owner's email template.
+// A no-op if no rate request exists for the lane yet.
+func (s *Service) RebuildEmailContent(laneID, ownerID int) {
+	lane, err := s.fetchLane(laneID)
+	if err != nil {
+		log.Printf("RebuildEmailContent: fetch lane %d: %v", laneID, err)
+		return
+	}
+	var rrID int
+	var refID string
+	if err := s.DB.QueryRow(
+		`SELECT id, reference_id FROM rate_requests WHERE lane_id = ?`, laneID,
+	).Scan(&rrID, &refID); err != nil {
+		log.Printf("RebuildEmailContent: fetch rate request for lane %d: %v", laneID, err)
+		return
+	}
+	emailTmpl := settings.FetchTemplate(s.DB, ownerID)
+	if _, err := s.DB.Exec(
+		`UPDATE rate_requests SET subject = ?, body = ? WHERE id = ?`,
+		buildSubjectBase(lane)+" - "+refID,
+		buildBody(lane, refID, emailTmpl),
+		rrID,
+	); err != nil {
+		log.Printf("RebuildEmailContent: update rate request %d: %v", rrID, err)
+	}
+}
+
 // containerSizeDisplay converts a DB value to a display string.
 func containerSizeDisplay(v string) string {
 	switch v {

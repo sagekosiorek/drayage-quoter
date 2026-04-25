@@ -8,8 +8,8 @@
             <button type="submit" class="btn-danger">Delete Lane</button>
         </form>
         {{ end }}
-        {{ if and .Lane.IsOwner (eq .Lane.Status "draft") }}
-        <a href="/lanes/{{ .Lane.ID }}/edit"><button>Edit Draft</button></a>
+        {{ if .Lane.IsOwner }}
+        <a href="/lanes/{{ .Lane.ID }}/edit"><button>{{ if eq .Lane.Status "draft" }}Edit Draft{{ else }}Edit Lane Details{{ end }}</button></a>
         {{ end }}
         {{ if .Lane.IsOwner }}
         {{ if eq .Lane.Status "draft" }}
