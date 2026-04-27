@@ -100,16 +100,18 @@ func advanceLabel(to string) string {
 
 // LaneRow holds the data needed for a single row in the dashboard list.
 type LaneRow struct {
-	ID            int
-	CustomerName  string
-	OriginPort    string
-	Destination   string
-	ContainerSize string
-	Direction     string
-	Status        string
-	StatusLabel   string
-	OwnerName     string
-	CreatedAt     string
+	ID                int
+	CustomerName      string
+	OriginPort        string
+	Destination       string
+	ContainerSize     string
+	Direction         string
+	Status            string
+	StatusLabel       string
+	OwnerName         string
+	CreatedAt         string
+	ResponsesReceived int
+	CarrierCount      int
 }
 
 type portOption struct {
@@ -235,6 +237,7 @@ const dashboardRowsPartial = `
     <td>{{ .Direction }}</td>
     <td>{{ if eq .Status "rates_requested" }}<span class="status-badge status-{{ .Status }}"
               hx-get="/lanes/{{ .ID }}/status" hx-trigger="every 30s" hx-swap="outerHTML">{{ .StatusLabel }}</span>{{ else }}<span class="status-badge status-{{ .Status }}">{{ .StatusLabel }}</span>{{ end }}</td>
+    <td>{{ .ResponsesReceived }} / {{ .CarrierCount }}</td>
     <td>{{ .OwnerName }}</td>
     <td><time datetime="{{ .CreatedAt }}">{{ .CreatedAt }}</time></td>
 </tr>
@@ -268,11 +271,15 @@ func (s *Service) HandleDashboard(tmpl *template.Template) http.HandlerFunc {
 
 		query := `
 			SELECT l.id, c.name, p.name, l.destination, l.container_size,
-			       l.direction, l.status, u.name, l.created_at
+			       l.direction, l.status, u.name, l.created_at,
+			       COALESCE(rr.responses_received, 0),
+			       COUNT(rrv.carrier_id)
 			FROM lanes l
 			JOIN customers c ON l.customer_id = c.id
 			JOIN ports p ON l.origin_port_id = p.id
 			JOIN users u ON l.owner_id = u.id
+			LEFT JOIN rate_requests rr ON rr.lane_id = l.id
+			LEFT JOIN rate_request_carriers rrv ON rrv.rate_request_id = rr.id
 			WHERE 1=1`
 		var args []interface{}
 
@@ -293,7 +300,7 @@ func (s *Service) HandleDashboard(tmpl *template.Template) http.HandlerFunc {
 			args = append(args, ownerID)
 		}
 		// Fetch one extra row to detect whether more pages exist.
-		query += ` ORDER BY l.created_at DESC LIMIT 31 OFFSET ?`
+		query += ` GROUP BY l.id ORDER BY l.created_at DESC LIMIT 31 OFFSET ?`
 		args = append(args, offset)
 
 		rows, err := s.DB.Query(query, args...)
@@ -308,7 +315,8 @@ func (s *Service) HandleDashboard(tmpl *template.Template) http.HandlerFunc {
 			var l LaneRow
 			var createdStr string
 			if err := rows.Scan(&l.ID, &l.CustomerName, &l.OriginPort, &l.Destination,
-				&l.ContainerSize, &l.Direction, &l.Status, &l.OwnerName, &createdStr); err != nil {
+				&l.ContainerSize, &l.Direction, &l.Status, &l.OwnerName, &createdStr,
+				&l.ResponsesReceived, &l.CarrierCount); err != nil {
 				http.Error(w, "Scan lane row failed", http.StatusInternalServerError)
 				return
 			}
