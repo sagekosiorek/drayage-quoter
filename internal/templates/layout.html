@@ -13,54 +13,31 @@
     <script src="https://unpkg.com/htmx-ext-sse@2.2.2/sse.js" defer></script>
 </head>
 <body>
-<div id="loading-bar"></div>
-    {{ if .User }}
-    <nav class="app-nav">
-        <a href="/" class="app-nav-brand">Drayage Quoter</a>
-        <a href="/">Lanes</a>
-        <a href="/carriers">Carriers</a>
-        <a href="/settings">Settings</a>
-        <div class="app-nav-right">
-            <span>{{ .User.Name }}</span>
-            {{ if .User.IsAdmin }}
-            <a href="/admin/users">Admin</a>
-            {{ end }}
-            <form method="POST" action="/logout">
-                <button type="submit">Log out</button>
-            </form>
-        </div>
-    </nav>
-    <div class="app-content">
-        {{ template "content" . }}
+{{ if .User }}
+<nav class="app-nav">
+    <a href="/" class="app-nav-brand">Drayage Quoter</a>
+    <a href="/">Lanes</a>
+    <a href="/carriers">Carriers</a>
+    <a href="/settings">Settings</a>
+    <div class="app-nav-right">
+        <span>{{ .User.Name }}</span>
+        {{ if .User.IsAdmin }}
+        <a href="/admin/users">Admin</a>
+        {{ end }}
+        <form method="POST" action="/logout">
+            <button type="submit">Log out</button>
+        </form>
     </div>
-    {{ else }}
-    <div class="auth-content">
-        {{ template "content" . }}
-    </div>
-    {{ end }}
+</nav>
+<div class="app-content">
+    {{ template "content" . }}
+</div>
+{{ else }}
+<div class="auth-content">
+    {{ template "content" . }}
+</div>
+{{ end }}
 <script>
-  (function () {
-    var bar = document.getElementById('loading-bar');
-    var timer, startTime;
-    var MIN_MS = 400;
-    document.addEventListener('htmx:beforeRequest', function () {
-      clearTimeout(timer);
-      bar.className = '';
-      void bar.offsetWidth;
-      bar.classList.add('is-loading');
-      startTime = Date.now();
-    });
-    document.addEventListener('htmx:afterRequest', function () {
-      var remaining = Math.max(0, MIN_MS - (Date.now() - startTime));
-      clearTimeout(timer);
-      timer = setTimeout(function () {
-        bar.classList.remove('is-loading');
-        bar.classList.add('is-done');
-        timer = setTimeout(function () { bar.className = ''; }, 500);
-      }, remaining);
-    });
-  })();
-
   // Reformat all <time datetime="..."> elements into "March 11, 2026 2:30pm" in the user's local timezone.
   // root defaults to document; pass a narrower element after HTMX swaps.
   function fmtTimes(root) {
