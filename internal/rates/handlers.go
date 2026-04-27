@@ -145,8 +145,12 @@ func (s *Service) IngestEmail(subject, body, sender string) (string, error) {
 		return "", fmt.Errorf("match carrier by mailto for rr %d: %w", rrID, err)
 	}
 
-	if err := s.saveCarrierRate(rrID, carrierID, body, "regex", result.Items); err != nil {
+	replaced, err := s.saveCarrierRate(rrID, carrierID, body, "regex", result.Items)
+	if err != nil {
 		return "", fmt.Errorf("save carrier rate rr=%d carrier=%d: %w", rrID, carrierID, err)
+	}
+	if replaced {
+		return "duplicate", nil
 	}
 	return "matched", nil
 }
@@ -375,6 +379,18 @@ func (s *Service) HandleIngestConfirm() http.HandlerFunc {
 		}
 		defer tx.Rollback()
 
+		// Replace any existing response from this carrier for this rate request.
+		delRes, err := tx.Exec(
+			`DELETE FROM carrier_rates WHERE rate_request_id = ? AND carrier_id = ?`,
+			rrID, carrierID,
+		)
+		if err != nil {
+			http.Error(w, "Delete prior carrier rate failed", http.StatusInternalServerError)
+			return
+		}
+		rowsDeleted, _ := delRes.RowsAffected()
+		replaced := rowsDeleted > 0
+
 		res, err := tx.Exec(
 			`INSERT INTO carrier_rates (rate_request_id, carrier_id, original_email, parsed_by) VALUES (?, ?, ?, ?)`,
 			rrID, carrierID, rawEmail, parsedBy,
@@ -398,7 +414,9 @@ func (s *Service) HandleIngestConfirm() http.HandlerFunc {
 		}
 
 		tx.Exec(`UPDATE rate_request_carriers SET responded = 1 WHERE rate_request_id = ? AND carrier_id = ?`, rrID, carrierID)
-		tx.Exec(`UPDATE rate_requests SET responses_received = responses_received + 1 WHERE id = ?`, rrID)
+		if !replaced {
+			tx.Exec(`UPDATE rate_requests SET responses_received = responses_received + 1 WHERE id = ?`, rrID)
+		}
 		tx.Exec(`
 			UPDATE lanes SET status = 'rates_received', updated_at = ?
 			WHERE id = (SELECT lane_id FROM rate_requests WHERE id = ?)
@@ -443,19 +461,32 @@ func (s *Service) fetchCarriersOnRR(rrID int) ([]CarrierOption, error) {
 
 // saveCarrierRate inserts a carrier_rates record and its items, then updates
 // rate_request_carriers and rate_requests response counters.
-func (s *Service) saveCarrierRate(rrID, carrierID int, rawEmail, parsedBy string, items []RateItem) error {
+// Returns replaced=true when a prior record for the same (rate_request_id, carrier_id) was overwritten.
+func (s *Service) saveCarrierRate(rrID, carrierID int, rawEmail, parsedBy string, items []RateItem) (replaced bool, err error) {
 	tx, err := s.DB.Begin()
 	if err != nil {
-		return err
+		return false, err
 	}
 	defer tx.Rollback()
+
+	// Replace any existing response from this carrier for this rate request.
+	// ON DELETE CASCADE on carrier_rate_items removes the old items automatically.
+	delRes, err := tx.Exec(
+		`DELETE FROM carrier_rates WHERE rate_request_id = ? AND carrier_id = ?`,
+		rrID, carrierID,
+	)
+	if err != nil {
+		return false, err
+	}
+	rowsDeleted, _ := delRes.RowsAffected()
+	replaced = rowsDeleted > 0
 
 	res, err := tx.Exec(
 		`INSERT INTO carrier_rates (rate_request_id, carrier_id, original_email, parsed_by) VALUES (?, ?, ?, ?)`,
 		rrID, carrierID, rawEmail, parsedBy,
 	)
 	if err != nil {
-		return err
+		return false, err
 	}
 	vrID, _ := res.LastInsertId()
 
@@ -464,12 +495,14 @@ func (s *Service) saveCarrierRate(rrID, carrierID int, rawEmail, parsedBy string
 			`INSERT INTO carrier_rate_items (carrier_rate_id, charge_type, amount, unit, parsed_by) VALUES (?, ?, ?, ?, ?)`,
 			vrID, item.ChargeType, item.Amount, item.Unit, item.Source,
 		); err != nil {
-			return err
+			return false, err
 		}
 	}
 
 	tx.Exec(`UPDATE rate_request_carriers SET responded = 1 WHERE rate_request_id = ? AND carrier_id = ?`, rrID, carrierID)
-	tx.Exec(`UPDATE rate_requests SET responses_received = responses_received + 1 WHERE id = ?`, rrID)
+	if !replaced {
+		tx.Exec(`UPDATE rate_requests SET responses_received = responses_received + 1 WHERE id = ?`, rrID)
+	}
 	tx.Exec(`
 		UPDATE lanes SET status = 'rates_received', updated_at = ?
 		WHERE id = (SELECT lane_id FROM rate_requests WHERE id = ?)
@@ -477,11 +510,11 @@ func (s *Service) saveCarrierRate(rrID, carrierID int, rawEmail, parsedBy string
 	`, time.Now().UTC().Format("2006-01-02 15:04:05"), rrID)
 
 	if err := tx.Commit(); err != nil {
-		return err
+		return false, err
 	}
 
 	s.checkAndNotify(rrID)
-	return nil
+	return replaced, nil
 }
 
 // checkAndNotify fires a threshold notification email if the rate request has hit
