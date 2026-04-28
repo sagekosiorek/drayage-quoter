@@ -9,6 +9,7 @@ services:
     environment:
       DB_PATH: /data/drayage.db
       BASE_URL: http://localhost:8080
+      ADMIN_NAME: ${ADMIN_NAME}
       ADMIN_EMAIL: ${ADMIN_EMAIL}
       MAILGUN_API_KEY: ${MAILGUN_API_KEY}
       MAILGUN_DOMAIN: ${MAILGUN_DOMAIN}

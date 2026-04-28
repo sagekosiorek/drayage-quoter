@@ -55,11 +55,12 @@ func main() {
 		log.Fatalf("run migrations: %v", err)
 	}
 
+	adminName := os.Getenv("ADMIN_NAME")
 	adminEmail := os.Getenv("ADMIN_EMAIL")
-	if adminEmail == "" {
-		log.Fatal("ADMIN_EMAIL environment variable must be set")
+	if adminEmail == "" || adminName == "" {
+		log.Fatal("ADMIN_NAME and ADMIN_EMAIL environment variables must be set")
 	}
-	database.Exec("INSERT OR IGNORE INTO users (name, email) VALUES (?, ?)", adminEmail, adminEmail)
+	database.Exec("INSERT OR IGNORE INTO users (name, email) VALUES (?, ?)", adminName, adminEmail)
 	database.Exec("UPDATE users SET is_admin=1 WHERE email=?", adminEmail)
 
 	log.Println("database ready")
