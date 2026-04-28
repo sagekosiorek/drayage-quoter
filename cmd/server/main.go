@@ -224,6 +224,7 @@ func main() {
 	mux.HandleFunc("POST /lanes", authService.RequireAuth(lanesSvc.HandleCreate()))
 	mux.HandleFunc("GET /lanes/{id}", authService.RequireAuth(lanesSvc.HandleDetail(laneDetailTmpl)))
 	mux.HandleFunc("GET /lanes/{id}/status", authService.RequireAuth(lanesSvc.HandleStatusBadge()))
+	mux.HandleFunc("GET /lanes/{id}/responses", authService.RequireAuth(lanesSvc.HandleResponsesBadge()))
 	mux.HandleFunc("GET /lanes/{id}/edit", authService.RequireAuth(lanesSvc.HandleEditForm(laneEditTmpl)))
 	mux.HandleFunc("POST /lanes/{id}", authService.RequireAuth(lanesSvc.HandleUpdate()))
 	mux.HandleFunc("POST /lanes/{id}/status", authService.RequireAuth(lanesSvc.HandleAdvanceStatus()))

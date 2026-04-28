@@ -835,6 +835,42 @@ func (s *Service) HandleStatusBadge() http.HandlerFunc {
 
 
 
+// HandleResponsesBadge returns an HTML fragment with the current responses count for a lane.
+// Intended for HTMX polling: GET /lanes/{id}/responses
+// Polls every 30s while the lane is rates_requested or rates_received; static otherwise.
+func (s *Service) HandleResponsesBadge() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id, err := strconv.Atoi(r.PathValue("id"))
+		if err != nil || id <= 0 {
+			http.Error(w, "Not found", http.StatusNotFound)
+			return
+		}
+		var status string
+		var received, total int
+		err = s.DB.QueryRow(`
+			SELECT l.status, COALESCE(rr.responses_received, 0), COUNT(rrv.carrier_id)
+			FROM lanes l
+			LEFT JOIN rate_requests rr ON rr.lane_id = l.id
+			LEFT JOIN rate_request_carriers rrv ON rrv.rate_request_id = rr.id
+			WHERE l.id = ?
+			GROUP BY l.id
+		`, id).Scan(&status, &received, &total)
+		if err == sql.ErrNoRows {
+			http.Error(w, fmt.Sprintf("lane %d not found", id), http.StatusNotFound)
+			return
+		} else if err != nil {
+			http.Error(w, fmt.Sprintf("failed to fetch lane %d responses: %v", id, err), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "text/html")
+		if status == "rates_requested" || status == "rates_received" {
+			fmt.Fprintf(w, `<span hx-get="/lanes/%d/responses" hx-trigger="every 30s" hx-swap="outerHTML">%d / %d</span>`, id, received, total)
+		} else {
+			fmt.Fprintf(w, `<span>%d / %d</span>`, received, total)
+		}
+	}
+}
+
 // HandleDelete permanently removes a lane and all associated data (rate requests, rates, lineup, quote link).
 func (s *Service) HandleDelete() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {

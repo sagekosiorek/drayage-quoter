@@ -55,7 +55,7 @@
             <td>{{ .Direction }}</td>
             <td>{{ if eq .Status "rates_requested" }}<span class="status-badge status-{{ .Status }}"
                       hx-get="/lanes/{{ .ID }}/status" hx-trigger="every 30s" hx-swap="outerHTML">{{ .StatusLabel }}</span>{{ else }}<span class="status-badge status-{{ .Status }}">{{ .StatusLabel }}</span>{{ end }}</td>
-            <td>{{ .ResponsesReceived }} / {{ .CarrierCount }}</td>
+            <td>{{- if or (eq .Status "rates_requested") (eq .Status "rates_received") }}<span hx-get="/lanes/{{ .ID }}/responses" hx-trigger="every 30s" hx-swap="outerHTML">{{ .ResponsesReceived }} / {{ .CarrierCount }}</span>{{- else }}{{ .ResponsesReceived }} / {{ .CarrierCount }}{{- end }}</td>
             <td>{{ .OwnerName }}</td>
             <td><time datetime="{{ .CreatedAt }}">{{ .CreatedAt }}</time></td>
         </tr>
