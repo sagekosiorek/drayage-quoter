@@ -2,6 +2,7 @@ package admin
 
 import (
 	"database/sql"
+	"fmt"
 	"html/template"
 	"net/http"
 	"strconv"
@@ -103,6 +104,16 @@ func (s *Service) HandleDeleteUser() http.HandlerFunc {
 		}
 		if id == currentUser.ID {
 			http.Error(w, "Cannot delete your own account", http.StatusBadRequest)
+			return
+		}
+		var laneCount, quoteCount int
+		s.DB.QueryRow("SELECT COUNT(*) FROM lanes WHERE owner_id = ?", id).Scan(&laneCount)
+		s.DB.QueryRow("SELECT COUNT(*) FROM quotes WHERE owner_id = ?", id).Scan(&quoteCount)
+		if laneCount > 0 || quoteCount > 0 {
+			http.Error(w, fmt.Sprintf(
+				"Cannot delete user: they own %d lane(s) and %d quote(s) — reassign or delete those first",
+				laneCount, quoteCount,
+			), http.StatusConflict)
 			return
 		}
 		if _, err = s.DB.Exec("DELETE FROM users WHERE id = ?", id); err != nil {
