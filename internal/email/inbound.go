@@ -17,6 +17,8 @@ import (
 // The route must be registered WITHOUT auth middleware (Mailgun posts from outside).
 func HandleInbound(ratesSvc *rates.Service, signingKey string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		log.Printf("inbound webhook content-type: %s",
+		r.Header.Get("Content-Type"))
 		if err := r.ParseMultipartForm(8 << 20); err != nil {
 			http.Error(w, "cannot parse multipart form", http.StatusBadRequest)
 			return
