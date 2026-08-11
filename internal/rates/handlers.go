@@ -86,8 +86,9 @@ type apiIngestRequest struct {
 
 // IngestEmail is the shared core for processing an inbound rate response email.
 // Flow: parse body → match reference ID → verify sender is a known user or carrier domain →
-// match carrier via mailto/From/To addresses in body → save or orphan.
-// Returns a status string ("matched" or "orphaned") and any hard error.
+// match carrier via mailto/From/To addresses in body → save.
+// Returns a status string ("matched", "duplicate", or "orphaned") and any hard error.
+// "orphaned" means the email was silently discarded (no DB write).
 func (s *Service) IngestEmail(subject, body, sender string) (string, error) {
 	result, err := s.Parse(body)
 	if err != nil {
@@ -100,14 +101,12 @@ func (s *Service) IngestEmail(subject, body, sender string) (string, error) {
 		refMatch = reReferenceID.FindString(body)
 	}
 	if refMatch == "" {
-		s.insertOrphan(body, subject, sender, 0)
 		return "orphaned", nil
 	}
 
 	var rrID int
 	err = s.DB.QueryRow(`SELECT id FROM rate_requests WHERE reference_id = ?`, refMatch).Scan(&rrID)
 	if err == sql.ErrNoRows {
-		s.insertOrphan(body, subject, sender, 0)
 		return "orphaned", nil
 	}
 	if err != nil {
@@ -120,7 +119,6 @@ func (s *Service) IngestEmail(subject, body, sender string) (string, error) {
 	if err = s.DB.QueryRow(`SELECT COUNT(*) FROM users WHERE LOWER(email) = ?`, strings.ToLower(sender)).Scan(&userExists); err != nil || userExists == 0 {
 		senderParts := strings.SplitN(strings.ToLower(sender), "@", 2)
 		if len(senderParts) != 2 || senderParts[1] == "" {
-			s.insertOrphan(body, subject, sender, rrID)
 			return "orphaned", nil
 		}
 		var domainMatch int
@@ -131,14 +129,12 @@ func (s *Service) IngestEmail(subject, body, sender string) (string, error) {
 			JOIN rate_request_carriers rrv ON rrv.carrier_id = vp.carrier_id
 			WHERE rrv.rate_request_id = ? AND LOWER(vc.email) LIKE '%@' || ?
 		`, rrID, senderParts[1]).Scan(&domainMatch); err != nil || domainMatch == 0 {
-			s.insertOrphan(body, subject, sender, rrID)
 			return "orphaned", nil
 		}
 	}
 
 	carrierID, err := s.matchCarrierByBody(body, rrID)
 	if err == sql.ErrNoRows {
-		s.insertOrphan(body, subject, sender, rrID)
 		return "orphaned", nil
 	}
 	if err != nil {
@@ -568,19 +564,6 @@ func (s *Service) checkAndNotify(rrID int) {
 		responsesReceived, originPort, destination, dir, compURL,
 	)
 	_ = s.Notify(ownerEmail, subject, body)
-}
-
-// insertOrphan stores an unmatched email for later manual assignment.
-// rrID = 0 means no rate request could be identified.
-func (s *Service) insertOrphan(rawEmail, subject, sender string, rrID int) {
-	var assignedTo interface{}
-	if rrID > 0 {
-		assignedTo = rrID
-	}
-	s.DB.Exec(
-		`INSERT INTO orphan_emails (raw_email, subject, sender, assigned_to_rate_request_id) VALUES (?, ?, ?, ?)`,
-		rawEmail, subject, sender, assignedTo,
-	)
 }
 
 // writeJSON writes a JSON response with Content-Type header.
