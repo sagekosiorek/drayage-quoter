@@ -100,7 +100,6 @@ func (s *Service) IngestEmail(subject, body, sender string) (string, error) {
 		refMatch = reReferenceID.FindString(body)
 	}
 	if refMatch == "" {
-		log.Printf("no reference matched")
 		s.insertOrphan(body, subject, sender, 0)
 		return "orphaned", nil
 	}
@@ -133,7 +132,6 @@ func (s *Service) IngestEmail(subject, body, sender string) (string, error) {
 			WHERE rrv.rate_request_id = ? AND LOWER(vc.email) LIKE '%@' || ?
 		`, rrID, senderParts[1]).Scan(&domainMatch); err != nil || domainMatch == 0 {
 			s.insertOrphan(body, subject, sender, rrID)
-			log.Printf("user not found in DB")
 			return "orphaned", nil
 		}
 	}

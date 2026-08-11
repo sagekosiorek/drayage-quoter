@@ -57,9 +57,24 @@ func HandleInbound(ratesSvc *rates.Service, signingKey string) http.HandlerFunc 
 			if body == "" {
 				body = p.EventData.Message.BodyPlain
 			}
-		} else {
+		} else if strings.Contains(r.Header.Get("Content-Type"), "multipart/") {
 			if err := r.ParseMultipartForm(8 << 20); err != nil {
 				http.Error(w, "cannot parse multipart form", http.StatusBadRequest)
+				return
+			}
+			timestamp = r.FormValue("timestamp")
+			token = r.FormValue("token")
+			sig = r.FormValue("signature")
+			subject = r.FormValue("subject")
+			sender = r.FormValue("sender")
+			body = r.FormValue("body-html")
+			if body == "" {
+				body = r.FormValue("body-plain")
+			}
+		} else {
+			// url-encoded (Mailgun sends this for some plain-text emails)
+			if err := r.ParseForm(); err != nil {
+				http.Error(w, "cannot parse form", http.StatusBadRequest)
 				return
 			}
 			timestamp = r.FormValue("timestamp")
